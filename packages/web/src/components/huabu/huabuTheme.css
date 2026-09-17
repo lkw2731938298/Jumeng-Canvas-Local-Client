@@ -1,0 +1,5768 @@
+/* 自动生成：scripts/scope-huabu-css.mjs，请勿手改。源自 huabu 参考项目 App.css，作用域限定在 .huabu-scope。 */
+/* Google Fonts 已改为同域自托管 + 系统中文字体，见 src/styles/selfHostedFonts.ts */
+
+.huabu-scope {
+  color: #f4f1fa;
+  background: #08070c;
+  font-family: 'DM Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #08070c;
+  --panel: #0e0c14;
+  --panel-soft: #131019;
+  --line: rgba(255, 255, 255, 0.1);
+  --muted: #9892a5;
+  --purple: #8b5cf6;
+  --purple-bright: #b79aff;
+  --pink: #e04aff;
+}
+
+.huabu-scope * {
+  box-sizing: border-box;
+}
+
+.huabu-scope {
+  scroll-behavior: smooth;
+}
+
+.huabu-scope {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.huabu-scope button, .huabu-scope textarea {
+  color: inherit;
+  font: inherit;
+}
+
+.huabu-scope button, .huabu-scope a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.huabu-scope button {
+  border: 0;
+  cursor: pointer;
+}
+
+.huabu-scope a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.huabu-scope .app-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 70% 5%, rgba(104, 54, 189, 0.1), transparent 27%),
+    var(--bg);
+}
+
+.huabu-scope .noise {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  opacity: 0.035;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+}
+
+.huabu-scope .topbar {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 22px 0 16px;
+  pointer-events: none;
+}
+
+.huabu-scope .topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+/* 发现页右上角运营弹窗：低于顶栏 z-index，不挡登录/活动入口 */
+.huabu-scope .discover-corner-popup {
+  position: fixed;
+  z-index: 40;
+  top: 72px;
+  right: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(16, 12, 22, 0.94);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.38);
+  pointer-events: auto;
+}
+
+.huabu-scope .discover-corner-popup-169 {
+  width: min(280px, calc(100vw - 96px));
+}
+
+.huabu-scope .discover-corner-popup-916 {
+  width: min(176px, calc(100vw - 96px));
+}
+
+.huabu-scope .discover-corner-popup.is-fill.discover-corner-popup-169 {
+  aspect-ratio: 16 / 9;
+}
+
+.huabu-scope .discover-corner-popup.is-fill.discover-corner-popup-916 {
+  aspect-ratio: 9 / 16;
+}
+
+.huabu-scope .discover-corner-popup-close {
+  position: absolute;
+  z-index: 3;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(8, 6, 12, 0.72);
+  color: #f3eef8;
+  cursor: pointer;
+}
+
+.huabu-scope .discover-corner-popup-close:hover {
+  background: rgba(8, 6, 12, 0.92);
+}
+
+.huabu-scope .discover-corner-popup.is-fill .discover-corner-popup-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.huabu-scope .discover-corner-popup.is-fit .discover-corner-popup-image {
+  display: block;
+  width: 100%;
+  background: #0c0a10;
+  object-fit: contain;
+}
+
+.huabu-scope .discover-corner-popup.is-fit.discover-corner-popup-169 .discover-corner-popup-image {
+  aspect-ratio: 16 / 9;
+}
+
+.huabu-scope .discover-corner-popup.is-fit.discover-corner-popup-916 .discover-corner-popup-image {
+  aspect-ratio: 9 / 16;
+}
+
+.huabu-scope .discover-corner-popup-text {
+  margin: 0;
+  color: #e8e2ef;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.huabu-scope .discover-corner-popup.is-fit .discover-corner-popup-text {
+  padding: 8px 12px 12px;
+}
+
+.huabu-scope .discover-corner-popup.is-fill .discover-corner-popup-text {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 28px 12px 10px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72));
+}
+
+.huabu-scope .discover-corner-popup.is-fill:not(:has(.discover-corner-popup-image)) .discover-corner-popup-text {
+  position: relative;
+  padding: 36px 12px 12px;
+  background: transparent;
+}
+
+.huabu-scope .topbar-challenge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(183, 154, 255, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(28, 20, 42, 0.95) 0%,
+    rgba(14, 10, 22, 0.98) 100%
+  );
+  color: #d4b8ff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(183, 154, 255, 0.12),
+    0 0 20px rgba(139, 92, 246, 0.08);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.huabu-scope .topbar-challenge svg {
+  color: #c9a0ff;
+  flex-shrink: 0;
+}
+
+.huabu-scope .topbar-challenge:hover {
+  border-color: rgba(183, 154, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(183, 154, 255, 0.18),
+    0 0 28px rgba(139, 92, 246, 0.18);
+  transform: translateY(-1px);
+}
+
+.huabu-scope .topbar-challenge.is-active {
+  border-color: rgba(183, 154, 255, 0.65);
+  background: linear-gradient(
+    180deg,
+    rgba(42, 28, 68, 0.98) 0%,
+    rgba(22, 14, 36, 0.98) 100%
+  );
+  color: #e8ddff;
+  box-shadow:
+    inset 0 1px 0 rgba(183, 154, 255, 0.22),
+    0 0 28px rgba(139, 92, 246, 0.2);
+}
+
+.huabu-scope .topbar-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(16, 13, 24, 0.92);
+  color: #c8c0d8;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+  text-decoration: none;
+}
+
+.huabu-scope .topbar-icon-btn:hover {
+  border-color: rgba(183, 154, 255, 0.3);
+  background: rgba(22, 17, 34, 0.98);
+  color: #e8ddff;
+}
+
+.huabu-scope .topbar-store {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: rgba(16, 13, 24, 0.92);
+  color: #b79aff;
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.huabu-scope .topbar-store:hover {
+  border-color: rgba(183, 154, 255, 0.35);
+  background: rgba(22, 17, 34, 0.98);
+  color: #d4bcff;
+}
+
+.huabu-scope .topbar-member {
+  position: relative;
+  margin-left: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.huabu-scope .topbar-notify {
+  position: relative;
+}
+
+.huabu-scope .topbar-notify-btn {
+  position: relative;
+}
+
+.huabu-scope .topbar-notify-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(16, 13, 24, 0.95);
+}
+
+.huabu-scope .topbar-notify-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(420px, 70vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(18, 14, 28, 0.98);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.huabu-scope .topbar-notify-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.huabu-scope .topbar-notify-head strong {
+  font-size: 13px;
+  color: #f2ecff;
+}
+
+.huabu-scope .topbar-notify-readall {
+  border: 0;
+  background: transparent;
+  color: #b79aff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.huabu-scope .topbar-notify-readall:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.huabu-scope .topbar-notify-list {
+  overflow: auto;
+  padding: 6px;
+}
+
+.huabu-scope .topbar-notify-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  color: #8f859e;
+  font-size: 13px;
+}
+
+.huabu-scope .topbar-notify-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.huabu-scope .topbar-notify-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.huabu-scope .topbar-notify-item.is-unread {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.huabu-scope .topbar-notify-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #8f859e;
+  font-size: 11px;
+}
+
+.huabu-scope .topbar-notify-cat {
+  color: #b79aff;
+}
+
+.huabu-scope .topbar-notify-title {
+  color: #f0eaf8;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.huabu-scope .topbar-notify-body {
+  margin: 4px 0 0;
+  color: #a89bb8;
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.huabu-scope .member-badge {
+  position: absolute;
+  z-index: 2;
+  top: -9px;
+  left: 10px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #c4a0ff, #9b6dff);
+  color: #12091f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+}
+
+.huabu-scope .member-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 15, 30, 0.96) 0%,
+    rgba(11, 9, 16, 0.98) 100%
+  );
+  color: #ece6f8;
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.huabu-scope .member-panel:hover {
+  border-color: rgba(183, 154, 255, 0.32);
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.12);
+}
+
+.huabu-scope .member-gem {
+  color: #d4a8ff;
+  flex-shrink: 0;
+}
+
+.huabu-scope .member-label {
+  white-space: nowrap;
+}
+
+.huabu-scope .member-credits {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  color: #b79aff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.huabu-scope .member-avatar {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  margin-left: 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #f3eeff;
+  flex-shrink: 0;
+}
+
+.huabu-scope .avatar-mascot {
+  width: 18px;
+  height: 18px;
+}
+
+.huabu-scope .avatar-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #0e0c14;
+  border-radius: 50%;
+  background: #ff4d6d;
+}
+
+.huabu-scope .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.huabu-scope .brand-mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: block;
+  transform: rotate(45deg);
+}
+
+.huabu-scope .brand-mark i {
+  position: absolute;
+  display: block;
+  border: 2px solid var(--purple-bright);
+  border-radius: 5px 11px 5px 11px;
+}
+
+.huabu-scope .brand-mark i:first-child {
+  inset: 1px 8px 8px 1px;
+}
+
+.huabu-scope .brand-mark i:last-child {
+  inset: 8px 1px 1px 8px;
+  border-color: #e6d9ff;
+}
+
+.huabu-scope .primary-btn {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-radius: 7px;
+  background: #f4efff;
+  color: #17101f;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 30px rgba(170, 123, 255, 0.14);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.huabu-scope .primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(170, 123, 255, 0.3);
+}
+
+/* 与 CanvasHeader 品牌按钮一致：logo + 聚梦(主色) + 画布 */
+.huabu-scope .brand-logo {
+  position: fixed;
+  z-index: 55;
+  top: 14px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  color: rgba(244, 241, 250, 0.9);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+
+.huabu-scope .brand-logo:hover {
+  opacity: 0.8;
+}
+
+.huabu-scope .brand-logo-img {
+  display: block;
+  height: 20px;
+  width: auto;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.huabu-scope .brand-name,
+.huabu-scope .brand-name-rest {
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.huabu-scope .brand-name-primary {
+  color: var(--purple-bright, #b79aff);
+}
+
+.huabu-scope .brand-name-rest {
+  color: inherit;
+}
+
+.huabu-scope .sidebar {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 72px 0 20px;
+  border: none;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.huabu-scope .side-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  pointer-events: auto;
+}
+
+/* 侧栏按钮与链接统一尺寸/样式（与「新建」一致） */
+.huabu-scope .side-nav button,
+.huabu-scope .side-nav a {
+  width: 52px;
+  height: 56px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 0 8px;
+  border: none;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  line-height: 1;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  pointer-events: auto;
+}
+
+.huabu-scope .side-nav button svg,
+.huabu-scope .side-nav a svg {
+  display: block;
+  fill: none;
+  background: transparent;
+  color: inherit;
+}
+
+.huabu-scope .side-nav button:hover,
+.huabu-scope .side-nav button:focus,
+.huabu-scope .side-nav button:focus-visible,
+.huabu-scope .side-nav button.active,
+.huabu-scope .side-nav a:hover,
+.huabu-scope .side-nav a:focus,
+.huabu-scope .side-nav a:focus-visible,
+.huabu-scope .side-nav a.active {
+  color: #fff;
+  border: none;
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.huabu-scope .side-wechat-wrap {
+  position: relative;
+  margin-top: auto;
+  pointer-events: auto;
+}
+
+.huabu-scope .side-wechat {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.2s ease;
+  pointer-events: auto;
+}
+
+.huabu-scope .side-wechat:hover, .huabu-scope .side-wechat:focus, .huabu-scope .side-wechat:focus-visible {
+  color: #fff;
+  border: none;
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.huabu-scope .side-wechat svg {
+  display: block;
+  background: transparent;
+}
+
+.huabu-scope .wechat-popover {
+  position: absolute;
+  z-index: 80;
+  bottom: -2px;
+  left: 50px;
+  width: 500px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background: rgba(42, 40, 45, 0.98);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-6px) scale(0.98);
+  transform-origin: left bottom;
+  transition:
+    opacity 0.18s ease,
+    visibility 0.18s ease,
+    transform 0.18s ease;
+}
+
+.huabu-scope .side-wechat-wrap:hover .wechat-popover, .huabu-scope .side-wechat-wrap:focus-within .wechat-popover {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.huabu-scope .wechat-qr-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+}
+
+.huabu-scope .wechat-qr-item img {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  padding: 10px;
+  border-radius: 2px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.huabu-scope .wechat-qr-item span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.huabu-scope main {
+  padding-left: 0;
+}
+
+.huabu-scope .activities-page {
+  min-height: 100vh;
+  padding: 88px 48px 64px 96px;
+  background: #000;
+}
+
+.huabu-scope .activities-title {
+  margin: 0 0 36px;
+  color: #fff;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.huabu-scope .activities-block + .activities-block {
+  margin-top: 48px;
+}
+
+.huabu-scope .activities-section-title {
+  margin: 0 0 18px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.huabu-scope .campaign-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.huabu-scope .campaign-grid-ongoing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.huabu-scope .campaign-grid-past {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.huabu-scope .campaign-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.huabu-scope .campaign-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: #141018;
+  padding: 0;
+  text-align: left;
+}
+
+.huabu-scope .campaign-card-lg .campaign-media {
+  aspect-ratio: 16 / 9;
+}
+
+.huabu-scope .campaign-card-sm .campaign-media {
+  aspect-ratio: 16 / 10;
+}
+
+.huabu-scope .campaign-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.45s ease;
+}
+
+.huabu-scope .campaign-media:hover img {
+  transform: scale(1.04);
+}
+
+.huabu-scope .campaign-media-mask {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 20%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+.huabu-scope .campaign-tag {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  backdrop-filter: blur(8px);
+}
+
+.huabu-scope .campaign-tag-purple {
+  background: rgba(98, 54, 196, 0.88);
+}
+
+.huabu-scope .campaign-tag-dark {
+  background: rgba(20, 18, 28, 0.78);
+}
+
+.huabu-scope .campaign-banner-copy {
+  position: absolute;
+  z-index: 2;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #fff;
+  pointer-events: none;
+}
+
+.huabu-scope .campaign-banner-copy strong {
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+}
+
+.huabu-scope .campaign-banner-copy span {
+  font-size: clamp(13px, 1.2vw, 16px);
+  font-weight: 600;
+  opacity: 0.95;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.huabu-scope .campaign-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.huabu-scope .campaign-meta h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.huabu-scope .campaign-card-sm .campaign-meta h3 {
+  font-size: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.huabu-scope .campaign-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.huabu-scope .campaign-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.huabu-scope .campaign-badge svg {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.huabu-scope .projects-page {
+  min-height: 100vh;
+  padding: 88px 48px 64px 96px;
+  background: var(--bg);
+}
+
+.huabu-scope .projects-page-title {
+  margin: 0 0 42px;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.huabu-scope .projects-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.huabu-scope .projects-tabs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.huabu-scope .projects-tabs button {
+  height: 32px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: transparent;
+  color: #777080;
+  font-size: 12px;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.huabu-scope .projects-tabs button:hover {
+  color: #d4cddc;
+}
+
+.huabu-scope .projects-tabs button.active {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}
+
+.huabu-scope .projects-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.huabu-scope .projects-search {
+  width: 180px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #777080;
+}
+
+.huabu-scope .projects-search:focus-within {
+  border-color: rgba(183, 154, 255, 0.3);
+}
+
+.huabu-scope .projects-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #eee9f4;
+  font: inherit;
+  font-size: 12px;
+}
+
+.huabu-scope .projects-search input::placeholder {
+  color: #696271;
+}
+
+.huabu-scope .projects-recycle,
+.huabu-scope .projects-tool-btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: transparent;
+  color: #8d8595;
+  font-size: 12px;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.huabu-scope .projects-recycle:hover,
+.huabu-scope .projects-tool-btn:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #d9d2e1;
+}
+
+.huabu-scope .projects-recycle.active,
+.huabu-scope .projects-tool-btn.active {
+  border-color: rgba(183, 154, 255, 0.35);
+  background: rgba(139, 92, 246, 0.12);
+  color: #d4c4ff;
+}
+
+.huabu-scope .projects-tool-btn.danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}
+
+.huabu-scope .projects-tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.huabu-scope .projects-batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.huabu-scope .projects-batch-count {
+  color: #8d8595;
+  font-size: 12px;
+}
+
+.huabu-scope .projects-batch-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.huabu-scope .projects-trash-hint {
+  margin: 0 0 14px;
+  color: #6f6778;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.huabu-scope .projects-library-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px 12px;
+}
+
+.huabu-scope .library-project-card {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1.58 / 1;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+    #0d0b11;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.huabu-scope .library-project-card:hover {
+  border-color: rgba(183, 154, 255, 0.26);
+  background:
+    linear-gradient(180deg, rgba(139, 92, 246, 0.075), rgba(255, 255, 255, 0.012)),
+    #0f0c15;
+  transform: translateY(-2px);
+}
+
+.huabu-scope .library-project-new {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-style: dashed;
+  color: #fff;
+}
+
+.huabu-scope .library-project-new strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.huabu-scope .library-new-icon {
+  color: #fff;
+}
+
+.huabu-scope .library-project-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.025);
+  transform: scale(1.8);
+}
+
+.huabu-scope .library-project-copy {
+  position: absolute;
+  z-index: 1;
+  right: 13px;
+  bottom: 12px;
+  left: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.huabu-scope .library-project-copy strong {
+  overflow: hidden;
+  color: #eeeaf3;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .library-project-copy span {
+  color: #625c68;
+  font-size: 10px;
+}
+
+.huabu-scope .library-favorite {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  right: 9px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(9, 8, 12, 0.72);
+  color: #777080;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    color 0.18s ease;
+}
+
+.huabu-scope .library-project-card:hover .library-favorite, .huabu-scope .library-favorite.active, .huabu-scope .library-favorite:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.huabu-scope .library-favorite:hover, .huabu-scope .library-favorite.active {
+  color: #b79aff;
+}
+
+.huabu-scope .library-select {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 9px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(9, 8, 12, 0.78);
+  color: #8d8595;
+}
+
+.huabu-scope .library-select.active {
+  color: #b79aff;
+  border-color: rgba(183, 154, 255, 0.4);
+}
+
+.huabu-scope .library-card-actions {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 9px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.huabu-scope .library-project-card:hover .library-card-actions,
+.huabu-scope .library-card-actions:focus-within {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.huabu-scope .library-card-actions button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(9, 8, 12, 0.78);
+  color: #9a93a3;
+}
+
+.huabu-scope .library-card-actions button:hover {
+  color: #eeeaf3;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.huabu-scope .library-card-actions button.danger:hover {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.huabu-scope .library-project-card.selected {
+  border-color: rgba(183, 154, 255, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(183, 154, 255, 0.18);
+}
+
+.huabu-scope .projects-empty {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #625c68;
+  font-size: 13px;
+}
+
+.huabu-scope .skills-page {
+  min-height: 100vh;
+  padding: 84px 44px 64px 92px;
+  background:
+    radial-gradient(circle at 50% 5%, rgba(139, 92, 246, 0.075), transparent 30%),
+    var(--bg);
+}
+
+.huabu-scope .skills-hero {
+  width: min(760px, 100%);
+  margin: 0 auto 38px;
+}
+
+.huabu-scope .skills-hero h1 {
+  margin: 0 0 20px;
+  color: #fff;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.huabu-scope .skills-hero h1 span {
+  color: #aaa2b3;
+  font-weight: 400;
+}
+
+.huabu-scope .skills-hero .skill-creator {
+  width: 100%;
+}
+
+.huabu-scope .skills-catalog {
+  width: min(1560px, 100%);
+  margin: 0 auto;
+}
+
+.huabu-scope .skills-primary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.huabu-scope .skills-primary-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.huabu-scope .skills-primary-tabs button {
+  position: relative;
+  padding: 0 0 8px;
+  background: transparent;
+  color: #777080;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.huabu-scope .skills-primary-tabs button:hover {
+  color: #d8d1e0;
+}
+
+.huabu-scope .skills-primary-tabs button.active {
+  color: #fff;
+}
+
+.huabu-scope .skills-primary-tabs button.active::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: #fff;
+  content: '';
+}
+
+.huabu-scope .create-skill-button {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 1px solid rgba(183, 154, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.16);
+  color: #eee8f8;
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.huabu-scope .create-skill-button:hover {
+  border-color: rgba(183, 154, 255, 0.52);
+  background: rgba(139, 92, 246, 0.24);
+  transform: translateY(-1px);
+}
+
+.huabu-scope .skills-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.huabu-scope .skills-category-tabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.huabu-scope .skills-category-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.huabu-scope .skills-category-tabs button {
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #777080;
+  font-size: 12px;
+}
+
+.huabu-scope .skills-category-tabs button:hover {
+  color: #d8d1e0;
+}
+
+.huabu-scope .skills-category-tabs button.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.huabu-scope .skills-search {
+  width: 190px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #777080;
+}
+
+.huabu-scope .skills-search:focus-within {
+  border-color: rgba(183, 154, 255, 0.3);
+}
+
+.huabu-scope .skills-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #eee9f4;
+  font: inherit;
+  font-size: 12px;
+}
+
+.huabu-scope .skills-search input::placeholder {
+  color: #696271;
+}
+
+.huabu-scope .skills-card-grid {
+  display: grid;
+  /* 桌面一行五张；封面 9:16，说明在图下 */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.huabu-scope .skill-library-card {
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.huabu-scope .skill-library-card.skill-library-card-mine {
+  min-height: 0;
+}
+
+.huabu-scope .skill-library-card:hover {
+  border-color: rgba(183, 154, 255, 0.25);
+  background: rgba(255, 255, 255, 0.065);
+  transform: translateY(-2px);
+}
+
+.huabu-scope .skill-library-thumb {
+  position: relative;
+  width: 100%;
+  /* 封面固定 9:16，说明区在图下方，禁止叠到图上 */
+  height: auto;
+  aspect-ratio: 9 / 16;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #15121b;
+  z-index: 0;
+}
+
+.huabu-scope .skill-library-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.huabu-scope .skill-library-card:hover .skill-library-thumb img {
+  transform: scale(1.04);
+}
+
+.huabu-scope .skill-library-thumb > span {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: rgba(8, 7, 12, 0.72);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 9px;
+  backdrop-filter: blur(8px);
+}
+
+.huabu-scope .skill-library-content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 9px 7px;
+  overflow: hidden;
+  background: inherit;
+}
+
+/* 节点 / 想法单行省略，避免把卡片撑得过高；底部 meta 仍完整可见 */
+.huabu-scope .skill-library-card .skill-pipeline-summary,
+.huabu-scope .skill-library-card .skill-defaults-idea {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.huabu-scope .skill-library-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.huabu-scope .skill-library-title h2 {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  color: #f0ecf4;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .skill-library-title button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #625c68;
+  /* 收藏/删除始终可见，避免用户找不到 */
+  opacity: 1;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+}
+
+.huabu-scope .skill-library-meta .skill-fav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.huabu-scope .skill-library-meta .skill-fav-link:hover,
+.huabu-scope .skill-library-meta .skill-fav-link.active {
+  opacity: 1;
+  color: #b79aff;
+}
+
+.huabu-scope .skill-library-meta .skill-publish-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.huabu-scope .skill-library-meta .skill-publish-link:hover {
+  opacity: 1;
+  color: #93c5fd;
+}
+
+.huabu-scope .skill-library-title button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d8d1e0;
+}
+
+.huabu-scope .skill-library-title button.active {
+  color: #b79aff;
+}
+
+.huabu-scope .skill-library-content p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #777080;
+  font-size: 10px;
+  line-height: 1.4;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.huabu-scope .skill-library-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 6px;
+  color: #625c68;
+  font-size: 9px;
+}
+
+/* 我的卡：操作按钮不被挤出可视区 */
+.huabu-scope .skill-library-card-mine .skill-library-meta {
+  position: relative;
+  z-index: 1;
+}
+
+.huabu-scope .skill-doc-link {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #6b5ce7;
+  cursor: pointer;
+  font-size: 9px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.huabu-scope .skill-doc-link:hover {
+  color: #4f46e5;
+}
+
+/* 我的 Skill：醒目的 MD 预览入口 */
+.huabu-scope .skill-doc-link-strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(107, 92, 231, 0.12);
+  color: #a78bfa;
+  font-size: 10px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.huabu-scope .skill-doc-link-strong:hover {
+  background: rgba(107, 92, 231, 0.22);
+  color: #c4b5fd;
+}
+
+.huabu-scope .skill-doc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 28, 0.55);
+}
+
+.huabu-scope .skill-doc-modal {
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 18px 14px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 64px rgba(20, 16, 28, 0.28);
+}
+
+.huabu-scope .skill-doc-modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.huabu-scope .skill-doc-modal header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: #1f1729;
+}
+
+.huabu-scope .skill-doc-modal header button {
+  border: 0;
+  background: #f3f0f7;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #4a4452;
+}
+
+.huabu-scope .skill-doc-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #625c68;
+  line-height: 1.5;
+}
+
+.huabu-scope .skill-doc-body {
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f5fa;
+  color: #2d2736;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.huabu-scope .skill-doc-modal footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.huabu-scope .skill-doc-use {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #6b5ce7;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.huabu-scope .skill-doc-use:hover {
+  background: #5a4bd4;
+}
+
+.huabu-scope .skills-empty {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #625c68;
+  font-size: 13px;
+}
+
+.huabu-scope .hero-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.huabu-scope .hero-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.huabu-scope .hero-video-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 7, 12, 0.45) 0%, rgba(8, 7, 12, 0.68) 45%, rgba(8, 7, 12, 0.9) 100%),
+    radial-gradient(circle at 50% 28%, rgba(100, 54, 190, 0.16), transparent 55%);
+  pointer-events: none;
+}
+
+.huabu-scope .hero-stage > .hero-grid, .huabu-scope .hero-stage > .orb {
+  z-index: 1;
+}
+
+.huabu-scope .hero-stage > .hero {
+  position: relative;
+  z-index: 2;
+}
+
+.huabu-scope .prompt-suggestions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min(1100px, 100%);
+  margin: 8px auto 0;
+}
+
+.huabu-scope .hero {
+  position: relative;
+  z-index: 2;
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: visible;
+  padding: 100px 50px 36px;
+  text-align: center;
+}
+
+.huabu-scope .hero::before {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  z-index: 0;
+  width: 760px;
+  height: 540px;
+  border-radius: 50%;
+  content: '';
+  background: rgba(100, 54, 190, 0.13);
+  filter: blur(120px);
+  transform: translateX(-50%);
+}
+
+.huabu-scope .hero-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 74px 74px;
+  mask-image: radial-gradient(circle at 50% 36%, black 0, transparent 72%);
+  pointer-events: none;
+}
+
+.huabu-scope .orb {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid rgba(187, 154, 255, 0.25);
+  border-radius: 50%;
+  filter: blur(0.2px);
+}
+
+.huabu-scope .orb-one {
+  top: 18%;
+  left: 12%;
+  width: 160px;
+  height: 160px;
+  animation: float 8s ease-in-out infinite;
+}
+
+.huabu-scope .orb-one::before {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  content: '';
+  background: #ae7bff;
+  box-shadow: 0 0 20px #ae7bff;
+}
+
+.huabu-scope .orb-two {
+  right: 12%;
+  bottom: 18%;
+  width: 80px;
+  height: 80px;
+  animation: float 6s 1s ease-in-out infinite reverse;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-20px) rotate(18deg);
+  }
+}
+
+.huabu-scope .hero h1 {
+  position: relative;
+  max-width: 960px;
+  margin: 0 0 18px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: clamp(28px, 3.8vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.075em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.huabu-scope .hero h1 em {
+  background: linear-gradient(105deg, #e9deff 5%, #9a68ff 48%, #df7cf3 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.huabu-scope .creation-box {
+  position: relative;
+  /* 在 hero 等宽容器内水平居中（勿依赖父级 max-w 与框宽一致） */
+  width: min(760px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0;
+  border: 1px solid rgba(193, 157, 255, 0.25);
+  border-radius: 24px;
+  background: rgba(20, 16, 28, 0.88);
+  box-shadow:
+    0 25px 90px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(128, 75, 222, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  text-align: left;
+  backdrop-filter: blur(20px);
+}
+
+.huabu-scope .creation-box::before {
+  position: absolute;
+  top: -1px;
+  left: 15%;
+  width: 33%;
+  height: 1px;
+  content: '';
+  background: linear-gradient(90deg, transparent, #b99aff, transparent);
+}
+
+.huabu-scope .creation-top {
+  min-height: 108px;
+  padding: 20px 22px 10px;
+}
+
+/* 创作框已选 Skill 芯片（类似 ×技能名） */
+.huabu-scope .creation-skill-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.huabu-scope .creation-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 8px;
+  background: rgba(167, 139, 250, 0.2);
+  color: #e9e0ff;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.huabu-scope .creation-skill-chip:hover {
+  background: rgba(167, 139, 250, 0.32);
+  border-color: rgba(196, 181, 253, 0.55);
+}
+
+.huabu-scope .creation-skill-chip-x {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.huabu-scope .creation-skill-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 「我的」卡参数徽标：提高对比度 */
+.huabu-scope .skill-mine-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.huabu-scope .skill-mine-badge {
+  padding: 2px 7px;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 6px;
+  background: rgba(167, 139, 250, 0.16);
+  color: #d4c4ff;
+  font-size: 10px;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.huabu-scope .creation-top textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: white;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.huabu-scope .creation-top textarea::placeholder {
+  color: #696273;
+}
+
+.huabu-scope .creation-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px 14px;
+}
+
+.huabu-scope .creation-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.huabu-scope .creation-tools::-webkit-scrollbar {
+  display: none;
+}
+
+.huabu-scope .tool-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.huabu-scope .creation-tools button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: transparent;
+  color: #847e8c;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.huabu-scope .creation-tools button svg:last-child:not(:first-child) {
+  margin-left: -2px;
+  opacity: 0.7;
+}
+
+.huabu-scope .creation-tools button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #d4cddd;
+}
+
+.huabu-scope .tool-icon-btn {
+  padding: 6px 10px !important;
+}
+
+.huabu-scope .create-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b5cf6, #713ae8);
+  box-shadow: 0 8px 28px rgba(125, 71, 235, 0.32);
+}
+
+.huabu-scope .prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #c8c2d0;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.huabu-scope .prompt-chip-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Skill 无封面时的图标占位 */
+.huabu-scope .prompt-chip-thumb-fallback {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.huabu-scope .prompt-chip-all {
+  padding: 7px 12px;
+  gap: 4px;
+  color: #797280;
+}
+
+.huabu-scope .prompt-chip:hover {
+  border-color: rgba(171, 132, 244, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c4b2dd;
+}
+
+.huabu-scope .dashboard-section {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 28px clamp(20px, 5vw, 50px) 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.huabu-scope .dash-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.huabu-scope .dash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 13px;
+}
+
+.huabu-scope .dash-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.huabu-scope .dash-title svg {
+  color: #fff;
+}
+
+.huabu-scope .dash-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.huabu-scope .project-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(10, 9, 14, 0.72);
+}
+
+.huabu-scope .project-tabs button {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 17px;
+  border-radius: 999px;
+  background: transparent;
+  color: #857e8d;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.huabu-scope .project-tabs button:hover {
+  color: #d9d3e2;
+}
+
+.huabu-scope .project-tabs button.active {
+  background: rgba(255, 255, 255, 0.17);
+  color: #fff;
+}
+
+.huabu-scope .project-tabs svg {
+  color: currentColor;
+}
+
+.huabu-scope .dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: #fff;
+  font-size: 12px;
+}
+
+.huabu-scope .dash-link:hover, .huabu-scope .dash-link:focus, .huabu-scope .dash-link:focus-visible, .huabu-scope .dash-link:active {
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: #c4b2dd;
+}
+
+.huabu-scope .project-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(14, 12, 20, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.huabu-scope .project-card {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  background: rgba(20, 17, 29, 0.82);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.huabu-scope .project-card:hover {
+  border-color: rgba(171, 132, 244, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+}
+
+.huabu-scope .project-actions {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.huabu-scope .project-card:hover .project-actions, .huabu-scope .project-card:focus-within .project-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.huabu-scope .project-action {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(11, 9, 16, 0.82);
+  color: #aaa1b5;
+  backdrop-filter: blur(10px);
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.huabu-scope .project-action:hover {
+  border-color: rgba(171, 132, 244, 0.32);
+  background: rgba(28, 21, 42, 0.94);
+  color: #e5dcf2;
+}
+
+.huabu-scope .project-action.is-favorite {
+  border-color: rgba(171, 132, 244, 0.32);
+  color: #a98af0;
+}
+
+.huabu-scope .project-menu {
+  position: absolute;
+  z-index: 5;
+  top: 46px;
+  right: 10px;
+  width: 126px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(18, 15, 25, 0.98);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(14px);
+  animation: project-menu-in 0.16s ease both;
+}
+
+.huabu-scope .project-menu button {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: transparent;
+  color: #bdb5c8;
+  font-size: 12px;
+  text-align: left;
+}
+
+.huabu-scope .project-menu button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0eaf7;
+}
+
+.huabu-scope .project-menu button.project-menu-danger {
+  color: #d88794;
+}
+
+.huabu-scope .project-menu button.project-menu-danger:hover {
+  background: rgba(208, 75, 94, 0.1);
+  color: #f2a3af;
+}
+
+@keyframes project-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.huabu-scope .project-new {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* 无封面时接近「16:9 封面 + 信息栏」总高度，避免单独显示过矮 */
+  min-height: 160px;
+  color: #8d8496;
+}
+
+.huabu-scope .project-new span {
+  font-size: 12px;
+}
+
+.huabu-scope .project-new-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #9f7aea;
+}
+
+/* 项目封面固定 16:9 */
+.huabu-scope .project-cover {
+  flex: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 72% 25%, rgba(139, 92, 246, 0.2), transparent 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025), rgba(139, 92, 246, 0.08));
+  color: rgba(183, 154, 255, 0.3);
+}
+
+.huabu-scope .project-cover img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.huabu-scope .project-cover-input {
+  display: none;
+}
+
+.huabu-scope .project-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 13px 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.huabu-scope .project-heading, .huabu-scope .project-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.huabu-scope .project-id {
+  min-width: 0;
+  overflow: hidden;
+  color: #6d6676;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .project-title {
+  flex-shrink: 0;
+  color: #ddd7e8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.huabu-scope .project-details {
+  color: #8d8496;
+  font-size: 11px;
+}
+
+.huabu-scope .project-time {
+  color: #6d6676;
+  font-size: 11px;
+}
+
+.huabu-scope .feature-board {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 0.95fr;
+  grid-template-rows: 118px 118px;
+  gap: 10px;
+}
+
+.huabu-scope .feature-card {
+  position: relative;
+  overflow: hidden;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(14, 12, 20, 0.55);
+  backdrop-filter: blur(8px);
+  text-align: left;
+}
+
+.huabu-scope .feature-card:hover {
+  border-color: rgba(171, 132, 244, 0.28);
+}
+
+.huabu-scope .feature-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #ebe6f4;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.huabu-scope .feature-story,
+.huabu-scope .feature-skill {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: rgba(18, 14, 28, 0.92);
+}
+
+/* 大卡封面：整卡铺满 */
+.huabu-scope .feature-story .feature-cover,
+.huabu-scope .feature-skill .feature-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.45s ease;
+}
+
+.huabu-scope .feature-story:hover .feature-cover,
+.huabu-scope .feature-skill:hover .feature-cover {
+  transform: scale(1.04);
+}
+
+/* 顶部浅暗角，保证上方标题可读（无毛玻璃） */
+.huabu-scope .feature-story::after,
+.huabu-scope .feature-skill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(12, 8, 20, 0.55) 0%,
+    rgba(12, 8, 20, 0.12) 42%,
+    rgba(12, 8, 20, 0.08) 100%
+  );
+}
+
+.huabu-scope .feature-story .feature-label,
+.huabu-scope .feature-skill .feature-label {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f3eefc;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+
+.huabu-scope .feature-skill-art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(167, 139, 250, 0.28), transparent 55%),
+    linear-gradient(160deg, rgba(72, 42, 140, 0.55), rgba(20, 16, 28, 0.92));
+  color: #d4c2ff;
+}
+
+.huabu-scope .feature-mini-grid {
+  grid-row: 1 / 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+}
+
+.huabu-scope .feature-mini {
+  display: flex;
+  align-items: flex-start;
+}
+
+.huabu-scope .feature-mini-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.huabu-scope .feature-mini .feature-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: rgba(235, 230, 244, 0.62);
+}
+
+.huabu-scope .feature-purple {
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.35), rgba(61, 40, 102, 0.85));
+}
+
+.huabu-scope .feature-blue {
+  background: linear-gradient(145deg, rgba(118, 168, 255, 0.28), rgba(30, 45, 74, 0.9));
+}
+
+.huabu-scope .feature-indigo {
+  background: linear-gradient(145deg, rgba(113, 58, 232, 0.32), rgba(36, 28, 68, 0.92));
+}
+
+.huabu-scope .feature-gold {
+  background: linear-gradient(145deg, rgba(255, 196, 36, 0.22), rgba(61, 48, 24, 0.92));
+}
+
+.huabu-scope .feature-sub {
+  color: #9a92a8;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.huabu-scope .feature-new {
+  position: absolute;
+  top: 8px;
+  right: -18px;
+  padding: 2px 22px;
+  background: #8ee6c1;
+  color: #0a1a12;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transform: rotate(32deg);
+}
+
+.huabu-scope .activity-row {
+  display: block;
+}
+
+/* 首页活动：16:9 轮播 */
+.huabu-scope .activity-carousel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(88, 52, 168, 0.12), rgba(14, 12, 20, 0.55)),
+    rgba(14, 12, 20, 0.72);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.huabu-scope .activity-carousel:hover {
+  border-color: rgba(171, 132, 244, 0.28);
+}
+
+.huabu-scope .activity-carousel-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.huabu-scope .activity-carousel-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity 0.7s ease,
+    transform 5.2s ease;
+  pointer-events: none;
+}
+
+.huabu-scope .activity-carousel-slide.is-active {
+  opacity: 1;
+  transform: scale(1);
+  z-index: 1;
+}
+
+.huabu-scope .activity-carousel-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      115deg,
+      rgba(10, 8, 18, 0.72) 0%,
+      rgba(10, 8, 18, 0.28) 42%,
+      rgba(10, 8, 18, 0.12) 68%,
+      rgba(10, 8, 18, 0.45) 100%
+    ),
+    linear-gradient(180deg, transparent 42%, rgba(8, 6, 14, 0.88) 100%);
+}
+
+.huabu-scope .activity-carousel-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 28px 28px;
+  max-width: min(640px, 78%);
+  pointer-events: none;
+}
+
+.huabu-scope .activity-carousel-kicker {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: 1px solid rgba(196, 168, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(88, 52, 168, 0.28);
+  color: #dccfff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.huabu-scope .activity-carousel-copy strong {
+  color: #f6f1ff;
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+.huabu-scope .activity-carousel-copy span:last-child {
+  color: rgba(235, 230, 244, 0.72);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.huabu-scope .activity-carousel-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(16, 12, 24, 0.55);
+  color: #efe8ff;
+  opacity: 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    opacity 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.huabu-scope .activity-carousel:hover .activity-carousel-nav,
+.huabu-scope .activity-carousel:focus-within .activity-carousel-nav {
+  opacity: 1;
+}
+
+.huabu-scope .activity-carousel-nav:hover {
+  background: rgba(88, 52, 168, 0.55);
+  border-color: rgba(196, 168, 255, 0.35);
+}
+
+.huabu-scope .activity-carousel-nav.is-prev {
+  left: 14px;
+}
+
+.huabu-scope .activity-carousel-nav.is-next {
+  right: 14px;
+}
+
+.huabu-scope .activity-carousel-dots {
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  z-index: 4;
+  display: flex;
+  gap: 7px;
+}
+
+.huabu-scope .activity-carousel-dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+
+.huabu-scope .activity-carousel-dots button.is-active {
+  width: 22px;
+  background: linear-gradient(90deg, #b79aff, #8ee6c1);
+}
+
+.huabu-scope .activity-card {
+  position: relative;
+  overflow: hidden;
+  height: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
+}
+
+.huabu-scope .activity-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+}
+
+.huabu-scope .activity-card:hover {
+  border-color: rgba(171, 132, 244, 0.28);
+}
+
+.huabu-scope .activity-copy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 12px;
+  background: linear-gradient(180deg, transparent 10%, rgba(8, 7, 12, 0.9) 72%);
+}
+
+.huabu-scope .activity-copy strong {
+  color: #f0ebf8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.huabu-scope .activity-copy span {
+  color: #9a92a8;
+  font-size: 10px;
+}
+
+.huabu-scope .scroll-note {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #554f5c;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  transform: translateX(-50%);
+}
+
+.huabu-scope .scroll-note span {
+  width: 25px;
+  height: 1px;
+  background: #554f5c;
+}
+
+.huabu-scope .reveal-one, .huabu-scope .reveal-two, .huabu-scope .reveal-three, .huabu-scope .reveal-four {
+  opacity: 0;
+  animation: reveal 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.huabu-scope .reveal-two {
+  animation-delay: 0.08s;
+}
+
+.huabu-scope .reveal-three {
+  animation-delay: 0.17s;
+}
+
+.huabu-scope .reveal-four {
+  animation-delay: 0.28s;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.huabu-scope .section {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 120px clamp(30px, 6vw, 90px);
+}
+
+.huabu-scope .skills-section {
+  max-width: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(115deg, rgba(139, 92, 246, 0.045), transparent 45%),
+    #0a090e;
+}
+
+.huabu-scope .section-heading {
+  max-width: 1260px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 0 auto 48px;
+}
+
+.huabu-scope .section-kicker {
+  display: block;
+  margin-bottom: 13px;
+  color: #8f6fd0;
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+}
+
+.huabu-scope .section-heading h2 {
+  margin: 0 0 10px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: clamp(30px, 3vw, 44px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+
+.huabu-scope .section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.huabu-scope .text-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid #5f5769;
+  background: transparent;
+  color: #b6afbe;
+  font-size: 11px;
+}
+
+.huabu-scope .skills-grid {
+  max-width: 1260px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.huabu-scope .skill-card {
+  position: relative;
+  min-height: 310px;
+  padding: 34px 30px;
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.012);
+  transition:
+    background 0.3s ease,
+    transform 0.3s ease;
+}
+
+.huabu-scope .skill-card:last-child {
+  border-right: 0;
+}
+
+.huabu-scope .skill-card:hover {
+  z-index: 2;
+  background:
+    radial-gradient(circle at 25% 30%, color-mix(in srgb, var(--skill-color, #8b5cf6) 12%, transparent), transparent 35%),
+    #15111d;
+  transform: translateY(-5px);
+}
+
+.huabu-scope .skill-index {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  color: #413d48;
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+}
+
+.huabu-scope .skill-icon {
+  width: 55px;
+  height: 55px;
+  display: grid;
+  place-items: center;
+  margin: 22px 0 35px;
+  border: 1px solid color-mix(in srgb, var(--skill-color) 30%, transparent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--skill-color) 8%, transparent);
+  color: var(--skill-color);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--skill-color) 8%, transparent);
+}
+
+.huabu-scope .skill-card h3 {
+  margin: 0 0 11px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.huabu-scope .skill-card p {
+  min-height: 43px;
+  margin: 0;
+  color: #77717e;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.huabu-scope .skill-card > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 24px;
+  padding: 0;
+  background: transparent;
+  color: #9b8bac;
+  font-size: 11px;
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: 0.25s ease;
+}
+
+.huabu-scope .skill-card:hover > button {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.huabu-scope .gallery-section {
+  padding-top: 36px;
+  padding-bottom: 100px;
+}
+
+.huabu-scope .gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.huabu-scope .gallery-header h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.huabu-scope .gallery-header h2 svg {
+  color: #fff;
+}
+
+.huabu-scope .workflow-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.huabu-scope .workflow-tabs button {
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 9px;
+  background: transparent;
+  color: #8f8798;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.huabu-scope .workflow-tabs button:hover {
+  color: #d9d2e1;
+}
+
+.huabu-scope .workflow-tabs button.active {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.huabu-scope .gallery-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(280px, 42vw);
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #6f6878;
+}
+
+.huabu-scope .gallery-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e8e2f0;
+  font-size: 12px;
+}
+
+.huabu-scope .gallery-search input::placeholder {
+  color: #6f6878;
+}
+
+.huabu-scope .gallery-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 22px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.huabu-scope .gallery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 22px;
+}
+
+.huabu-scope .gallery-toolbar .gallery-filters {
+  margin-bottom: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.huabu-scope .gallery-sort {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.huabu-scope .gallery-sort button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #8a8494;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.huabu-scope .gallery-sort button:hover {
+  color: #c5bdcd;
+}
+
+.huabu-scope .gallery-sort button.active {
+  background: rgba(139, 92, 246, 0.18);
+  color: #f4f1fa;
+}
+
+.huabu-scope .gallery-likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  color: #9a91a8;
+  font-size: 11px;
+}
+
+.huabu-scope .gallery-likes svg {
+  color: #ff7aa2;
+}
+
+.huabu-scope .gallery-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.huabu-scope .gallery-filters button {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: transparent;
+  color: #8a8494;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: 0.2s ease;
+}
+
+.huabu-scope .gallery-filters button:hover {
+  color: #c5bdcd;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.huabu-scope .gallery-filters button.active {
+  border-color: rgba(193, 157, 255, 0.35);
+  background: rgba(139, 92, 246, 0.15);
+  color: #f4f1fa;
+}
+
+.huabu-scope .gallery-grid {
+  display: grid;
+  /* 9:16 竖版卡片：桌面多列，避免单卡过高 */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.huabu-scope .gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.huabu-scope .gallery-publish-card {
+  aspect-ratio: 9 / 16;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(139, 92, 246, 0.1), transparent 48%),
+    rgba(255, 255, 255, 0.025);
+  color: #cfc7d9;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.huabu-scope .gallery-publish-card span {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(139, 92, 246, 0.14);
+  color: #b79aff;
+}
+
+.huabu-scope .gallery-publish-card strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.huabu-scope .gallery-publish-card:hover {
+  border-color: rgba(183, 154, 255, 0.38);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(139, 92, 246, 0.17), transparent 50%),
+    rgba(255, 255, 255, 0.04);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.huabu-scope .gallery-thumb {
+  position: relative;
+  /* 列表固定竖框；横屏内容 contain 居中，不随媒体改写比例 */
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #16121e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.huabu-scope .gallery-thumb.is-landscape,
+.huabu-scope .gallery-thumb.is-portrait,
+.huabu-scope .gallery-thumb.is-square {
+  /* 方向钩子保留，盒子比例仍 9:16 */
+  max-height: none;
+}
+
+.huabu-scope .gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  transition: transform 0.4s ease;
+}
+
+.huabu-scope .gallery-card:hover .gallery-thumb img {
+  transform: scale(1.03);
+}
+
+/* 封面叠在视频上；悬浮淡出封面并播视频；contain 与视频一致，横屏竖框居中 */
+.huabu-scope .gallery-thumb-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.huabu-scope .gallery-card:hover .gallery-thumb-cover {
+  opacity: 0;
+  transform: none;
+}
+
+.huabu-scope .gallery-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 36px;
+}
+
+.huabu-scope .gallery-page-btn {
+  min-width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: transparent;
+  color: #9a93a6;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.huabu-scope .gallery-page-btn:hover:not(:disabled) {
+  border-color: rgba(183, 154, 255, 0.35);
+  background: rgba(139, 92, 246, 0.1);
+  color: #e8ddff;
+}
+
+.huabu-scope .gallery-page-btn.is-active {
+  border-color: rgba(183, 154, 255, 0.45);
+  background: rgba(139, 92, 246, 0.2);
+  color: #f4f1fa;
+}
+
+.huabu-scope .gallery-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.huabu-scope .gallery-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.huabu-scope .gallery-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.huabu-scope .gallery-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.huabu-scope .gallery-author span {
+  overflow: hidden;
+  color: #d8d2e2;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .gallery-badge {
+  flex-shrink: 0;
+  color: #8b5cf6;
+}
+
+.huabu-scope .gallery-caption {
+  margin: 0;
+  overflow: hidden;
+  color: #9a92a8;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .gallery-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.huabu-scope .gallery-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c4b5d4;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.huabu-scope .gallery-delete-btn:hover:not(:disabled) {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.huabu-scope .gallery-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.huabu-scope .cta-section {
+  position: relative;
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(127, 69, 215, 0.19), transparent 42%),
+    linear-gradient(125deg, #0a080f, #100b19 50%, #08070c);
+  text-align: center;
+}
+
+.huabu-scope .cta-art {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 630px;
+  height: 630px;
+  display: grid;
+  place-items: center;
+  color: rgba(193, 160, 255, 0.13);
+  transform: translate(-50%, -50%);
+}
+
+.huabu-scope .film-ring {
+  position: absolute;
+  border: 1px solid rgba(167, 124, 255, 0.12);
+  border-radius: 50%;
+}
+
+.huabu-scope .ring-one {
+  inset: 8%;
+  border-style: dashed;
+  animation: spin 30s linear infinite;
+}
+
+.huabu-scope .ring-two {
+  inset: 22%;
+  border-color: rgba(167, 124, 255, 0.2);
+}
+
+.huabu-scope .ring-two::after, .huabu-scope .ring-two::before {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  content: '';
+  background: #8e5cea;
+  box-shadow: 0 0 20px #8757dc;
+}
+
+.huabu-scope .ring-two::before {
+  top: 8%;
+  left: 17%;
+}
+
+.huabu-scope .ring-two::after {
+  right: 5%;
+  bottom: 27%;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.huabu-scope .cta-content {
+  position: relative;
+}
+
+.huabu-scope .cta-content > span {
+  color: #7f668f;
+  font-family: 'Syne', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+}
+
+.huabu-scope .cta-content h2 {
+  margin: 19px 0 12px;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+}
+
+.huabu-scope .cta-content p {
+  margin: 0 0 30px;
+  color: #88818e;
+  font-size: 12px;
+}
+
+.huabu-scope .primary-btn.large {
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 0 23px;
+}
+
+.huabu-scope footer {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  padding: 75px clamp(30px, 7vw, 105px) 25px;
+  background: #07060a;
+}
+
+.huabu-scope .footer-brand .brand {
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #5a5560;
+}
+
+.huabu-scope .footer-brand p {
+  margin: 21px 0 0;
+  color: #4e4954;
+  font-family: 'Syne', sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.19em;
+}
+
+.huabu-scope .footer-links {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+}
+
+.huabu-scope .footer-links div {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.huabu-scope .footer-links strong {
+  margin-bottom: 5px;
+  color: #d3cdd8;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.huabu-scope .footer-links a {
+  color: #615b67;
+  font-size: 10px;
+  transition: color 0.2s ease;
+}
+
+.huabu-scope .footer-links a:hover {
+  color: #b9a5d1;
+}
+
+/* 联系我们二维码弹层 */
+.huabu-scope .footer-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.huabu-scope .footer-qr-panel {
+  width: min(520px, 100%);
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #141218;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  padding: 20px 22px 24px;
+}
+
+.huabu-scope .footer-qr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  color: #e8e2ef;
+  font-size: 14px;
+}
+
+.huabu-scope .footer-qr-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #8a8490;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.huabu-scope .footer-qr-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #d3cdd8;
+}
+
+.huabu-scope .footer-qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 18px;
+}
+
+.huabu-scope .footer-qr-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.huabu-scope .footer-qr-item img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.huabu-scope .footer-qr-item span {
+  color: #9b94a3;
+  font-size: 12px;
+}
+
+.huabu-scope .footer-bottom {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 25px;
+  padding-top: 21px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #3e3a42;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.huabu-scope .footer-bottom-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* 备案链接：与 footer 底栏灰字同级，悬停略亮 */
+.huabu-scope .footer-icp {
+  color: #3e3a42;
+  transition: color 0.2s ease;
+}
+
+.huabu-scope .footer-icp:hover {
+  color: var(--muted);
+}
+
+/* 发现页友情链接：暗色 footer 内用主题紫，与 --purple / --muted 对齐 */
+.huabu-scope .footer-friend-links {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  margin-top: 28px;
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.huabu-scope .footer-friend-links .footer-friend-label {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* 友链条目：系统主题紫 */
+.huabu-scope .footer-friend-links a {
+  color: var(--purple);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.huabu-scope .footer-friend-links a:hover {
+  color: var(--purple-bright);
+  text-decoration: none;
+}
+
+@media (max-width: 1280px) {
+  .huabu-scope .skills-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1050px) {.huabu-scope .skills-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }.huabu-scope .skill-card:nth-child(2) {
+    border-right: 0;
+  }.huabu-scope .skill-card:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }.huabu-scope .gallery-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }.huabu-scope .activities-page {
+    padding: 88px 28px 56px 88px;
+  }.huabu-scope .projects-page {
+    padding: 88px 28px 56px 88px;
+  }.huabu-scope .projects-library-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }.huabu-scope .skills-page {
+    padding: 84px 28px 56px 88px;
+  }.huabu-scope .skills-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }.huabu-scope .campaign-grid-past {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {.huabu-scope .brand-logo {
+    top: 10px;
+    left: 12px;
+    font-size: 16px;
+  }.huabu-scope .brand-logo-img {
+    height: 18px;
+  }.huabu-scope .topbar {
+    left: 0;
+    height: 56px;
+    padding: 0 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }.huabu-scope .topbar::-webkit-scrollbar {
+    display: none;
+  }.huabu-scope .topbar-actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }.huabu-scope .topbar-challenge {
+    padding: 0 10px;
+    font-size: 11px;
+  }.huabu-scope .member-label {
+    display: none;
+  }.huabu-scope .sidebar {
+    display: none;
+  }.huabu-scope main {
+    padding-left: 0;
+  }.huabu-scope .hero {
+    min-height: auto;
+    padding: 88px 20px 24px;
+  }.huabu-scope .dashboard-section {
+    padding: 0 20px 56px;
+    gap: 28px;
+  }.huabu-scope .project-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }.huabu-scope .feature-board {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }.huabu-scope .feature-story, .huabu-scope .feature-mini-grid, .huabu-scope .feature-skill {
+    grid-row: auto;
+    grid-column: auto;
+  }.huabu-scope .feature-story {
+    min-height: 140px;
+  }.huabu-scope .feature-mini-grid {
+    min-height: 220px;
+  }.huabu-scope .feature-skill {
+    min-height: 120px;
+  }.huabu-scope .activity-row {
+    display: block;
+  }.huabu-scope .activity-carousel-copy {
+    max-width: 88%;
+    padding: 16px 18px 22px;
+  }.huabu-scope .activity-carousel-copy strong {
+    font-size: 17px;
+  }.huabu-scope .activity-carousel-nav {
+    opacity: 1;
+    width: 32px;
+    height: 32px;
+    margin-top: -16px;
+  }.huabu-scope .activity-card {
+    height: 88px;
+  }.huabu-scope .activities-page {
+    padding: 80px 20px 48px;
+  }.huabu-scope .projects-page {
+    padding: 80px 20px 48px;
+  }.huabu-scope .projects-page-title {
+    margin-bottom: 28px;
+    font-size: 26px;
+  }.huabu-scope .projects-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }.huabu-scope .projects-tools {
+    width: 100%;
+  }.huabu-scope .projects-search {
+    flex: 1;
+    width: auto;
+  }.huabu-scope .projects-library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }.huabu-scope .skills-page {
+    padding: 76px 20px 48px;
+  }.huabu-scope .skills-hero {
+    margin-bottom: 32px;
+  }.huabu-scope .skills-hero h1 {
+    font-size: 18px;
+  }.huabu-scope .skills-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }.huabu-scope .skills-search {
+    width: 100%;
+  }.huabu-scope .skills-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }.huabu-scope .activities-title {
+    margin-bottom: 28px;
+    font-size: 32px;
+  }.huabu-scope .activities-block + .activities-block {
+    margin-top: 36px;
+  }.huabu-scope .campaign-grid-ongoing, .huabu-scope .campaign-grid-past {
+    grid-template-columns: 1fr;
+  }.huabu-scope .hero h1 {
+    margin-top: 0;
+    letter-spacing: -0.07em;
+  }.huabu-scope .section {
+    padding: 90px 20px;
+  }.huabu-scope .section-heading {
+    align-items: flex-start;
+  }.huabu-scope .gallery-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }.huabu-scope .gallery-search {
+    width: 100%;
+  }.huabu-scope .gallery-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }.huabu-scope .gallery-filters::-webkit-scrollbar {
+    display: none;
+  }.huabu-scope .gallery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }.huabu-scope footer {
+    grid-template-columns: 1fr;
+    gap: 45px;
+    padding: 60px 25px 25px;
+  }
+}
+
+@media (max-width: 560px) {.huabu-scope .topbar-challenge .challenge-text {
+    display: none;
+  }.huabu-scope .topbar-challenge {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }.huabu-scope .topbar-store span {
+    display: none;
+  }.huabu-scope .topbar-store {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }.huabu-scope .member-badge {
+    font-size: 9px;
+    padding: 2px 5px;
+  }.huabu-scope .brand {
+    font-size: 13px;
+  }.huabu-scope .hero h1 {
+    font-size: 26px;
+    line-height: 1.2;
+  }.huabu-scope .creation-top {
+    min-height: 100px;
+    padding: 16px 16px 8px;
+  }.huabu-scope .creation-bottom {
+    align-items: center;
+    padding: 6px 10px 12px;
+  }.huabu-scope .creation-tools button span {
+    display: none;
+  }.huabu-scope .creation-tools button svg:last-child:not(:first-child) {
+    display: none;
+  }.huabu-scope .creation-tools button {
+    width: 32px;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+  }.huabu-scope .tool-divider {
+    margin: 0 4px;
+  }.huabu-scope .create-btn {
+    width: 34px;
+    height: 34px;
+  }.huabu-scope .prompt-suggestions {
+    max-width: 100%;
+    gap: 6px;
+  }.huabu-scope .prompt-chip {
+    font-size: 11px;
+  }.huabu-scope .prompt-chip-thumb {
+    width: 20px;
+    height: 20px;
+  }.huabu-scope .section-heading .text-link {
+    display: none;
+  }.huabu-scope .skills-grid {
+    grid-template-columns: 1fr;
+  }.huabu-scope .skill-card, .huabu-scope .skill-card:nth-child(2) {
+    min-height: 245px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }.huabu-scope .skill-card:last-child {
+    border-bottom: 0;
+  }.huabu-scope .skill-icon {
+    margin: 5px 0 25px;
+  }.huabu-scope .skill-card > button {
+    opacity: 1;
+    transform: none;
+  }.huabu-scope .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }.huabu-scope .gallery-header h2 {
+    font-size: 22px;
+  }.huabu-scope .cta-section {
+    min-height: 380px;
+    padding: 0 25px;
+  }.huabu-scope .footer-links {
+    gap: 15px;
+  }.huabu-scope .footer-friend-links {
+    gap: 8px 14px;
+    padding: 12px 14px;
+    font-size: 12px;
+  }.huabu-scope .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {.huabu-scope *, .huabu-scope *::before, .huabu-scope *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* —— 工作流发布 / 详情 / 只读预览 —— */
+.huabu-scope .gallery-thumb video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  background: #16121e;
+}
+.huabu-scope .gallery-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  background: #1a1622;
+}
+.huabu-scope .gallery-avatar-fallback {
+  display: inline-block;
+  background: rgba(183, 154, 255, 0.25);
+}
+.huabu-scope .gallery-empty {
+  grid-column: 1 / -1;
+  padding: 48px 16px;
+  text-align: center;
+  color: #9a91a8;
+  font-size: 14px;
+}
+.huabu-scope .gallery-card {
+  cursor: pointer;
+}
+
+.wf-pub-overlay,
+.wf-detail-overlay,
+.wf-preview-overlay,
+.wf-pub-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 6, 12, 0.72);
+  padding: 24px;
+}
+.wf-pub-modal,
+.wf-detail-modal,
+.wf-preview-panel,
+.wf-pub-picker-panel {
+  width: min(520px, 100%);
+  max-height: min(92vh, 900px);
+  overflow: auto;
+  border-radius: 16px;
+  background: #1c1824;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f2edf7;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.wf-detail-modal {
+  width: min(860px, 100%);
+}
+.wf-detail-modal.with-preview {
+  display: none;
+}
+.wf-preview-panel {
+  width: min(1100px, 100%);
+  height: min(86vh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.wf-pub-header,
+.wf-detail-header,
+.wf-preview-panel > header,
+.wf-pub-picker-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+.wf-pub-header h2,
+.wf-detail-title-block h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  flex: 1;
+}
+.wf-detail-title-block {
+  flex: 1;
+  min-width: 0;
+}
+.wf-detail-title-block p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #a89eb8;
+}
+.wf-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wf-pub-close {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c9c0d6;
+  cursor: pointer;
+}
+.wf-pub-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.wf-pub-body {
+  padding: 8px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wf-pub-upload {
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #b7aec6;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+}
+.wf-pub-upload strong {
+  color: #f0eaf8;
+  font-size: 14px;
+}
+.wf-pub-upload .req,
+.wf-pub-field .req {
+  color: #ff6b8a;
+}
+.wf-pub-upload video {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+/* 发布预览：默认封面，悬浮播视频 */
+.wf-pub-preview {
+  position: relative;
+  min-height: 168px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  color: #b7aec6;
+}
+.wf-pub-preview.has-media {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.wf-pub-preview-video,
+.wf-pub-preview-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.wf-pub-preview-video {
+  z-index: 0;
+  background: #16121e;
+}
+.wf-pub-preview-cover {
+  z-index: 1;
+  transition: opacity 0.2s ease;
+}
+.wf-pub-preview.is-playing .wf-pub-preview-cover {
+  opacity: 0;
+  pointer-events: none;
+}
+.wf-pub-preview-empty {
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+.wf-pub-preview-empty strong {
+  color: #f0eaf8;
+  font-size: 14px;
+}
+.wf-pub-preview-empty span {
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 280px;
+  opacity: 0.78;
+}
+.wf-pub-preview-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  z-index: 2;
+}
+.wf-pub-preview-actions.static {
+  position: relative;
+  margin-top: 4px;
+  opacity: 1;
+}
+.wf-pub-preview.has-media .wf-pub-preview-actions {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.wf-pub-preview.has-media:hover .wf-pub-preview-actions {
+  opacity: 1;
+}
+.wf-pub-preview-actions button,
+.wf-pub-media-chip {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 14, 24, 0.78);
+  color: #f0eaf8;
+  font-size: 12px;
+  padding: 7px 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.wf-pub-preview-actions button:hover,
+.wf-pub-media-chip:hover {
+  background: rgba(139, 92, 246, 0.45);
+}
+.wf-pub-media-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wf-pub-media-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.wf-pub-media-chip.on {
+  background: rgba(139, 92, 246, 0.22);
+  color: #efe8ff;
+}
+.wf-pub-video-item img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+  background: #1a1622;
+}
+.wf-pub-preview .req {
+  color: #ff6b8a;
+}
+.wf-pub-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wf-pub-field.row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.wf-pub-field label {
+  font-size: 13px;
+  color: #d8d0e4;
+}
+.wf-pub-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wf-pub-help {
+  color: #8f859f;
+}
+.wf-pub-input-wrap {
+  position: relative;
+}
+.wf-pub-field input,
+.wf-pub-field textarea,
+.wf-pub-field select {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f0fa;
+  padding: 12px 48px 12px 12px;
+  font-size: 13px;
+  outline: none;
+}
+.wf-pub-field textarea {
+  resize: vertical;
+  min-height: 84px;
+  padding-right: 52px;
+}
+.wf-pub-field select {
+  padding-right: 12px;
+  cursor: pointer;
+}
+.wf-pub-counter {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font-size: 11px;
+  color: #8f859f;
+}
+.wf-pub-select-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(183, 154, 255, 0.16);
+  color: #d7c6ff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wf-pub-switch {
+  width: 44px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+}
+.wf-pub-switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s ease;
+}
+.wf-pub-switch.on {
+  background: #e85a8c;
+}
+.wf-pub-switch.on span {
+  transform: translateX(20px);
+}
+.wf-pub-footer {
+  padding: 8px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-pub-submit {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f4eef9;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wf-pub-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.wf-pub-submit:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.wf-pub-legal {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: #8f859f;
+}
+.wf-pub-legal span {
+  text-decoration: underline;
+  cursor: default;
+}
+.wf-pub-picker-panel {
+  width: min(420px, 100%);
+  max-height: 70vh;
+}
+.wf-pub-picker-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 16px;
+  max-height: 52vh;
+  overflow: auto;
+}
+.wf-pub-picker-panel li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #efe8f7;
+  cursor: pointer;
+}
+.wf-pub-picker-panel li button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.wf-pub-picker-panel .empty {
+  padding: 24px;
+  text-align: center;
+  color: #8f859f;
+  font-size: 13px;
+}
+.wf-pub-video-item {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+.wf-pub-video-item video {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #111;
+}
+
+.wf-detail-video-wrap {
+  margin: 0 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0e0b12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 元数据未到前先给合理占位，避免弹层跳动过大 */
+  min-height: 200px;
+  max-height: min(70vh, 640px);
+}
+/* 竖屏：以高度为主约束，宽度随真实比例（inline aspect-ratio） */
+.wf-detail-video-wrap.is-portrait {
+  height: min(70vh, 640px);
+  width: auto;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 0;
+}
+/* 横屏：以宽度铺满弹层内容区，高度随真实比例 */
+.wf-detail-video-wrap.is-landscape {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: min(56vh, 480px);
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 0;
+}
+/* 方屏 */
+.wf-detail-video-wrap.is-square {
+  width: min(100%, min(70vh, 560px));
+  height: auto;
+  max-height: min(70vh, 560px);
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 0;
+}
+.wf-detail-video-wrap video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  background: #0e0b12;
+}
+/* 未判定方向时：视频自身按 max 约束自适应，不强行 9:16 */
+.wf-detail-video-wrap:not(.is-portrait):not(.is-landscape):not(.is-square) video {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(70vh, 640px);
+}
+.wf-detail-video-empty,
+.wf-detail-error {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  color: #9a91a8;
+}
+.wf-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 20px 8px;
+}
+.wf-detail-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #efe8f7;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wf-detail-actions button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.wf-detail-actions button.liked {
+  color: #ff7aa2;
+  background: rgba(232, 90, 140, 0.18);
+}
+.wf-detail-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(183, 154, 255, 0.18);
+  color: #e4d8ff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wf-detail-desc {
+  margin: 0 20px 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #b7aec6;
+}
+.wf-preview-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.wf-preview-canvas {
+  width: 100%;
+  height: 100%;
+  background: #121018;
+}
+.wf-preview-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 280px;
+  color: #9a91a8;
+}
+.wf-preview-node {
+  position: relative;
+  width: 180px;
+  border-radius: 10px;
+  overflow: visible;
+  background: #221c2c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eee;
+  font-size: 12px;
+}
+.wf-preview-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: #9b8fb8 !important;
+  border: 1px solid #1c1824 !important;
+  opacity: 0.85;
+}
+.wf-preview-canvas .react-flow__edge-path {
+  stroke: #9b8fb8 !important;
+  stroke-width: 2 !important;
+}
+.wf-preview-canvas .react-flow__connection-path {
+  stroke: #9b8fb8 !important;
+}
+.wf-preview-node-media {
+  aspect-ratio: 16 / 10;
+  background: #16121e;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+}
+.wf-preview-node-media img,
+.wf-preview-node-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.wf-preview-node-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #8f859f;
+  padding: 8px;
+  text-align: center;
+}
+.wf-preview-node-label {
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* —— 创建 Skill 弹窗（对齐技能页色板） —— */
+.huabu-scope .create-skill-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(139, 92, 246, 0.18), transparent 55%),
+    rgba(5, 4, 10, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.huabu-scope .create-skill-dialog {
+  position: relative;
+  width: min(820px, 100%);
+  max-height: min(92vh, 920px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(183, 154, 255, 0.16);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(24, 20, 36, 0.98) 0%, rgba(12, 10, 18, 0.98) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 28px 80px rgba(0, 0, 0, 0.55),
+    0 0 60px rgba(139, 92, 246, 0.08);
+}
+
+.huabu-scope .create-skill-dialog .csd-glow {
+  position: absolute;
+  top: -80px;
+  left: 20%;
+  right: 20%;
+  height: 160px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.22), transparent 70%);
+}
+
+.huabu-scope .create-skill-dialog .csd-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.huabu-scope .create-skill-dialog .csd-kicker {
+  margin: 0 0 4px;
+  color: #b79aff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.huabu-scope .create-skill-dialog .csd-header h2 {
+  margin: 0;
+  color: #f5f1fa;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'DM Sans', sans-serif;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.huabu-scope .create-skill-dialog .csd-sub {
+  margin: 6px 0 0;
+  max-width: 36em;
+  color: #8a8396;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.huabu-scope .create-skill-dialog .csd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-save {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 18px;
+  border: 1px solid rgba(183, 154, 255, 0.4);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(168, 85, 247, 0.75));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.28);
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #8a8396;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #eee8f8;
+}
+
+.huabu-scope .create-skill-dialog .csd-body {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(183, 154, 255, 0.25) transparent;
+}
+
+.huabu-scope .create-skill-dialog .csd-section {
+  margin-bottom: 18px;
+}
+
+.huabu-scope .create-skill-dialog .csd-section-md {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.huabu-scope .create-skill-dialog .csd-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.huabu-scope .create-skill-dialog .csd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.huabu-scope .create-skill-dialog .csd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.huabu-scope .create-skill-dialog .csd-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c8c0d6;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.huabu-scope .create-skill-dialog .csd-label i {
+  color: #c084fc;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.huabu-scope .create-skill-dialog .csd-input,
+.huabu-scope .create-skill-dialog .csd-textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(8, 7, 12, 0.55);
+  color: #f0ecf4;
+  font-size: 13px;
+  line-height: 1.45;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-input {
+  height: 42px;
+  padding: 0 14px;
+}
+
+.huabu-scope .create-skill-dialog .csd-textarea {
+  min-height: 78px;
+  padding: 11px 14px;
+  resize: vertical;
+}
+
+.huabu-scope .create-skill-dialog .csd-input::placeholder,
+.huabu-scope .create-skill-dialog .csd-textarea::placeholder {
+  color: #625c68;
+}
+
+.huabu-scope .create-skill-dialog .csd-input:focus,
+.huabu-scope .create-skill-dialog .csd-textarea:focus,
+.huabu-scope .create-skill-dialog .csd-md-code:focus {
+  border-color: rgba(183, 154, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.14);
+  background: rgba(12, 10, 20, 0.75);
+}
+
+.huabu-scope .create-skill-dialog .csd-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-tabs {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.huabu-scope .create-skill-dialog .csd-tab {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: #777080;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-tab:hover {
+  color: #d8d1e0;
+}
+
+.huabu-scope .create-skill-dialog .csd-tab.active {
+  background: rgba(139, 92, 246, 0.22);
+  color: #eee8f8;
+}
+
+.huabu-scope .create-skill-dialog .csd-md-shell {
+  display: flex;
+  gap: 10px;
+  min-height: 220px;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree {
+  width: 148px;
+  flex-shrink: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-caption {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: #625c68;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-folder {
+  margin: 8px 0 4px;
+  padding-left: 4px;
+  color: #6e6778;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #9a92a8;
+  font-size: 11px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-file:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #d8d0e4;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-file.is-active {
+  background: rgba(139, 92, 246, 0.14);
+  color: #ddd4ef;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-file-nested {
+  padding-left: 14px;
+  font-weight: 500;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #6e6778;
+  box-shadow: none;
+}
+
+.huabu-scope .create-skill-dialog .csd-tree-file.is-active .csd-tree-dot {
+  background: #b79aff;
+  box-shadow: 0 0 8px rgba(183, 154, 255, 0.7);
+}
+
+/* 流程设置：创建技能包核心步骤列表 */
+.huabu-scope .create-skill-dialog .csd-flow-section .csd-flow-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-idx {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #d4c4f5;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-remove {
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-remove:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.huabu-scope .create-skill-dialog .csd-md-panel {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(5, 4, 10, 0.55);
+}
+
+.huabu-scope .create-skill-dialog .csd-md-preview,
+.huabu-scope .create-skill-dialog .csd-md-code {
+  width: 100%;
+  height: 260px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+  color: #b8b0c4;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  outline: none;
+  resize: none;
+}
+
+.huabu-scope .create-skill-dialog .csd-md-code {
+  color: #e4dcf2;
+}
+
+.huabu-scope .create-skill-dialog .csd-md-upload {
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+  color: #8a8396;
+  font-size: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-md-upload-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #b79aff;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ghost {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ddd4ef;
+  font-size: 12px;
+  font-weight: 550;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ghost:hover:not(:disabled) {
+  border-color: rgba(183, 154, 255, 0.35);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-box {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d8d1e0;
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(216, 209, 224, 0.85);
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-list .csd-recipe-kind {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.65;
+  text-transform: uppercase;
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-list em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.huabu-scope .create-skill-dialog .csd-recipe-notes {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(216, 209, 224, 0.75);
+}
+
+.huabu-scope .create-skill-dialog .csd-meta-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip strong {
+  color: #d8d1e0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip span {
+  color: #625c68;
+  font-size: 11px;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip:hover {
+  border-color: rgba(183, 154, 255, 0.25);
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip.active {
+  border-color: rgba(183, 154, 255, 0.45);
+  background: rgba(139, 92, 246, 0.16);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.12) inset;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip.active strong {
+  color: #eee8f8;
+}
+
+.huabu-scope .create-skill-dialog .csd-type-chip.active span {
+  color: #b79aff;
+}
+
+.huabu-scope .create-skill-dialog .csd-cover {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-cover-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed rgba(183, 154, 255, 0.28);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(139, 92, 246, 0.1), transparent 60%),
+    rgba(0, 0, 0, 0.3);
+  color: #777080;
+}
+
+.huabu-scope .create-skill-dialog .csd-cover-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.huabu-scope .create-skill-dialog .csd-cover-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.huabu-scope .create-skill-dialog .csd-cover-copy p {
+  margin: 0;
+  color: #625c68;
+  font-size: 11px;
+}
+
+/* AI 创建：平常折叠；展开后选类型 → 一句话 → 生成 */
+.huabu-scope .create-skill-dialog .csd-ai-hero {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 1px dashed rgba(183, 154, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(139, 92, 246, 0.06);
+  overflow: hidden;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero.is-open {
+  border-style: solid;
+  border-color: rgba(183, 154, 255, 0.28);
+  background:
+    linear-gradient(160deg, rgba(139, 92, 246, 0.12), transparent 55%),
+    rgba(8, 6, 14, 0.45);
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: #b79aff;
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle-main strong {
+  font-weight: 600;
+  color: #d8d1e0;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: #8e8698;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-toggle-hint {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-body {
+  padding: 0 16px 14px;
+  border-top: 1px solid rgba(183, 154, 255, 0.12);
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-desc {
+  margin: 10px 0 12px;
+  color: #8e8698;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-types {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-prompt {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-hero-hint {
+  color: #6e6778;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-filled-banner {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+  color: #a7f3d0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.huabu-scope .create-skill-dialog .csd-section-label-row {
+  margin-bottom: 10px;
+}
+
+.huabu-scope .create-skill-dialog .csd-section-label {
+  color: #9a92a8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.huabu-scope .create-skill-dialog .csd-section-ready {
+  scroll-margin-top: 12px;
+}
+
+.huabu-scope .create-skill-dialog .csd-hint {
+  margin: 0 0 10px;
+  color: #6e6778;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.huabu-scope .create-skill-dialog .csd-hint code {
+  font-size: 11px;
+  color: #b79aff;
+}
+
+/* 折叠分区：说明 / 技能包文件 / 高级 */
+.huabu-scope .create-skill-dialog .csd-fold {
+  margin-bottom: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold.is-open {
+  border-color: rgba(183, 154, 255, 0.22);
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: #d8d1e0;
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-toggle-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-req {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(192, 132, 252, 0.16);
+  color: #cbbff0;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-opt {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8e8698;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-empty {
+  margin: 0 0 8px;
+  padding: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #6e6778;
+  font-size: 12px;
+  text-align: center;
+}
+
+.huabu-scope .create-skill-dialog .csd-flow-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: #8e8698;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-hint {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.huabu-scope .create-skill-dialog .csd-fold-panel {
+  padding: 0 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-credit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(183, 154, 255, 0.28);
+  background: rgba(139, 92, 246, 0.16);
+  color: #ddd4f0;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.01em;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-tip-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 2px;
+  color: #cbbff0;
+  font-weight: 650;
+  vertical-align: -1px;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-chevron {
+  transition: transform 0.18s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.huabu-scope .create-skill-dialog .csd-ai-tip {
+  margin: 10px 0 10px;
+  color: #8e8698;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* 技能包能力对齐：多文件参考资料行（高级折叠区内） */
+.huabu-scope .create-skill-dialog .csd-pkg-file-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid rgba(183, 154, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.04);
+}
+
+.huabu-scope .create-skill-dialog .csd-pkg-file-row .csd-textarea {
+  min-height: 72px;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai {
+  height: 42px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(183, 154, 255, 0.4);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(168, 85, 247, 0.72));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 22px rgba(139, 92, 246, 0.22);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai-primary {
+  min-width: 148px;
+  justify-content: center;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai-label {
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(18, 14, 28, 0.28);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.huabu-scope .create-skill-dialog .csd-btn-ai:disabled {
+  opacity: 0.55;
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  .huabu-scope .create-skill-dialog-backdrop {
+    padding: 10px;
+    align-items: stretch;
+  }
+
+  .huabu-scope .create-skill-dialog {
+    max-height: none;
+    height: 100%;
+    border-radius: 16px;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-header,
+  .huabu-scope .create-skill-dialog .csd-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-grid-2,
+  .huabu-scope .create-skill-dialog .csd-meta-row,
+  .huabu-scope .create-skill-dialog .csd-type-row,
+  .huabu-scope .create-skill-dialog .csd-ai-hero-types {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-tree {
+    display: none;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-ai-toggle {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-ai-toggle-hint {
+    display: none;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-ai-row {
+    flex-direction: column;
+  }
+
+  .huabu-scope .create-skill-dialog .csd-btn-ai {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

@@ -1,0 +1,3 @@
+# 开源本地画布：默认不对外提供站点
+User-agent: *
+Disallow: /

@@ -1,0 +1,22 @@
+{
+  "name": "jumeng-canvas-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/web",
+    "packages/shared",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @jumeng-canvas/web",
+    "build": "npm run build -w @jumeng-canvas/web",
+    "start": "npm run start -w @jumeng-canvas/web",
+    "lint": "npm run lint -w @jumeng-canvas/web",
+    "local": "node scripts/start-browser.mjs",
+    "desktop": "node scripts/start-browser.mjs",
+    "desktop:electron": "npm run start -w @jumeng-canvas/desktop"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}

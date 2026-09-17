@@ -1,0 +1,446 @@
+import type { ComponentType } from "react";
+import type { NodeCategory, NodeTypeDefinition, PortDefinition } from "@jumeng-canvas/shared";
+import {
+  CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  PORT_COLORS,
+} from "@jumeng-canvas/shared";
+import { DEFAULT_TEXT_MODEL, TEXT_MODEL_OPTIONS } from "@/lib/canvas/textModels";
+import { REFERENCE_INPUT_PORT } from "@/lib/canvas/referencePort";
+
+export type {
+  NodeCategory,
+  NodeStatus,
+  PortDefinition,
+  ParamDefinition,
+  NodeTypeDefinition,
+  PortType,
+} from "@jumeng-canvas/shared";
+
+export { PORT_COLORS, CATEGORY_COLORS, CATEGORY_LABELS };
+
+const TEXT_MODEL_SELECT_OPTIONS = TEXT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
+
+export const NODE_REGISTRY: Record<string, NodeTypeDefinition> = {
+  image_input: {
+    type: "image_input",
+    label: "图片输入",
+    category: "input",
+    icon: "Image",
+    color: "#f59e0b",
+    defaultWidth: 240,
+    defaultHeight: 160,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "image", type: "image", label: "图片" }],
+    params: [
+      { key: "prompt", label: "提示词", type: "string", default: "" },
+      { key: "imageUrl", label: "图片地址", type: "string", default: "" },
+      { key: "assetId", label: "素材 ID", type: "string", default: "" },
+    ],
+  },
+  video_input: {
+    type: "video_input",
+    label: "视频输入",
+    category: "input",
+    icon: "Video",
+    color: "#ef4444",
+    defaultWidth: 240,
+    defaultHeight: 160,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "video", type: "video", label: "视频" }],
+    params: [
+      { key: "prompt", label: "提示词", type: "string", default: "" },
+      { key: "videoUrl", label: "视频地址", type: "string", default: "" },
+      { key: "frameRate", label: "帧率", type: "number", default: 24 },
+    ],
+  },
+  audio_input: {
+    type: "audio_input",
+    label: "音频输入",
+    category: "input",
+    icon: "Music",
+    color: "#ec4899",
+    defaultWidth: 240,
+    defaultHeight: 140,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "audio", type: "audio", label: "音频" }],
+    params: [
+      { key: "prompt", label: "提示词", type: "string", default: "" },
+      { key: "audioUrl", label: "音频地址", type: "string", default: "" },
+      { key: "volume", label: "音量", type: "slider", default: 1, min: 0, max: 2, step: 0.1 },
+    ],
+  },
+  text_input: {
+    type: "text_input",
+    label: "文本输入",
+    category: "input",
+    icon: "Type",
+    color: "#06b6d4",
+    defaultWidth: 240,
+    defaultHeight: 140,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "text", type: "text", label: "文本" }],
+    params: [
+      { key: "content", label: "文本内容", type: "string", default: "" },
+      {
+        key: "textPromptKind",
+        label: "文本类型",
+        type: "select",
+        default: "",
+        options: [
+          { value: "", label: "默认（通用文本）" },
+          { value: "text_image_prompt", label: "图片提示词" },
+          { value: "text_video_prompt", label: "视频提示词" },
+          { value: "text_script", label: "生成剧本" },
+          { value: "text_subject", label: "主体提示词" },
+        ],
+      },
+      {
+        key: "model",
+        label: "模型",
+        type: "select",
+        default: DEFAULT_TEXT_MODEL,
+        options: TEXT_MODEL_SELECT_OPTIONS,
+      },
+    ],
+  },
+  // 文档/链接节点：多格式文档或网页网址，供万相 3.0 等 file/link 参考
+  document_input: {
+    type: "document_input",
+    label: "文档/链接",
+    category: "input",
+    icon: "FileText",
+    color: "#a78bfa",
+    defaultWidth: 280,
+    defaultHeight: 200,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "document", type: "document", label: "文档" }],
+    params: [
+      {
+        key: "resourceKind",
+        label: "类型",
+        type: "select",
+        default: "file",
+        options: [
+          { value: "file", label: "文件（Office/PDF/文本等）" },
+          { value: "link", label: "网址" },
+        ],
+      },
+      { key: "fileUrl", label: "文件地址", type: "string", default: "" },
+      { key: "fileName", label: "文件名", type: "string", default: "" },
+      { key: "linkUrl", label: "网址", type: "string", default: "" },
+      { key: "assetId", label: "素材 ID", type: "string", default: "" },
+    ],
+  },
+  director_stage: {
+    type: "director_stage",
+    label: "导演台",
+    category: "control",
+    icon: "Clapperboard",
+    color: "#6366f1",
+    defaultWidth: 280,
+    defaultHeight: 200,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "image", type: "image", label: "分镜截图" }],
+    params: [
+      { key: "imageUrl", label: "截图地址", type: "string", default: "" },
+      { key: "assetId", label: "截图素材 ID", type: "string", default: "" },
+      { key: "depthUrl", label: "深度图地址", type: "string", default: "" },
+      { key: "depthAssetId", label: "深度图素材 ID", type: "string", default: "" },
+      { key: "normalUrl", label: "法线图地址", type: "string", default: "" },
+      { key: "normalAssetId", label: "法线图素材 ID", type: "string", default: "" },
+      { key: "segmentationUrl", label: "语义分割地址", type: "string", default: "" },
+      { key: "segmentationAssetId", label: "语义分割素材 ID", type: "string", default: "" },
+      { key: "openposeUrl", label: "骨架图地址", type: "string", default: "" },
+      { key: "openposeAssetId", label: "骨架图素材 ID", type: "string", default: "" },
+      { key: "previewImageUrl", label: "AI 预览图", type: "string", default: "" },
+      { key: "previewAssetId", label: "AI 预览素材 ID", type: "string", default: "" },
+      { key: "sceneStateKey", label: "场景 OSS Key", type: "string", default: "" },
+    ],
+  },
+  storyboard_grid: {
+    type: "storyboard_grid",
+    label: "分镜表",
+    category: "control",
+    icon: "LayoutGrid",
+    color: "#a855f7",
+    defaultWidth: 880,
+    defaultHeight: 360,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "shots_out", type: "text", label: "镜头 JSON" }],
+    params: [
+      { key: "shots", label: "分镜行", type: "string", default: "[]" },
+      { key: "selectedShotId", label: "选中行", type: "string", default: "" },
+      { key: "sourceNodeId", label: "来源节点", type: "string", default: "" },
+      { key: "viewMode", label: "视图", type: "string", default: "shots" },
+      { key: "subjects", label: "准备资产", type: "string", default: "{}" },
+      { key: "subjectKind", label: "主体分类", type: "string", default: "role" },
+      { key: "selectedSubjectId", label: "选中主体", type: "string", default: "" },
+      { key: "sketchModel", label: "草图模型", type: "string", default: "doubao_image" },
+      { key: "sketchRetryRowId", label: "草图重试行", type: "string", default: "" },
+      { key: "cameraGenRowId", label: "运镜生成行", type: "string", default: "" },
+      { key: "videoGenRowId", label: "视频词生成行", type: "string", default: "" },
+      { key: "subjectImageRetryId", label: "主体图重试", type: "string", default: "" },
+      { key: "subjectImageModel", label: "主体图模型", type: "string", default: "" },
+      { key: "visualStyleId", label: "视觉风格", type: "string", default: "none" },
+    ],
+  },
+  /** 仅爆款/出海批量成片时创建；不进节点面板手动添加 */
+  finished_clips_grid: {
+    type: "finished_clips_grid",
+    label: "成片表",
+    category: "control",
+    icon: "Clapperboard",
+    color: "#0ea5e9",
+    defaultWidth: 720,
+    defaultHeight: 480,
+    inputs: [],
+    outputs: [],
+    params: [
+      { key: "sourceGridNodeId", label: "来源分镜表", type: "string", default: "" },
+      { key: "skillKind", label: "技能来源", type: "string", default: "" },
+    ],
+  },
+  /** 一键出海专属可复用节点（对齐 OiiOii Skill 卡） */
+  overseas_localize: {
+    type: "overseas_localize",
+    label: "一键出海",
+    category: "control",
+    icon: "Globe",
+    color: "#8b5cf6",
+    defaultWidth: 400,
+    defaultHeight: 520,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [
+      { id: "video", type: "video", label: "参考视频" },
+      { id: "shots_out", type: "text", label: "分镜 JSON" },
+    ],
+    params: [
+      { key: "targetMarketId", label: "目标市场", type: "string", default: "US" },
+      { key: "aspectRatio", label: "画幅", type: "string", default: "9:16" },
+      { key: "clarity", label: "清晰度", type: "string", default: "1080p" },
+      { key: "tipIndex", label: "提示步", type: "number", default: 0 },
+      // 布尔：勿用空字符串（Boolean("false") 会误判为 true）
+      { key: "tipDismissed", label: "提示已关", type: "toggle", default: false },
+      { key: "phase", label: "阶段", type: "string", default: "idle" },
+      { key: "videoAssetId", label: "参考视频", type: "string", default: "" },
+      { key: "gridNodeId", label: "分镜表", type: "string", default: "" },
+    ],
+  },
+  prompt: {
+    type: "prompt",
+    label: "提示词",
+    category: "generation",
+    icon: "MessageSquare",
+    color: "#8b5cf6",
+    defaultWidth: 280,
+    defaultHeight: 180,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [
+      { id: "positive", type: "text", label: "正向提示词" },
+      { id: "negative", type: "text", label: "反向提示词" },
+    ],
+    params: [
+      { key: "positive", label: "正向提示词", type: "string", default: "" },
+      { key: "negative", label: "反向提示词", type: "string", default: "" },
+    ],
+  },
+  model_loader: {
+    type: "model_loader",
+    label: "模型加载器",
+    category: "model",
+    icon: "Box",
+    color: "#3b82f6",
+    defaultWidth: 240,
+    defaultHeight: 120,
+    inputs: [],
+    outputs: [{ id: "model", type: "model", label: "模型" }],
+    params: [
+      {
+        key: "checkpoint",
+        label: "Checkpoint",
+        type: "select",
+        default: "sd_xl_base",
+        options: [
+          { label: "SD XL Base", value: "sd_xl_base" },
+          { label: "SD XL Turbo", value: "sd_xl_turbo" },
+          { label: "Flux Dev", value: "flux_dev" },
+          { label: "Flux Schnell", value: "flux_schnell" },
+        ],
+      },
+    ],
+  },
+  ksampler: {
+    type: "ksampler",
+    label: "采样器",
+    category: "generation",
+    icon: "Sparkles",
+    color: "#8b5cf6",
+    defaultWidth: 280,
+    defaultHeight: 220,
+    inputs: [
+      { id: "model", type: "model", label: "模型", required: true },
+      { id: "positive", type: "text", label: "正向提示词", required: true },
+      { id: "negative", type: "text", label: "反向提示词" },
+      { id: "latent_image", type: "latent", label: "Latent" },
+    ],
+    outputs: [{ id: "latent", type: "latent", label: "Latent" }],
+    params: [
+      { key: "seed", label: "Seed", type: "seed", default: -1 },
+      { key: "steps", label: "步数", type: "slider", default: 20, min: 1, max: 150, step: 1 },
+      { key: "cfg", label: "CFG", type: "slider", default: 7, min: 1, max: 30, step: 0.5 },
+      {
+        key: "sampler",
+        label: "采样器",
+        type: "select",
+        default: "euler",
+        options: [
+          { label: "Euler", value: "euler" },
+          { label: "Euler a", value: "euler_ancestral" },
+          { label: "DPM++ 2M", value: "dpmpp_2m" },
+          { label: "DPM++ SDE", value: "dpmpp_sde" },
+          { label: "DDIM", value: "ddim" },
+        ],
+      },
+      {
+        key: "scheduler",
+        label: "调度器",
+        type: "select",
+        default: "normal",
+        options: [
+          { label: "Normal", value: "normal" },
+          { label: "Karras", value: "karras" },
+          { label: "Exponential", value: "exponential" },
+        ],
+      },
+      { key: "width", label: "宽度", type: "number", default: 1024 },
+      { key: "height", label: "高度", type: "number", default: 1024 },
+    ],
+  },
+  vae_decode: {
+    type: "vae_decode",
+    label: "VAE 解码",
+    category: "generation",
+    icon: "ImagePlay",
+    color: "#8b5cf6",
+    defaultWidth: 240,
+    defaultHeight: 100,
+    inputs: [
+      { id: "latent", type: "latent", label: "Latent", required: true },
+      { id: "vae", type: "vae", label: "VAE" },
+    ],
+    outputs: [{ id: "image", type: "image", label: "图片" }],
+    params: [],
+  },
+  lora: {
+    type: "lora",
+    label: "LoRA",
+    category: "model",
+    icon: "PlusCircle",
+    color: "#3b82f6",
+    defaultWidth: 240,
+    defaultHeight: 140,
+    inputs: [{ id: "model", type: "model", label: "模型", required: true }],
+    outputs: [{ id: "model", type: "model", label: "模型" }],
+    params: [
+      {
+        key: "lora_name",
+        label: "LoRA",
+        type: "select",
+        default: "",
+        options: [
+          { label: "细节增强 v2", value: "detail_enhancer_v2" },
+          { label: "动漫风格", value: "anime_style" },
+          { label: "写实人像", value: "realistic_portrait" },
+        ],
+      },
+      { key: "strength", label: "强度", type: "slider", default: 1, min: -2, max: 2, step: 0.05 },
+    ],
+  },
+  image_preview: {
+    type: "image_preview",
+    label: "图片预览",
+    category: "output",
+    icon: "Eye",
+    color: "#f59e0b",
+    defaultWidth: 320,
+    defaultHeight: 320,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [],
+    params: [],
+  },
+  upscale: {
+    type: "upscale",
+    label: "超分辨率",
+    category: "postprocess",
+    icon: "Maximize2",
+    color: "#10b981",
+    defaultWidth: 240,
+    defaultHeight: 140,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "image", type: "image", label: "图片" }],
+    params: [
+      { key: "scale", label: "放大倍数", type: "slider", default: 2, min: 1, max: 8, step: 0.5 },
+      {
+        key: "method",
+        label: "算法",
+        type: "select",
+        default: "esrgan",
+        options: [
+          { label: "ESRGAN", value: "esrgan" },
+          { label: "Real-ESRGAN", value: "real_esrgan" },
+          { label: "SwinIR", value: "swinir" },
+        ],
+      },
+    ],
+  },
+  llm_text: {
+    type: "llm_text",
+    label: "LLM 文本",
+    category: "generation",
+    icon: "Brain",
+    color: "#8b5cf6",
+    defaultWidth: 280,
+    defaultHeight: 180,
+    inputs: [REFERENCE_INPUT_PORT],
+    outputs: [{ id: "text", type: "text", label: "文本" }],
+    params: [
+      {
+        key: "model",
+        label: "模型",
+        type: "select",
+        default: DEFAULT_TEXT_MODEL,
+        options: TEXT_MODEL_SELECT_OPTIONS,
+      },
+      { key: "max_tokens", label: "最大输出", type: "number", default: 2048 },
+      { key: "temperature", label: "随机性", type: "slider", default: 0.7, min: 0, max: 2, step: 0.1 },
+    ],
+  },
+  // 画布节点组：液态玻璃底框，无端口，由多选成组创建
+  node_group: {
+    type: "node_group",
+    label: "节点组",
+    category: "control",
+    icon: "Layers",
+    color: "#8b5cf6",
+    defaultWidth: 400,
+    defaultHeight: 300,
+    inputs: [],
+    outputs: [],
+    params: [],
+  },
+};
+
+export function getNodeDef(type: string): NodeTypeDefinition | undefined {
+  return NODE_REGISTRY[type];
+}
+
+export function getNodesByCategory(): Record<NodeCategory, NodeTypeDefinition[]> {
+  const result: Record<string, NodeTypeDefinition[]> = {};
+  for (const def of Object.values(NODE_REGISTRY)) {
+    if (!result[def.category]) result[def.category] = [];
+    result[def.category].push(def);
+  }
+  return result;
+}
+

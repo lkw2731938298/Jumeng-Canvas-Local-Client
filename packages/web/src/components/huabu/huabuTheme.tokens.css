@@ -1,0 +1,424 @@
+/* 全局主题覆盖 huabu 壳层硬编码色（发现 / 项目 / 技能 / 活动）。
+   选择器带 html[data-app-theme]，优先级高于 huabuTheme.css。 */
+
+html[data-app-theme] .huabu-scope {
+  color: var(--foreground);
+  background: var(--background);
+  --bg: var(--background);
+  --panel: var(--card);
+  --panel-soft: var(--muted);
+  --line: var(--border);
+  --muted: var(--muted-foreground);
+  --purple: var(--primary);
+  --purple-bright: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .app-shell {
+  background:
+    radial-gradient(
+      circle at 70% 5%,
+      color-mix(in srgb, var(--primary) 12%, transparent),
+      transparent 27%
+    ),
+    var(--background);
+}
+
+html[data-app-theme] .huabu-scope .brand-logo {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .brand-name-primary {
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .side-nav button,
+html[data-app-theme] .huabu-scope .side-nav a {
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+html[data-app-theme] .huabu-scope .side-nav button:hover,
+html[data-app-theme] .huabu-scope .side-nav button:focus,
+html[data-app-theme] .huabu-scope .side-nav button:focus-visible,
+html[data-app-theme] .huabu-scope .side-nav button.active,
+html[data-app-theme] .huabu-scope .side-nav a:hover,
+html[data-app-theme] .huabu-scope .side-nav a:focus,
+html[data-app-theme] .huabu-scope .side-nav a:focus-visible,
+html[data-app-theme] .huabu-scope .side-nav a.active {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .topbar-icon-btn,
+html[data-app-theme] .huabu-scope .topbar-store {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .topbar-icon-btn:hover,
+html[data-app-theme] .huabu-scope .topbar-store:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .topbar-challenge {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: var(--card);
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .topbar-challenge.is-active {
+  background: color-mix(in srgb, var(--primary) 16%, var(--card));
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .member-panel {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .member-gem,
+html[data-app-theme] .huabu-scope .member-credits {
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .topbar-notify-panel {
+  border-color: var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
+html[data-app-theme] .huabu-scope .topbar-notify-head strong,
+html[data-app-theme] .huabu-scope .topbar-notify-title,
+html[data-app-theme] .huabu-scope .topbar-notify-item {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .topbar-notify-readall,
+html[data-app-theme] .huabu-scope .topbar-notify-body,
+html[data-app-theme] .huabu-scope .topbar-notify-empty {
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .projects-page,
+html[data-app-theme] .huabu-scope .skills-page {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .projects-page-title,
+html[data-app-theme] .huabu-scope .skills-hero h1,
+html[data-app-theme] .huabu-scope .dash-head,
+html[data-app-theme] .huabu-scope .dash-title svg,
+html[data-app-theme] .huabu-scope .dash-link {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .skills-hero h1 span {
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .workflow-tabs button,
+html[data-app-theme] .huabu-scope .projects-tabs button,
+html[data-app-theme] .huabu-scope .skills-primary-tabs button,
+html[data-app-theme] .huabu-scope .skills-category-tabs button,
+html[data-app-theme] .huabu-scope .gallery-filters button,
+html[data-app-theme] .huabu-scope .gallery-sort button,
+html[data-app-theme] .huabu-scope .project-tabs button {
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .workflow-tabs button:hover,
+html[data-app-theme] .huabu-scope .projects-tabs button:hover,
+html[data-app-theme] .huabu-scope .skills-primary-tabs button:hover,
+html[data-app-theme] .huabu-scope .skills-category-tabs button:hover,
+html[data-app-theme] .huabu-scope .gallery-filters button:hover,
+html[data-app-theme] .huabu-scope .gallery-sort button:hover,
+html[data-app-theme] .huabu-scope .project-tabs button:hover {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .workflow-tabs button.active,
+html[data-app-theme] .huabu-scope .projects-tabs button.active,
+html[data-app-theme] .huabu-scope .skills-primary-tabs button.active,
+html[data-app-theme] .huabu-scope .skills-category-tabs button.active,
+html[data-app-theme] .huabu-scope .gallery-filters button.active,
+html[data-app-theme] .huabu-scope .gallery-sort button.active,
+html[data-app-theme] .huabu-scope .project-tabs button.active {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .project-title,
+html[data-app-theme] .huabu-scope .library-project-new,
+html[data-app-theme] .huabu-scope .library-new-icon {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .activities-title,
+html[data-app-theme] .huabu-scope .activities-section-title {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .project-tabs {
+  border-color: var(--border);
+  background: var(--muted);
+}
+
+/* 紫色主题（dark）保留原始玻璃质感：避免 project-tabs / workflow-tabs 外层被中性化 */
+html[data-app-theme="dark"] .huabu-scope .project-tabs {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(10, 9, 14, 0.72);
+}
+
+html[data-app-theme] .huabu-scope .projects-search,
+html[data-app-theme] .huabu-scope .skills-search,
+html[data-app-theme] .huabu-scope .projects-recycle,
+html[data-app-theme] .huabu-scope .projects-tool-btn,
+html[data-app-theme] .huabu-scope .gallery-sort,
+html[data-app-theme] .huabu-scope .gallery-filters button {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .projects-search input,
+html[data-app-theme] .huabu-scope .skills-search input {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .projects-search input::placeholder,
+html[data-app-theme] .huabu-scope .skills-search input::placeholder {
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .project-card,
+html[data-app-theme] .huabu-scope .skill-library-card,
+html[data-app-theme] .huabu-scope .library-project-card,
+html[data-app-theme] .huabu-scope .discover-corner-popup {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+html[data-app-theme] .huabu-scope .discover-corner-popup-text {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .skill-library-title h2,
+html[data-app-theme] .huabu-scope .skill-library-title,
+html[data-app-theme] .huabu-scope .gallery-likes {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .creation-box {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .creation-box textarea,
+html[data-app-theme] .huabu-scope .creation-box input,
+html[data-app-theme] .huabu-scope .creation-box button,
+html[data-app-theme] .huabu-scope .creation-bottom,
+html[data-app-theme] .huabu-scope .creation-tools,
+html[data-app-theme] .huabu-scope .tool-icon-btn,
+html[data-app-theme] .huabu-scope .creation-top textarea {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .creation-top textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .hero-video-mask {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--background) 35%, transparent) 0%,
+      color-mix(in srgb, var(--background) 62%, transparent) 45%,
+      var(--background) 100%
+    ),
+    radial-gradient(
+      circle at 50% 28%,
+      color-mix(in srgb, var(--primary) 16%, transparent),
+      transparent 55%
+    );
+}
+
+/* 主视觉叠在视频上：只在深色主题保持浅色字 */
+html[data-app-theme="dark"] .huabu-scope .hero,
+html[data-app-theme="dark"] .huabu-scope .hero h1,
+html[data-app-theme="dark-blue"] .huabu-scope .hero,
+html[data-app-theme="dark-blue"] .huabu-scope .hero h1,
+html[data-app-theme="dark-green"] .huabu-scope .hero,
+html[data-app-theme="dark-green"] .huabu-scope .hero h1 {
+  color: #f8fafc;
+}
+
+/* 浅色主题回填语义颜色，避免“太白” */
+html[data-app-theme="light"] .huabu-scope .hero,
+html[data-app-theme="light"] .huabu-scope .hero h1,
+html[data-app-theme="light-blue"] .huabu-scope .hero,
+html[data-app-theme="light-blue"] .huabu-scope .hero h1 {
+  color: var(--foreground);
+}
+
+html[data-app-theme="dark"] .huabu-scope .prompt-chip,
+html[data-app-theme="dark-blue"] .huabu-scope .prompt-chip,
+html[data-app-theme="dark-green"] .huabu-scope .prompt-chip {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.28);
+  color: #f1f5f9;
+}
+
+html[data-app-theme="light"] .huabu-scope .prompt-chip,
+html[data-app-theme="light-blue"] .huabu-scope .prompt-chip {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--muted-foreground);
+}
+
+html[data-app-theme] .huabu-scope .gallery-header h2,
+html[data-app-theme] .huabu-scope .gallery-header h2 svg {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .workflow-tabs {
+  border-color: var(--border);
+  background: var(--muted);
+}
+
+html[data-app-theme="dark"] .huabu-scope .workflow-tabs {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+/* 公共页仍残留的品牌紫高亮，统一跟随当前主题主色 */
+html[data-app-theme] .huabu-scope .campaign-tag-purple,
+html[data-app-theme] .huabu-scope .projects-recycle.active,
+html[data-app-theme] .huabu-scope .projects-tool-btn.active,
+html[data-app-theme] .huabu-scope .skills-primary-tabs button.active,
+html[data-app-theme] .huabu-scope .skills-category-tabs button.active,
+html[data-app-theme] .huabu-scope .gallery-sort button.active,
+html[data-app-theme] .huabu-scope .gallery-filters button.active,
+html[data-app-theme] .huabu-scope .prompt-chip-all,
+html[data-app-theme] .huabu-scope .library-project-new,
+html[data-app-theme] .huabu-scope .project-cover-edit {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .skills-primary-tabs button.active::after {
+  background: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .hero h1 em {
+  background: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--foreground) 92%, white) 5%,
+    var(--primary) 48%,
+    color-mix(in srgb, var(--primary) 72%, white) 85%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html[data-app-theme] .huabu-scope .member-gem,
+html[data-app-theme] .huabu-scope .member-credits,
+html[data-app-theme] .huabu-scope .avatar-mascot {
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .topbar-challenge,
+html[data-app-theme] .huabu-scope .topbar-challenge:hover,
+html[data-app-theme] .huabu-scope .topbar-challenge.is-active,
+html[data-app-theme] .huabu-scope .library-favorite,
+html[data-app-theme] .huabu-scope .library-favorite:hover,
+html[data-app-theme] .huabu-scope .library-favorite.active,
+html[data-app-theme] .huabu-scope .library-favorite:focus-visible,
+html[data-app-theme] .huabu-scope .library-select.active,
+html[data-app-theme] .huabu-scope .skill-library-meta .skill-fav-link,
+html[data-app-theme] .huabu-scope .skill-library-meta .skill-fav-link:hover,
+html[data-app-theme] .huabu-scope .skill-library-meta .skill-fav-link.active,
+html[data-app-theme] .huabu-scope .skill-library-title button.active,
+html[data-app-theme] .huabu-scope .creation-skill-chip,
+html[data-app-theme] .huabu-scope .creation-skill-chip:hover,
+html[data-app-theme] .huabu-scope .skill-mine-badge,
+html[data-app-theme] .huabu-scope .project-action.is-favorite,
+html[data-app-theme] .huabu-scope .feature-purple,
+html[data-app-theme] .huabu-scope .gallery-page-btn.is-active,
+html[data-app-theme] .huabu-scope .gallery-badge,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tab.active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tree-file.is-active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip:hover,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip.active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-ai-credit-chip,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-ai-tip-credit {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  color: var(--primary);
+}
+
+html[data-app-theme] .huabu-scope .topbar-challenge,
+html[data-app-theme] .huabu-scope .topbar-challenge.is-active,
+html[data-app-theme] .huabu-scope .library-favorite:hover,
+html[data-app-theme] .huabu-scope .library-favorite.active,
+html[data-app-theme] .huabu-scope .library-select.active,
+html[data-app-theme] .huabu-scope .skill-library-meta .skill-fav-link:hover,
+html[data-app-theme] .huabu-scope .skill-library-meta .skill-fav-link.active,
+html[data-app-theme] .huabu-scope .skill-library-title button.active,
+html[data-app-theme] .huabu-scope .creation-skill-chip,
+html[data-app-theme] .huabu-scope .skill-mine-badge,
+html[data-app-theme] .huabu-scope .project-action.is-favorite,
+html[data-app-theme] .huabu-scope .feature-purple,
+html[data-app-theme] .huabu-scope .gallery-page-btn.is-active,
+html[data-app-theme] .huabu-scope .gallery-badge,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tab.active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tree-file.is-active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip.active,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-ai-credit-chip,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-ai-tip-credit {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+html[data-app-theme] .huabu-scope .library-project-card.selected,
+html[data-app-theme] .huabu-scope .projects-tabs button.active,
+html[data-app-theme] .huabu-scope .project-tabs button.active,
+html[data-app-theme] .huabu-scope .workflow-tabs button.active {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tree-file.is-active .csd-tree-dot {
+  background: var(--primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip.active strong,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-type-chip.active span,
+html[data-app-theme] .huabu-scope .create-skill-dialog .csd-tree-file.is-active,
+html[data-app-theme] .huabu-scope .skill-mine-badge,
+html[data-app-theme] .huabu-scope .creation-skill-chip-label,
+html[data-app-theme] .huabu-scope .creation-skill-chip-x,
+html[data-app-theme] .huabu-scope .gallery-badge,
+html[data-app-theme] .huabu-scope .campaign-tag-purple {
+  color: var(--primary);
+}
+
+
+html[data-app-theme] .huabu-scope .campaign-meta h3,
+html[data-app-theme] .huabu-scope .campaign-badge {
+  color: var(--foreground);
+}
+
+html[data-app-theme] .huabu-scope .campaign-badge {
+  border-color: var(--border);
+  background: var(--muted);
+}
+

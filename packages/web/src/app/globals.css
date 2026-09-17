@@ -1,0 +1,418 @@
+/* 免安装包内没有 .git，Tailwind 的自动探测不会套用 .gitignore，
+   会把 .next/dev/cache/turbopack/*.sst 等二进制缓存当源码扫描，
+   生成 [&_[<乱码>slot=…]] 这类非法选择器导致 CSS 构建失败。
+   因此关闭自动探测，显式只扫 src 下的源码（class 仅存在于此）。 */
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@source "../**/*.{ts,tsx,js,jsx,mdx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "DM Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root,
+[data-app-theme="dark"] {
+  --radius: 0.5rem;
+  --background: hsl(240 30% 6%);
+  --foreground: #e2e8f0;
+  --card: hsl(240 25% 10%);
+  --card-foreground: #e2e8f0;
+  --popover: hsl(240 20% 14%);
+  --popover-foreground: #e2e8f0;
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --secondary: hsl(240 20% 14%);
+  --secondary-foreground: #cbd5e1;
+  --muted: hsl(240 15% 16%);
+  --muted-foreground: #94a3b8;
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: hsla(240, 20%, 100%, 0.06);
+  --input: hsla(240, 20%, 100%, 0.08);
+  --ring: rgba(139, 92, 246, 0.5);
+  --sidebar: hsl(240 25% 8%);
+  --sidebar-foreground: #94a3b8;
+  --sidebar-primary: #8b5cf6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: hsl(240 20% 12%);
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: hsla(240, 20%, 100%, 0.06);
+  --sidebar-ring: rgba(139, 92, 246, 0.5);
+  --chart-1: #8b5cf6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+  --grid-color: rgba(96, 96, 160, 0.12);
+  --grid-color-dot: rgba(96, 96, 160, 0.2);
+  --canvas-bg: #000000;
+  --panel-accent-border: rgba(139, 92, 246, 0.35);
+  --canvas-glass-tint: rgba(139, 92, 246, 0.15);
+  --node-border: rgba(255, 255, 255, 0.08);
+  --node-border-selected: #8b5cf6;
+  --node-glow: rgba(139, 92, 246, 0.3);
+  --panel-bg: rgba(18, 18, 36, 0.92);
+  --panel-blur: blur(24px);
+  --chrome-frost: rgba(255, 255, 255, 0.05);
+  --chrome-frost-border: rgba(255, 255, 255, 0.1);
+  --chrome-frost-text: rgba(255, 255, 255, 0.9);
+  --chrome-frost-muted: rgba(255, 255, 255, 0.5);
+}
+
+[data-app-theme="light"] {
+  --background: hsl(210 20% 98%);
+  --foreground: hsl(222 47% 11%);
+  --card: #ffffff;
+  --card-foreground: hsl(222 47% 11%);
+  --popover: #ffffff;
+  --popover-foreground: hsl(222 47% 11%);
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+  --secondary: hsl(210 20% 96%);
+  --secondary-foreground: hsl(215 16% 35%);
+  --muted: hsl(210 20% 96%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent: #7c3aed;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: hsla(222, 20%, 20%, 0.08);
+  --input: hsla(222, 20%, 20%, 0.06);
+  --ring: rgba(124, 58, 237, 0.35);
+  --sidebar: hsl(210 20% 97%);
+  --sidebar-foreground: hsl(215 16% 35%);
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: hsl(210 20% 94%);
+  --sidebar-accent-foreground: hsl(222 47% 11%);
+  --sidebar-border: hsla(222, 20%, 20%, 0.08);
+  --sidebar-ring: rgba(124, 58, 237, 0.35);
+  --chart-1: #7c3aed;
+  --grid-color: rgba(15, 23, 42, 0.08);
+  --grid-color-dot: rgba(15, 23, 42, 0.14);
+  --canvas-bg: #eef2f7;
+  --panel-accent-border: rgba(124, 58, 237, 0.25);
+  --canvas-glass-tint: rgba(124, 58, 237, 0.08);
+  --node-border: rgba(15, 23, 42, 0.1);
+  --node-border-selected: #7c3aed;
+  --node-glow: rgba(124, 58, 237, 0.2);
+  --panel-bg: rgba(255, 255, 255, 0.88);
+  --chrome-frost: rgba(255, 255, 255, 0.72);
+  --chrome-frost-border: rgba(15, 23, 42, 0.1);
+  --chrome-frost-text: hsl(222 47% 11%);
+  --chrome-frost-muted: hsl(215 16% 47%);
+}
+
+[data-app-theme="dark-blue"] {
+  --background: hsl(222 40% 6%);
+  --foreground: #e2e8f0;
+  --card: hsl(222 35% 10%);
+  --card-foreground: #e2e8f0;
+  --popover: hsl(222 30% 14%);
+  --popover-foreground: #e2e8f0;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: hsl(222 20% 14%);
+  --secondary-foreground: #cbd5e1;
+  --muted: hsl(222 15% 16%);
+  --muted-foreground: #94a3b8;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: hsla(222, 30%, 100%, 0.06);
+  --input: hsla(222, 30%, 100%, 0.08);
+  --ring: rgba(59, 130, 246, 0.5);
+  --sidebar: hsl(222 30% 8%);
+  --sidebar-foreground: #94a3b8;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: hsl(222 25% 12%);
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: hsla(222, 30%, 100%, 0.06);
+  --sidebar-ring: rgba(59, 130, 246, 0.5);
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --grid-color: rgba(59, 100, 160, 0.12);
+  --grid-color-dot: rgba(59, 100, 160, 0.22);
+  --canvas-bg: #020810;
+  --panel-accent-border: rgba(59, 130, 246, 0.35);
+  --canvas-glass-tint: rgba(59, 130, 246, 0.15);
+  --node-border: rgba(255, 255, 255, 0.08);
+  --node-border-selected: #3b82f6;
+  --node-glow: rgba(59, 130, 246, 0.3);
+  --panel-bg: rgba(10, 16, 32, 0.92);
+  --chrome-frost: rgba(255, 255, 255, 0.05);
+  --chrome-frost-border: rgba(255, 255, 255, 0.1);
+  --chrome-frost-text: rgba(255, 255, 255, 0.9);
+  --chrome-frost-muted: rgba(255, 255, 255, 0.5);
+}
+
+[data-app-theme="dark-green"] {
+  --background: hsl(160 25% 6%);
+  --foreground: #e2e8f0;
+  --card: hsl(160 20% 10%);
+  --card-foreground: #e2e8f0;
+  --popover: hsl(160 18% 14%);
+  --popover-foreground: #e2e8f0;
+  --primary: #10b981;
+  --primary-foreground: #ffffff;
+  --secondary: hsl(160 20% 14%);
+  --secondary-foreground: #cbd5e1;
+  --muted: hsl(160 15% 16%);
+  --muted-foreground: #94a3b8;
+  --accent: #10b981;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: hsla(160, 30%, 100%, 0.06);
+  --input: hsla(160, 30%, 100%, 0.08);
+  --ring: rgba(16, 185, 129, 0.5);
+  --sidebar: hsl(160 30% 8%);
+  --sidebar-foreground: #94a3b8;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: hsl(160 25% 12%);
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: hsla(160, 30%, 100%, 0.06);
+  --sidebar-ring: rgba(16, 185, 129, 0.5);
+  --chart-1: #10b981;
+  --chart-2: #3b82f6;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --grid-color: rgba(40, 120, 90, 0.12);
+  --grid-color-dot: rgba(40, 120, 90, 0.22);
+  --canvas-bg: #020a08;
+  --panel-accent-border: rgba(16, 185, 129, 0.35);
+  --canvas-glass-tint: rgba(16, 185, 129, 0.15);
+  --node-border: rgba(255, 255, 255, 0.08);
+  --node-border-selected: #10b981;
+  --node-glow: rgba(16, 185, 129, 0.3);
+  --panel-bg: rgba(10, 24, 20, 0.92);
+  --chrome-frost: rgba(255, 255, 255, 0.05);
+  --chrome-frost-border: rgba(255, 255, 255, 0.1);
+  --chrome-frost-text: rgba(255, 255, 255, 0.9);
+  --chrome-frost-muted: rgba(255, 255, 255, 0.5);
+}
+
+[data-app-theme="light-blue"] {
+  --background: hsl(214 60% 97%);
+  --foreground: hsl(222 47% 11%);
+  --card: #ffffff;
+  --card-foreground: hsl(222 47% 11%);
+  --popover: #ffffff;
+  --popover-foreground: hsl(222 47% 11%);
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: hsl(214 40% 94%);
+  --secondary-foreground: hsl(215 16% 35%);
+  --muted: hsl(214 40% 94%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent: #2563eb;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: hsla(222, 30%, 20%, 0.08);
+  --input: hsla(222, 30%, 20%, 0.06);
+  --ring: rgba(37, 99, 235, 0.35);
+  --sidebar: hsl(214 55% 95%);
+  --sidebar-foreground: hsl(215 16% 35%);
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: hsl(214 45% 91%);
+  --sidebar-accent-foreground: hsl(222 47% 11%);
+  --sidebar-border: hsla(222, 30%, 20%, 0.08);
+  --sidebar-ring: rgba(37, 99, 235, 0.35);
+  --chart-1: #2563eb;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+  --grid-color: rgba(15, 23, 42, 0.08);
+  --grid-color-dot: rgba(37, 99, 235, 0.18);
+  --canvas-bg: #e8f0fe;
+  --panel-accent-border: rgba(37, 99, 235, 0.25);
+  --canvas-glass-tint: rgba(37, 99, 235, 0.1);
+  --node-border: rgba(15, 23, 42, 0.1);
+  --node-border-selected: #2563eb;
+  --node-glow: rgba(37, 99, 235, 0.2);
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --chrome-frost: rgba(255, 255, 255, 0.75);
+  --chrome-frost-border: rgba(15, 23, 42, 0.1);
+  --chrome-frost-text: hsl(222 47% 11%);
+  --chrome-frost-muted: hsl(215 16% 47%);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
+  html { @apply font-sans; }
+}
+
+.canvas-fullscreen { position: fixed; inset: 0; z-index: 50; background: var(--canvas-bg, #000000); --canvas-handle-gap: 10px; --canvas-handle-dot: 12px; --canvas-handle-outset: calc(var(--canvas-handle-gap) + var(--canvas-handle-dot) / 2); }
+.glass-panel { background: var(--panel-bg); backdrop-filter: var(--panel-blur); border: 1px solid var(--border); }
+@keyframes node-selection-glow {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+@keyframes node-selection-dot {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.canvas-node-selected-glow {
+  border: 1.5px solid;
+  animation: node-selection-glow 2.4s ease-in-out infinite;
+}
+
+.canvas-node-selected-dot {
+  animation: node-selection-dot 2.4s ease-in-out infinite;
+}
+
+.react-flow__handle.canvas-node-handle {
+  z-index: 30;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+}
+
+.react-flow__handle.canvas-node-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--canvas-handle-dot, 12px);
+  height: var(--canvas-handle-dot, 12px);
+  border-radius: 50%;
+  background: var(--handle-color, #8b5cf6);
+  border: 2px solid rgba(0, 0, 0, 0.95);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* Dot center sits (gap + radius) outside the card border */
+.react-flow__handle.canvas-node-handle-left {
+  left: calc(-1 * var(--canvas-handle-outset, 16px));
+  transform: translate(-50%, -50%);
+}
+
+.react-flow__handle.canvas-node-handle-right {
+  right: calc(-1 * var(--canvas-handle-outset, 16px));
+  transform: translate(50%, -50%);
+}
+
+.react-flow__attribution { display: none !important; }
+
+/* Brighter default connection lines (including saved workflows). */
+.react-flow__edge .react-flow__edge-path {
+  filter: brightness(1.35);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #c4b5fd !important;
+  stroke-width: 2.5px !important;
+  filter: brightness(1.2);
+}
+
+@keyframes canvas-edge-flow {
+  to { stroke-dashoffset: -144; }
+}
+
+.canvas-edge-flow {
+  stroke: #ddd6fe;
+  opacity: 0.55;
+  animation: canvas-edge-flow 2.4s ease-in-out infinite;
+  filter: blur(1px) brightness(1.2);
+}
+
+.react-flow__node[class*="react-flow__node-"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+/* Selected node menus / editor popups (EdgeLabelRenderer) above elevated nodes (z +1000). */
+.canvas-fullscreen .react-flow__edgelabel-renderer {
+  z-index: 1100;
+  pointer-events: none;
+}
+
+.canvas-fullscreen .react-flow__edgelabel-renderer > * {
+  pointer-events: auto;
+}
+
+/* Hide resize box visuals; keep invisible hit areas for manual resize */
+.canvas-fullscreen .node-resize-handle,
+.canvas-fullscreen .node-resize-line {
+  opacity: 0 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.canvas-fullscreen .node-resize-handle {
+  width: 12px !important;
+  height: 12px !important;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--primary) 30%, transparent); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--primary) 50%, transparent); }
+
+@keyframes liquid-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
