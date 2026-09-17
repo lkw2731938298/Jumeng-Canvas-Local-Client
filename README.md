@@ -12,6 +12,14 @@
 | 模型来源 | 任意 OpenAI 兼容网关（聚梦、ComfyUI 及其它）由你自行配置 |
 | 许可证 | Apache-2.0 |
 
+## 交流群
+
+**开源无限画布交流 QQ 群：870365376**
+
+使用问题、功能建议、二次开发讨论都欢迎进群。
+
+<img src="docs/qq-group-870365376.png" alt="开源无限画布交流 QQ 群 870365376" width="260">
+
 ---
 
 ## 快速开始
@@ -136,7 +144,16 @@ npm run dev
 
 填 API Base 与 Key。任意 OpenAI 兼容网关均可。
 
-以聚梦为例，Base 填 `https://www.jumengai.com/v1`（**必须带 `/v1`**），实际请求会变成 `…/v1/images/generations`、`…/v1/chat/completions`、`…/v1/video/generations`。参见 [Base URL 文档](https://doc.jumengai.com/api/base-url)。
+以聚梦为例，按所在地区选站点注册取 Key：
+
+| 站点 | 地址 | Base 填写 |
+|---|---|---|
+| 国内站 | https://www.jumengai.com/ | `https://www.jumengai.com/v1` |
+| 海外站 | https://www.jumai.ai/ | `https://www.jumai.ai/v1` |
+
+**Base 必须带 `/v1`**，实际请求会变成 `…/v1/images/generations`、`…/v1/chat/completions`、`…/v1/video/generations`。参见 [Base URL 文档](https://doc.jumengai.com/api/base-url)。
+
+两个站点的账号与额度相互独立，Key 不通用。
 
 ### 2. 模型目录
 
@@ -191,6 +208,15 @@ npm run dev
 ## 技术栈
 
 Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Zustand · React Flow (@xyflow) · Three.js · TanStack Query
+
+## 相关链接
+
+| | |
+|---|---|
+| 交流 QQ 群 | 870365376 |
+| 聚梦 API 国内站 | https://www.jumengai.com/ |
+| 聚梦 API 海外站 | https://www.jumai.ai/ |
+| 聚梦 API 文档 | https://doc.jumengai.com/api/base-url |
 
 ## 许可证
 
