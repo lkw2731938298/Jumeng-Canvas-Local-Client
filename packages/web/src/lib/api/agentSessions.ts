@@ -100,6 +100,12 @@ export type CanvasSnapshotFocusedContent = {
   prompt?: string;
   /** 文本节点正文（截断；更长内容在 OSS） */
   content?: string;
+  /** 文档节点 HTML 摘要（截断） */
+  htmlContent?: string;
+  /** 文档外链 */
+  linkUrl?: string;
+  /** 文档资源类型 file | link | html */
+  resourceKind?: string;
   /** 分镜表行数 */
   shotCount?: number;
   /** 分镜表前几行摘要 */

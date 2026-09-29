@@ -1,0 +1,559 @@
+/* 聚梦画布本地版外框（项目 / 任务 / 设置页）
+   - 颜色走 --jm-* 变量，深浅色由 html[data-app-theme] 切换，强调色读 --primary
+   - html[data-app-glass="off"]：面板改不透明、去模糊
+   - html[data-app-glow="off"]：背景光晕静止 */
+
+.jm-shell {
+  --jm-topbar-h: 52px;
+  --jm-bg: #030013;
+  --jm-topbar: rgba(12, 9, 27, 0.9);
+  --jm-line: rgba(255, 255, 255, 0.08);
+  --jm-line-strong: rgba(255, 255, 255, 0.14);
+  --jm-panel: rgba(16, 13, 36, 0.58);
+  --jm-panel-solid: #0d0a1e;
+  --jm-card: rgba(255, 255, 255, 0.035);
+  --jm-card-solid: #121022;
+  --jm-card-hover: rgba(255, 255, 255, 0.06);
+  --jm-chip: rgba(255, 255, 255, 0.07);
+  --jm-chip-hover: rgba(255, 255, 255, 0.12);
+  --jm-inset: rgba(3, 1, 16, 0.55);
+  --jm-text: #f4f3ff;
+  --jm-text-2: rgba(236, 234, 255, 0.74);
+  --jm-muted: rgba(214, 212, 240, 0.46);
+  --jm-accent: var(--primary);
+  --jm-accent-fg: var(--primary-foreground);
+  --jm-accent-soft: color-mix(in srgb, var(--primary) 18%, transparent);
+  --jm-success: #19d3b5;
+  --jm-danger: #f7506a;
+  --jm-blur: blur(20px) saturate(1.25);
+  --jm-shadow: 0 30px 80px rgba(0, 0, 0, 0.38);
+  --jm-glow-a: color-mix(in srgb, var(--primary) 34%, transparent);
+  --jm-glow-b: rgba(22, 92, 190, 0.26);
+  --jm-glow-c: rgba(18, 150, 150, 0.2);
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--jm-bg);
+  color: var(--jm-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+html[data-app-theme="light"] .jm-shell {
+  --jm-bg: #f3f2f9;
+  --jm-topbar: rgba(255, 255, 255, 0.82);
+  --jm-line: rgba(20, 16, 50, 0.08);
+  --jm-line-strong: rgba(20, 16, 50, 0.16);
+  --jm-panel: rgba(255, 255, 255, 0.62);
+  --jm-panel-solid: #ffffff;
+  --jm-card: rgba(255, 255, 255, 0.7);
+  --jm-card-solid: #fbfaff;
+  --jm-card-hover: rgba(255, 255, 255, 0.95);
+  --jm-chip: rgba(20, 16, 50, 0.06);
+  --jm-chip-hover: rgba(20, 16, 50, 0.1);
+  --jm-inset: rgba(20, 16, 50, 0.05);
+  --jm-text: #16132b;
+  --jm-text-2: rgba(22, 19, 43, 0.74);
+  --jm-muted: rgba(22, 19, 43, 0.48);
+  --jm-success: #0d9f8a;
+  --jm-danger: #e0334f;
+  --jm-shadow: 0 24px 60px rgba(40, 30, 90, 0.12);
+  --jm-glow-a: color-mix(in srgb, var(--primary) 20%, transparent);
+  --jm-glow-b: rgba(60, 140, 255, 0.14);
+  --jm-glow-c: rgba(20, 200, 180, 0.12);
+}
+
+html[data-app-glass="off"] .jm-shell {
+  --jm-panel: var(--jm-panel-solid);
+  --jm-card: var(--jm-card-solid);
+  --jm-blur: none;
+}
+
+/* ---------- 背景光晕 ---------- */
+.jm-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.jm-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(20px);
+  will-change: transform;
+}
+
+.jm-glow-a {
+  left: 8%;
+  top: -34%;
+  width: 62vw;
+  height: 78vh;
+  background: radial-gradient(closest-side, var(--jm-glow-a), transparent);
+  animation: jm-glow-drift-a 22s ease-in-out infinite alternate;
+}
+
+.jm-glow-b {
+  right: -18%;
+  top: 2%;
+  width: 52vw;
+  height: 70vh;
+  background: radial-gradient(closest-side, var(--jm-glow-b), transparent);
+  animation: jm-glow-drift-b 26s ease-in-out infinite alternate;
+}
+
+.jm-glow-c {
+  left: -14%;
+  bottom: -40%;
+  width: 56vw;
+  height: 76vh;
+  background: radial-gradient(closest-side, var(--jm-glow-c), transparent);
+  animation: jm-glow-drift-c 30s ease-in-out infinite alternate;
+}
+
+@keyframes jm-glow-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(9vw, 5vh, 0) scale(1.12); }
+}
+
+@keyframes jm-glow-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-7vw, 9vh, 0) scale(0.92); }
+}
+
+@keyframes jm-glow-drift-c {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(8vw, -6vh, 0) scale(1.08); }
+}
+
+html[data-app-glow="off"] .jm-glow {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jm-glow { animation: none; }
+}
+
+/* ---------- 顶栏 ---------- */
+.jm-topbar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 30;
+  height: var(--jm-topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px 0 20px;
+  /* 顶栏透明且无分隔线：直接透出页面光晕背景 */
+  background: transparent;
+}
+
+.jm-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  user-select: none;
+}
+
+.jm-brand-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, #7c7dff 0%, #56b4ff 55%, #22a4ff 100%);
+  box-shadow: 0 6px 18px rgba(64, 140, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.jm-brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--jm-text);
+}
+
+.jm-brand-rest {
+  margin-left: -2px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--jm-accent);
+}
+
+.jm-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jm-top-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--jm-text-2);
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-top-icon:hover {
+  background: var(--jm-chip);
+  color: var(--jm-text);
+}
+
+.jm-top-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--jm-line-strong);
+}
+
+/* 顶栏「检查更新」：透明无边框，悬停浮现浅底；有新版本时右上角小红点 */
+.jm-top-update {
+  position: relative;
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--jm-text-2);
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-top-update:hover:not(:disabled) {
+  background: var(--jm-chip-hover);
+  color: var(--jm-text);
+}
+
+.jm-top-update:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.jm-top-update-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--jm-danger, #f7506a);
+  box-shadow: 0 0 0 2px var(--jm-bg);
+}
+
+.jm-top-user {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 5px;
+  border-radius: 10px;
+  background: var(--jm-chip);
+  color: var(--jm-text-2);
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.jm-top-user:hover {
+  background: var(--jm-chip-hover);
+}
+
+.jm-top-user-chevron {
+  opacity: 0.6;
+}
+
+.jm-avatar {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #5aa8ff, #6c7cff);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.jm-avatar-lg {
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+/* ---------- 左侧竖栏（仅项目页） ---------- */
+.jm-rail {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  z-index: 25;
+  display: flex;
+  width: 58px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 10px;
+  border: 1px solid var(--jm-line);
+  border-radius: 16px;
+  background: var(--jm-panel);
+  backdrop-filter: var(--jm-blur);
+  -webkit-backdrop-filter: var(--jm-blur);
+  box-shadow: var(--jm-shadow);
+  transform: translateY(-38%);
+}
+
+.jm-rail-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.jm-rail-item {
+  display: flex;
+  width: 46px;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  border-radius: 12px;
+  color: var(--jm-text-2);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-rail-item:hover {
+  background: var(--jm-chip);
+  color: var(--jm-text);
+}
+
+.jm-rail-item:disabled {
+  opacity: 0.6;
+}
+
+.jm-rail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jm-rail-label {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.jm-rail-item.active {
+  padding: 0;
+}
+
+.jm-rail-item.active .jm-rail-icon {
+  width: 44px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--jm-accent);
+  color: var(--jm-accent-fg);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.jm-rail-item.active:hover {
+  background: transparent;
+}
+
+.jm-rail-foot {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--jm-line);
+}
+
+/* ---------- 主区 ---------- */
+.jm-main {
+  position: absolute;
+  inset: var(--jm-topbar-h) 0 0 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* ---------- 通用组件 ---------- */
+.jm-panel {
+  border: 1px solid var(--jm-line);
+  border-radius: 18px;
+  background: var(--jm-panel);
+  backdrop-filter: var(--jm-blur);
+  -webkit-backdrop-filter: var(--jm-blur);
+  box-shadow: var(--jm-shadow);
+}
+
+.jm-card {
+  border: 1px solid var(--jm-line);
+  border-radius: 12px;
+  background: var(--jm-card);
+}
+
+.jm-pill {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 13px;
+  border-radius: 9px;
+  background: var(--jm-chip);
+  color: var(--jm-text-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-pill:hover {
+  background: var(--jm-chip-hover);
+  color: var(--jm-text);
+}
+
+.jm-pill.active {
+  background: var(--jm-accent);
+  color: var(--jm-accent-fg);
+}
+
+.jm-btn {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--jm-chip);
+  color: var(--jm-text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, filter 0.15s;
+}
+
+.jm-btn:hover:not(:disabled) {
+  background: var(--jm-chip-hover);
+  color: var(--jm-text);
+}
+
+.jm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.jm-btn-primary {
+  background: var(--jm-accent);
+  color: var(--jm-accent-fg);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.jm-btn-primary:hover:not(:disabled) {
+  background: var(--jm-accent);
+  color: var(--jm-accent-fg);
+  filter: brightness(1.08);
+}
+
+.jm-btn-danger-text {
+  background: transparent;
+  color: var(--jm-danger);
+}
+
+.jm-btn-danger-text:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--jm-danger) 12%, transparent);
+  color: var(--jm-danger);
+}
+
+.jm-icon-btn {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--jm-line);
+  border-radius: 10px;
+  background: var(--jm-panel);
+  color: var(--jm-text-2);
+  backdrop-filter: var(--jm-blur);
+  -webkit-backdrop-filter: var(--jm-blur);
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-icon-btn:hover,
+.jm-icon-btn.active {
+  background: var(--jm-chip-hover);
+  color: var(--jm-text);
+}
+
+.jm-dots {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--jm-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-dots:hover,
+.jm-dots[data-popup-open] {
+  background: var(--jm-chip);
+  color: var(--jm-text);
+}
+
+.jm-switch {
+  position: relative;
+  display: inline-flex;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--jm-chip-hover);
+  transition: background 0.18s;
+}
+
+.jm-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s;
+}
+
+.jm-switch[aria-checked="true"] {
+  background: var(--jm-accent);
+}
+
+.jm-switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+
+.jm-scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--jm-chip-hover) transparent;
+}
+
+.jm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  border: 1px dashed var(--jm-line-strong);
+  border-radius: 14px;
+  color: var(--jm-muted);
+  font-size: 13px;
+  text-align: center;
+}

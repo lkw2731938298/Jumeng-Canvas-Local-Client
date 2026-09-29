@@ -28,6 +28,8 @@ export function openAiCompatiblePath(category: LocalModelCategory): string {
   if (category === "image") return "/images/generations";
   if (category === "video") return "/video/generations";
   if (category === "audio") return "/audio/speech";
+  // 3D 生成（Tripo 等）走聚梦网关异步任务 /v1/videos（非 chat/completions）
+  if (category === "model3d") return "/videos";
   return "/chat/completions";
 }
 
@@ -74,10 +76,12 @@ export function defaultResponsePath(
     if (category === "image") return "data.0.url";
     if (category === "video") return "data.id";
     if (category === "audio") return "";
+    if (category === "model3d") return "id";
     return "choices.0.message.content";
   }
   if (category === "image") return "data.0.url";
   if (category === "video") return "data.id";
+  if (category === "model3d") return "id";
   return "choices.0.message.content";
 }
 
@@ -141,6 +145,12 @@ export function applyEndpointDefaults(
     out.bodyTemplate =
       '{\n  "model": "{{model}}",\n  "input": "{{prompt}}",\n  "voice": "alloy"\n}';
     out.responsePath = "";
+  } else if (category === "model3d") {
+    // 3D 生成固定走 Tripo 任务接口（type 由画布按文生/图生自动填写）
+    out.url = `${OPENAI_COMPAT_EXAMPLE_BASE}/videos`;
+    out.bodyTemplate =
+      '{\n  "model": "{{model}}",\n  "type": "text_to_model",\n  "prompt": "{{prompt}}"\n}';
+    out.responsePath = "id";
   } else {
     out.url = `${OPENAI_COMPAT_EXAMPLE_BASE}/chat/completions`;
     out.bodyTemplate =

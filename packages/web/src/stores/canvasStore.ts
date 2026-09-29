@@ -1002,6 +1002,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         {
           ...connection,
           style: { stroke: edgeColor, strokeWidth: 2 },
+          data: { connectFlash: true, connectFlashAt: Date.now() },
         } as Connection,
         s.edges
       );
@@ -1191,8 +1192,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     get().pushHistory();
     const hexColor = sourceNode ? (NODE_REGISTRY[sourceNode.type || ""]?.color || "#8b5cf6") : "#8b5cf6";
     const edgeColor = hexToRgba(hexColor, 0.72);
+    // 新建边打上 connectFlashAt，边组件播一次短闪后自清
     set((state) => {
-      const edges = addEdge({ ...connection, style: { stroke: edgeColor, strokeWidth: 2 } }, state.edges);
+      const edges = addEdge(
+        {
+          ...connection,
+          style: { stroke: edgeColor, strokeWidth: 2 },
+          data: { connectFlash: true, connectFlashAt: Date.now() },
+        },
+        state.edges
+      );
       return { edges, connectedNodeIds: buildConnectedNodeIds(edges) };
     });
     get().scheduleAutoSave();

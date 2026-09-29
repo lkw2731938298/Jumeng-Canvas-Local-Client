@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { withBasePath } from "@/lib/basePath";
+import { JmBrandMark } from "@/components/brand/JmBrandMark";
 
 export function TopBar() {
   const router = useRouter();
@@ -14,17 +13,9 @@ export function TopBar() {
         onClick={() => router.push("/projects")}
         className="flex items-center gap-2 text-lg font-bold text-foreground hover:opacity-80"
       >
-        <Image
-          src={withBasePath("/brand-logo.png")}
-          alt="开源画布"
-          width={36}
-          height={20}
-          className="h-5 w-auto object-contain"
-          priority
-          unoptimized
-        />
-        <span className="text-primary">开源</span>
-        <span>画布</span>
+        <JmBrandMark size={26} />
+        <span>聚梦</span>
+        <span className="text-primary">画布</span>
       </button>
     </header>
   );

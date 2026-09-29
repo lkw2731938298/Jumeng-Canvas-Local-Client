@@ -11,13 +11,17 @@ import {
   Video,
 } from "lucide-react";
 
-/** 与左侧工具栏「添加节点」一致的毛玻璃样式 */
-export const ADD_NODE_MENU_GLASS_STYLE = {
-  background: "var(--canvas-glass-tint)",
-  backdropFilter: "blur(24px)",
-  WebkitBackdropFilter: "blur(24px)",
-  border: "1px solid rgba(255, 255, 255, 0.06)",
+/** 画布轻雾玻璃：节点周边 chrome / 侧栏 / 弹层共用 */
+export const CANVAS_MIST_GLASS_STYLE = {
+  background: "rgba(16, 16, 24, 0.72)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  border: "1px solid rgba(255, 255, 255, 0.1)",
+  boxShadow: "0 8px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
 } as const;
+
+/** @deprecated 使用 CANVAS_MIST_GLASS_STYLE；保留别名避免旧引用断裂 */
+export const ADD_NODE_MENU_GLASS_STYLE = CANVAS_MIST_GLASS_STYLE;
 
 export interface AddNodeOption {
   type: string;

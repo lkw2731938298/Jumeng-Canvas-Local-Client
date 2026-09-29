@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { JmBrandMark } from "@/components/brand/JmBrandMark";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -21,7 +21,6 @@ import {
   createProject,
   listProjects,
 } from "@/lib/api/projects";
-import { withBasePath } from "@/lib/basePath";
 import {
   countLikelyRunnableSelection,
   runSelectionBatch,
@@ -184,19 +183,11 @@ export function CanvasHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex shrink-0 items-center gap-1 text-lg font-bold text-foreground/90 transition-opacity hover:opacity-80 outline-none"
-              aria-label="开源画布菜单"
+              aria-label="聚梦画布菜单"
             >
-              <Image
-                src={withBasePath("/brand-logo.png")}
-                alt="开源画布"
-                width={36}
-                height={20}
-                className="h-5 w-auto object-contain"
-                priority
-                unoptimized
-              />
-              <span className="text-primary">开源</span>
-              <span>画布</span>
+              <JmBrandMark size={26} className="mr-1.5" />
+              <span>聚梦</span>
+              <span className="text-primary">画布</span>
               <ChevronDown className="ml-0.5 h-4 w-4 text-muted-foreground/70" />
             </DropdownMenuTrigger>
             <DropdownMenuContent

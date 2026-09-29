@@ -43,6 +43,14 @@ const OPS = new Set([
   "appendGenerationJob",
   "updateGenerationJob",
   "clearGenerationJobs",
+  "readAgentSession",
+  "writeAgentSession",
+  "listAgentSkills",
+  "readAgentSkill",
+  "getAgentSkillsInfo",
+  "openAgentSkillsDir",
+  "listCodexSkills",
+  "importCodexSkills",
 ]);
 
 export async function POST(req: Request) {

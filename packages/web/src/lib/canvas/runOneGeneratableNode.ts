@@ -210,7 +210,12 @@ export async function runOneGeneratableNode(opts: {
   quoteToken?: string;
   /** 为 true 时提交成功后不轮询，返回 pending 供层内并行 */
   deferPoll?: boolean;
+  /** 助手停止 / 外部取消时中断本地提交与轮询 */
+  signal?: AbortSignal;
 }): Promise<SubmitOneOutcome> {
+  if (opts.signal?.aborted) {
+    return { ok: false, error: "用户已停止" };
+  }
   const store = useCanvasStore.getState();
   const node = store.nodes.find((n) => n.id === opts.nodeId);
   if (!node || !isEditorNodeType(node.type)) {
@@ -363,7 +368,11 @@ export async function runOneGeneratableNode(opts: {
       }
     }
 
-    const submitOptions = { idempotencyKey, quoteToken };
+    const submitOptions = {
+      idempotencyKey,
+      quoteToken,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    };
 
     if (isTextNode) {
       const textPromptKind = resolveTextPromptKind(params.textPromptKind);
@@ -574,6 +583,12 @@ export async function runOneGeneratableNode(opts: {
     store.endNodeGeneration(opts.nodeId);
     return { ok: false, error: result.message || "媒体生成失败" };
   } catch (err) {
+    const { isAgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    if (isAgentTurnAbortedError(err) || opts.signal?.aborted) {
+      markNodeGenerationError(opts.nodeId, "用户已停止");
+      store.endNodeGeneration(opts.nodeId);
+      return { ok: false, error: "用户已停止" };
+    }
     const errMsg = err instanceof Error ? err.message : "生成失败";
     markNodeGenerationError(opts.nodeId, errMsg);
     store.endNodeGeneration(opts.nodeId);

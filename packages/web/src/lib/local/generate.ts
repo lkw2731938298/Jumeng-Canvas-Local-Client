@@ -44,13 +44,48 @@ async function proxyUpstream(params: {
   headers?: Record<string, string>;
   body?: string | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<UpstreamProxyResult> {
-  const res = await callLocalProxyRoute("/api/local/upstream", params);
+  const res = await callLocalProxyRoute("/api/local/upstream", params, params.signal);
   const data = (await res.json()) as UpstreamProxyResult;
   if (!res.ok || data.ok === false) {
     throw new Error(data.error || `上游代理失败 HTTP ${res.status}`);
   }
   return data;
+}
+
+/** 流式代发：返回可读 Response（SSE / chunked） */
+async function proxyUpstreamStream(params: {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}): Promise<Response> {
+  const res = await callLocalProxyRoute(
+    "/api/local/upstream",
+    {
+      url: params.url,
+      method: params.method,
+      headers: params.headers,
+      body: params.body,
+      timeoutMs: params.timeoutMs,
+      stream: true,
+    },
+    params.signal
+  );
+  if (!res.ok) {
+    let detail = `上游流式代理失败 HTTP ${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j?.error) detail = j.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res;
 }
 
 /**
@@ -59,7 +94,8 @@ async function proxyUpstream(params: {
  */
 async function callLocalProxyRoute(
   route: string,
-  params: unknown
+  params: unknown,
+  signal?: AbortSignal
 ): Promise<Response> {
   const body = JSON.stringify(params);
   try {
@@ -67,8 +103,16 @@ async function callLocalProxyRoute(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal,
     });
   } catch (err) {
+    if (
+      (err instanceof Error && err.name === "AbortError") ||
+      signal?.aborted
+    ) {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
     const reason = err instanceof Error ? err.message : String(err);
     throw new Error(
       `本机代理 ${route} 连接失败（${reason}）。负载约 ${(body.length / (1024 * 1024)).toFixed(1)}MB。` +
@@ -455,9 +499,20 @@ export async function localGenerateText(params: {
   modelId: string;
   prompt: string;
   system?: string;
+  /** 多轮对话历史（按时间顺序，不含本轮 prompt）；自定义模板模式下拼进 prompt 文本 */
+  history?: { role: "user" | "assistant"; content: string }[];
+  /** 本轮附带的图片（本机素材地址 / data URL / https）；需所选模型支持看图，仅 OpenAI 兼容模式生效 */
+  images?: string[];
+  signal?: AbortSignal;
 }): Promise<string> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
   const model = await findLocalModel(params.modelId);
   if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  const history = (params.history || []).filter((m) => m.content.trim());
+  const rawImages = (params.images || []).map((u) => String(u || "").trim()).filter(Boolean);
   if (model.enabled === false) {
     throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
   }
@@ -466,8 +521,19 @@ export async function localGenerateText(params: {
   assertApiKeyReady(apiKey, model, provider);
 
   if (model.mode === "custom_template") {
+    if (rawImages.length) {
+      throw new Error(
+        `模型「${model.displayName || model.name}」是自定义模板接入，无法附带图片。请换一个 OpenAI 兼容接入、支持看图的对话模型`
+      );
+    }
+    // 自定义模板只有单条 prompt 占位：把历史以文本形式拼在前面
+    const joined = history.length
+      ? `${history
+          .map((m) => `${m.role === "user" ? "用户" : "助手"}: ${m.content}`)
+          .join("\n")}\n用户: ${params.prompt}\n助手:`
+      : params.prompt;
     return runCustomTemplate(model, {
-      prompt: params.prompt,
+      prompt: joined,
       system: params.system || "",
       apiKey,
       apiBase,
@@ -478,9 +544,21 @@ export async function localGenerateText(params: {
   if (!apiBase) throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base（可在供应商或模型上填写）`);
   // apiKey 已在 assertApiKeyReady 校验
 
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: string; content: unknown }[] = [];
   if (params.system) messages.push({ role: "system", content: params.system });
-  messages.push({ role: "user", content: params.prompt });
+  for (const m of history) messages.push({ role: m.role, content: m.content });
+  if (rawImages.length) {
+    // 多模态消息：图片转成 data URL（本机素材上游访问不到）；助手侧不截断张数
+    const parts: unknown[] = [{ type: "text", text: params.prompt }];
+    for (const u of rawImages) {
+      const resolved = await resolveLocalImageUrlForUpstream(u, { preferDataUrl: true });
+      if (!resolved) throw new Error(`参考图读取失败（${u.slice(0, 80)}），请换一张图`);
+      parts.push({ type: "image_url", image_url: { url: resolved } });
+    }
+    messages.push({ role: "user", content: parts });
+  } else {
+    messages.push({ role: "user", content: params.prompt });
+  }
 
   const endpoint = openAiCompatibleUrl(apiBase, "text");
   const data = await proxyUpstream({
@@ -494,6 +572,7 @@ export async function localGenerateText(params: {
       model: model.upstreamModel || model.name,
       messages,
     }),
+    signal: params.signal,
   });
   if ((data.status ?? 500) >= 400) {
     throw new Error(
@@ -507,6 +586,357 @@ export async function localGenerateText(params: {
     throw new Error("上游响应中未解析到文本内容，请检查 responsePath");
   }
   return content;
+}
+
+/** OpenAI 兼容：函数工具定义 */
+export type LocalChatTool = {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
+/** OpenAI 兼容：多轮消息（含 tool 回传） */
+export type LocalChatMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | unknown;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type?: "function";
+    function: { name: string; arguments: string };
+  }>;
+};
+
+export type LocalChatToolCall = {
+  id: string;
+  name: string;
+  /** 模型返回的 arguments JSON 字符串 */
+  arguments: string;
+};
+
+export type LocalChatResult = {
+  content: string;
+  toolCalls: LocalChatToolCall[];
+};
+
+/**
+ * 多轮聊天补全（支持 tools / tool_calls / vision）。
+ * 仅 OpenAI 兼容模式；自定义模板不支持函数调用。
+ */
+export async function localGenerateChat(params: {
+  modelId: string;
+  messages: LocalChatMessage[];
+  tools?: LocalChatTool[];
+  toolChoice?: "auto" | "none";
+  /** 附加到最后一条 user 消息的图片（看图） */
+  images?: string[];
+  /** 输出 token 上限；不传则用上游默认 */
+  maxTokens?: number;
+  /** 用户点停止时 abort */
+  signal?: AbortSignal;
+}): Promise<LocalChatResult> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  if (model.mode === "custom_template") {
+    throw new Error(
+      `模型「${model.displayName || model.name}」是自定义模板接入，不支持工具调用。请改用 OpenAI 兼容接入的对话模型`
+    );
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base（可在供应商或模型上填写）`);
+  }
+
+  const rawImages = (params.images || []).map((u) => String(u || "").trim()).filter(Boolean);
+  const messages: LocalChatMessage[] = params.messages.map((m) => ({ ...m }));
+  if (rawImages.length) {
+    let lastUser = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === "user") {
+        lastUser = i;
+        break;
+      }
+    }
+    if (lastUser < 0) throw new Error("附带图片时至少需要一条 user 消息");
+    const text =
+      typeof messages[lastUser].content === "string"
+        ? String(messages[lastUser].content)
+        : JSON.stringify(messages[lastUser].content ?? "");
+    const parts: unknown[] = [{ type: "text", text }];
+    for (const u of rawImages) {
+      const resolved = await resolveLocalImageUrlForUpstream(u, { preferDataUrl: true });
+      if (!resolved) throw new Error(`参考图读取失败（${u.slice(0, 80)}），请换一张图`);
+      parts.push({ type: "image_url", image_url: { url: resolved } });
+    }
+    messages[lastUser] = { ...messages[lastUser], content: parts };
+  }
+
+  const body: Record<string, unknown> = {
+    model: model.upstreamModel || model.name,
+    messages,
+  };
+  if (params.tools?.length) {
+    body.tools = params.tools;
+    body.tool_choice = params.toolChoice || "auto";
+  }
+  if (typeof params.maxTokens === "number" && params.maxTokens > 0) {
+    body.max_tokens = Math.floor(params.maxTokens);
+  }
+
+  const endpoint = openAiCompatibleUrl(apiBase, "text");
+  const data = await proxyUpstream({
+    url: endpoint,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: params.signal,
+  });
+  if ((data.status ?? 500) >= 400) {
+    throw new Error(
+      `上游文本生成失败 HTTP ${data.status}（${endpoint}）: ${upstreamErrorDetail(data)}`
+    );
+  }
+  const payload = (data.json ?? (data.text ? safeJson(data.text) : null)) as Record<
+    string,
+    unknown
+  > | null;
+  const message = getByPath(payload, "choices.0.message") as Record<string, unknown> | undefined;
+  if (!message || typeof message !== "object") {
+    throw new Error("上游响应中未解析到 message，请检查是否为 OpenAI 兼容聊天接口");
+  }
+  const contentRaw = message.content;
+  const content =
+    typeof contentRaw === "string"
+      ? contentRaw
+      : contentRaw == null
+        ? ""
+        : JSON.stringify(contentRaw);
+  const toolCalls: LocalChatToolCall[] = [];
+  const rawCalls = message.tool_calls;
+  if (Array.isArray(rawCalls)) {
+    for (const c of rawCalls) {
+      if (!c || typeof c !== "object") continue;
+      const rec = c as Record<string, unknown>;
+      const fn = (rec.function || {}) as Record<string, unknown>;
+      const name = String(fn.name || "").trim();
+      if (!name) continue;
+      toolCalls.push({
+        id: String(rec.id || `call_${toolCalls.length + 1}`),
+        name,
+        arguments: typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
+      });
+    }
+  }
+  return { content, toolCalls };
+}
+
+/**
+ * 流式聊天补全：边收边回调 onDelta；最终仍返回完整 content + toolCalls。
+ * 解析 OpenAI 兼容 SSE（data: {...} / [DONE]）。
+ */
+export async function localGenerateChatStream(params: {
+  modelId: string;
+  messages: LocalChatMessage[];
+  tools?: LocalChatTool[];
+  toolChoice?: "auto" | "none";
+  images?: string[];
+  /** 输出 token 上限 */
+  maxTokens?: number;
+  /** 累计正文变化时回调（用于 UI 流式渲染） */
+  onDelta?: (content: string) => void;
+  /** 用户点停止时 abort */
+  signal?: AbortSignal;
+}): Promise<LocalChatResult> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  if (model.mode === "custom_template") {
+    throw new Error(
+      `模型「${model.displayName || model.name}」是自定义模板接入，不支持工具调用。请改用 OpenAI 兼容接入的对话模型`
+    );
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base（可在供应商或模型上填写）`);
+  }
+
+  const rawImages = (params.images || []).map((u) => String(u || "").trim()).filter(Boolean);
+  const messages: LocalChatMessage[] = params.messages.map((m) => ({ ...m }));
+  if (rawImages.length) {
+    let lastUser = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === "user") {
+        lastUser = i;
+        break;
+      }
+    }
+    if (lastUser < 0) throw new Error("附带图片时至少需要一条 user 消息");
+    const text =
+      typeof messages[lastUser].content === "string"
+        ? String(messages[lastUser].content)
+        : JSON.stringify(messages[lastUser].content ?? "");
+    const parts: unknown[] = [{ type: "text", text }];
+    for (const u of rawImages) {
+      const resolved = await resolveLocalImageUrlForUpstream(u, { preferDataUrl: true });
+      if (!resolved) throw new Error(`参考图读取失败（${u.slice(0, 80)}），请换一张图`);
+      parts.push({ type: "image_url", image_url: { url: resolved } });
+    }
+    messages[lastUser] = { ...messages[lastUser], content: parts };
+  }
+
+  const body: Record<string, unknown> = {
+    model: model.upstreamModel || model.name,
+    messages,
+    stream: true,
+  };
+  if (params.tools?.length) {
+    body.tools = params.tools;
+    body.tool_choice = params.toolChoice || "auto";
+  }
+  if (typeof params.maxTokens === "number" && params.maxTokens > 0) {
+    body.max_tokens = Math.floor(params.maxTokens);
+  }
+
+  const endpoint = openAiCompatibleUrl(apiBase, "text");
+  const res = await proxyUpstreamStream({
+    url: endpoint,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+    timeoutMs: 300_000,
+    signal: params.signal,
+  });
+
+  if (res.status >= 400) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(
+      `上游文本流式失败 HTTP ${res.status}（${endpoint}）: ${errText.slice(0, 400)}`
+    );
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("上游未返回可读流");
+
+  const onAbort = () => {
+    void reader.cancel().catch(() => {});
+  };
+  params.signal?.addEventListener("abort", onAbort, { once: true });
+
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let content = "";
+  const toolAcc = new Map<number, { id: string; name: string; arguments: string }>();
+
+  const flushDelta = () => {
+    params.onDelta?.(content);
+  };
+
+  const ingestLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return;
+    if (!trimmed.startsWith("data:")) return;
+    const data = trimmed.slice(5).trim();
+    if (data === "[DONE]") return;
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const choices = json.choices;
+    if (!Array.isArray(choices) || !choices[0]) return;
+    const choice = choices[0] as Record<string, unknown>;
+    const delta = (choice.delta || choice.message || {}) as Record<string, unknown>;
+    if (typeof delta.content === "string" && delta.content) {
+      content += delta.content;
+      flushDelta();
+    }
+    const calls = delta.tool_calls;
+    if (Array.isArray(calls)) {
+      for (const c of calls) {
+        if (!c || typeof c !== "object") continue;
+        const rec = c as Record<string, unknown>;
+        const idx = Number(rec.index ?? 0);
+        const fn = (rec.function || {}) as Record<string, unknown>;
+        const prev = toolAcc.get(idx) || {
+          id: String(rec.id || `call_${idx + 1}`),
+          name: "",
+          arguments: "",
+        };
+        if (rec.id) prev.id = String(rec.id);
+        if (typeof fn.name === "string" && fn.name) prev.name = fn.name;
+        if (typeof fn.arguments === "string") prev.arguments += fn.arguments;
+        toolAcc.set(idx, prev);
+      }
+    }
+  };
+
+  try {
+    for (;;) {
+      if (params.signal?.aborted) {
+        const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+        throw new AgentTurnAbortedError();
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\r?\n/);
+      buffer = parts.pop() || "";
+      for (const line of parts) ingestLine(line);
+    }
+    if (buffer.trim()) ingestLine(buffer);
+  } catch (err) {
+    if (params.signal?.aborted) {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
+    if (err instanceof Error && err.name === "AbortError") {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
+    throw err;
+  } finally {
+    params.signal?.removeEventListener("abort", onAbort);
+  }
+
+  const toolCalls: LocalChatToolCall[] = [...toolAcc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, t]) => ({
+      id: t.id,
+      name: t.name,
+      arguments: t.arguments || "{}",
+    }))
+    .filter((t) => t.name);
+
+  return { content, toolCalls };
 }
 
 /** 是否为画幅比例（1:1 / 16:9 …） */
@@ -718,6 +1148,8 @@ export async function localGenerateImage(params: {
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
   onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  /** 用户停止助手时中断提交/轮询 */
+  signal?: AbortSignal;
 }): Promise<{
   url?: string;
   b64?: string;
@@ -726,6 +1158,10 @@ export async function localGenerateImage(params: {
   submittedRefHostPreview?: string;
   submittedRefUrls?: string[];
 }> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
   const model = await findLocalModel(params.modelId);
   if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
   if (model.enabled === false) {
@@ -990,6 +1426,7 @@ export async function localGenerateImage(params: {
     body: imageReqBody,
     // base64 参考会把请求体撑到数 MB，上传本身就要时间，放宽到 5 分钟
     timeoutMs: imageReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
   }).catch((err) => {
     throw enrichUpstreamFailure(err, {
       endpoint,
@@ -1085,6 +1522,7 @@ export async function localGenerateImage(params: {
         apiBase,
         apiKey,
         taskId,
+        signal: params.signal,
       });
       if (polled.url || polled.b64) return { ...polled, providerTaskId: taskId, ...submittedMeta };
     } catch (err) {
@@ -1189,6 +1627,7 @@ async function pollLocalJumengImageTask(params: {
   apiBase: string;
   apiKey: string;
   taskId: string;
+  signal?: AbortSignal;
 }): Promise<{ url?: string; b64?: string }> {
   const base = normalizeApiBase(params.apiBase);
   const tid = encodeURIComponent(params.taskId);
@@ -1196,15 +1635,20 @@ async function pollLocalJumengImageTask(params: {
     `${base}/images/generations/${tid}`,
     `${base}/images/${tid}`,
   ];
-  const deadline = Date.now() + 10 * 60 * 1000;
+  const deadline = Date.now() + LOCAL_IMAGE_POLL_TIMEOUT_MS;
   let lastErr = "";
   while (Date.now() < deadline) {
+    if (params.signal?.aborted) {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
     for (const qurl of pollUrls) {
       const polled = await proxyUpstream({
         url: qurl,
         method: "GET",
         headers: { Authorization: `Bearer ${params.apiKey}` },
         timeoutMs: 60_000,
+        signal: params.signal,
       });
       if (polled.status === 404) continue;
       if ((polled.status ?? 500) >= 400) {
@@ -1232,7 +1676,7 @@ async function pollLocalJumengImageTask(params: {
       }
       break;
     }
-    await sleep(4000);
+    await sleep(LOCAL_IMAGE_POLL_INTERVAL_MS, params.signal);
   }
   throw new Error(
     `上游图片任务超时（task_id=${params.taskId}）${lastErr ? `，末次：${lastErr}` : ""}`
@@ -1895,9 +2339,40 @@ export async function resolveLocalImageUrlsForUpstream(
   return out;
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const abortErr = () => {
+      const e = new Error("已停止");
+      e.name = "AgentTurnAbortedError";
+      return e;
+    };
+    if (signal?.aborted) {
+      reject(abortErr());
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortErr());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
+
+/**
+ * 本地画布在浏览器侧轮询上游：可等更久、间隔略放宽（无服务端 Worker 超时压力）。
+ * 「同步上游」短查仍用 SYNC_POLL_BUDGET_MS，避免点一次卡太久。
+ */
+const LOCAL_IMAGE_POLL_INTERVAL_MS = 6_000;
+const LOCAL_IMAGE_POLL_TIMEOUT_MS = 30 * 60 * 1000;
+const LOCAL_VIDEO_POLL_INTERVAL_MS = 8_000;
+const LOCAL_VIDEO_POLL_TIMEOUT_MS = 60 * 60 * 1000;
+const LOCAL_MODEL3D_POLL_INTERVAL_MS = 8_000;
+const LOCAL_MODEL3D_POLL_TIMEOUT_MS = 45 * 60 * 1000;
+const SYNC_POLL_BUDGET_MS = 45_000;
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -2102,6 +2577,7 @@ export async function localGenerateVideo(params: {
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
   onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  signal?: AbortSignal;
 }): Promise<{
   url: string;
   providerTaskId?: string;
@@ -2109,6 +2585,10 @@ export async function localGenerateVideo(params: {
   submittedRefHostPreview?: string;
   submittedRefUrls?: string[];
 }> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
   const model = await findLocalModel(params.modelId);
   if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
   if (model.enabled === false) {
@@ -2365,6 +2845,7 @@ export async function localGenerateVideo(params: {
     body: videoReqBody,
     // base64 参考视频动辄十几 MB，光上传就不止 3 分钟
     timeoutMs: videoReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
   }).catch((err) => {
     throw enrichUpstreamFailure(err, {
       endpoint: submitUrl,
@@ -2448,7 +2929,8 @@ export async function localGenerateVideo(params: {
     apiBase,
     apiKey,
     taskId,
-    timeoutMs: 30 * 60 * 1000,
+    timeoutMs: LOCAL_VIDEO_POLL_TIMEOUT_MS,
+    signal: params.signal,
   });
   return { url: polledUrl, providerTaskId: taskId, ...submittedMeta };
 }
@@ -2459,6 +2941,7 @@ async function pollLocalVideoTaskOnceLoop(params: {
   apiKey: string;
   taskId: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<string> {
   const pollUrls = [
     `${normalizeApiBase(params.apiBase)}/video/generations/${encodeURIComponent(params.taskId)}`,
@@ -2468,12 +2951,17 @@ async function pollLocalVideoTaskOnceLoop(params: {
   const deadline = Date.now() + Math.max(5_000, params.timeoutMs);
   let lastErr = "";
   while (Date.now() < deadline) {
+    if (params.signal?.aborted) {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
     for (const qurl of pollUrls) {
       const polled = await proxyUpstream({
         url: qurl,
         method: "GET",
         headers: { Authorization: `Bearer ${params.apiKey}` },
         timeoutMs: 60_000,
+        signal: params.signal,
       });
       if (polled.status === 404) continue;
       if ((polled.status ?? 500) >= 400) {
@@ -2493,7 +2981,7 @@ async function pollLocalVideoTaskOnceLoop(params: {
       }
       break;
     }
-    await sleep(5000);
+    await sleep(LOCAL_VIDEO_POLL_INTERVAL_MS, params.signal);
   }
   throw new Error(
     `视频任务超时（task_id=${params.taskId}）${lastErr ? `，末次错误：${lastErr}` : ""}。可在「生成任务」点「同步上游」再查`
@@ -2525,7 +3013,46 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
   if (!apiBase) throw new Error("模型未配置 API Base");
 
   const isVideo = job.category === "video";
-  const syncBudgetMs = 25_000;
+  const syncBudgetMs = SYNC_POLL_BUDGET_MS;
+
+  // 3D 任务：只按 task_id 查询 + 重新下载 GLB，不重新 POST
+  if (job.category === "model3d") {
+    try {
+      const url = await pollModel3dTaskLoop({ apiBase, apiKey, taskId, timeoutMs: syncBudgetMs });
+      let preview = url;
+      if (job.projectId) {
+        const saved = await persistLocalModel3dResult({
+          projectId: job.projectId,
+          url,
+          apiKey,
+          title: job.promptPreview || "AI 3D 模型",
+        });
+        preview = saved.fileUrl;
+      }
+      await api.updateGenerationJob(jobId, {
+        status: "succeeded",
+        error: "",
+        resultUrlPreview: String(preview).slice(0, 200),
+        providerTaskId: taskId,
+      });
+      return {
+        status: "succeeded",
+        message: "上游 3D 模型已完成，已存入项目素材（导演台可选用）",
+        resultUrlPreview: preview,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const stillRunning = /超时/.test(msg);
+      await api.updateGenerationJob(jobId, {
+        status: stillRunning ? "running" : "failed",
+        error: stillRunning ? "上游仍在处理中，可稍后再同步" : msg,
+        providerTaskId: taskId,
+      });
+      return stillRunning
+        ? { status: "running", message: "上游仍在处理中，请稍后再同步" }
+        : { status: "failed", message: msg };
+    }
+  }
 
   if (isVideo) {
     try {
@@ -2622,7 +3149,7 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
       lastErr = err instanceof Error ? err.message : String(err);
       break;
     }
-    await sleep(4000);
+    await sleep(LOCAL_IMAGE_POLL_INTERVAL_MS);
   }
 
   await api.updateGenerationJob(jobId, {
@@ -2722,6 +3249,260 @@ export async function persistLocalVideoResult(params: {
     /* 回退直链 */
   }
   return rawUrl;
+}
+
+/* ------------------------------------------------------------------ */
+/* 3D 模型生成（Tripo 等）：POST {base}/videos → 轮询 GET {base}/videos/{id} → 下载 GLB */
+/* ------------------------------------------------------------------ */
+
+/** 导演台 AI 生成模型在素材库里的子分类 */
+export const MODEL3D_ASSET_SUBCATEGORY = "AI 3D 模型";
+
+export type Model3dQuality = "standard" | "detailed";
+
+/** 结果地址优先取这些键（Tripo 原生 output.pbr_model / model / base_model，网关常见 url 字段兜底） */
+const MODEL3D_URL_KEYS = [
+  "pbr_model",
+  "model",
+  "base_model",
+  "glb",
+  "glb_url",
+  "model_url",
+  "result_url",
+  "resultUrl",
+  "output_url",
+  "url",
+  "video_url",
+];
+
+/** 在轮询 JSON 里递归找 3D 模型下载地址：.glb 直链优先，其次按键名优先级 */
+function extractModel3dUrl(body: unknown): string {
+  const byKey: Array<{ rank: number; url: string }> = [];
+  let glbHit = "";
+  const visit = (node: unknown, depth: number) => {
+    if (depth > 6 || node == null || glbHit) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+        if (/\.glb(\?|$)/i.test(value)) {
+          glbHit = value;
+          return;
+        }
+        const rank = MODEL3D_URL_KEYS.indexOf(key);
+        if (rank >= 0) byKey.push({ rank, url: value });
+      } else if (value && typeof value === "object") {
+        visit(value, depth + 1);
+      }
+    }
+  };
+  visit(body, 0);
+  if (glbHit) return glbHit;
+  byKey.sort((a, b) => a.rank - b.rank);
+  return byKey[0]?.url || "";
+}
+
+/** GLB 文件头为 ASCII "glTF"（base64 前缀 Z2xURg） */
+function isGlbBase64(b64: string): boolean {
+  return b64.startsWith("Z2xURg");
+}
+
+/** 3D 任务轮询：成功返回模型下载地址（无显式地址时回退网关 /content） */
+async function pollModel3dTaskLoop(params: {
+  apiBase: string;
+  apiKey: string;
+  taskId: string;
+  timeoutMs: number;
+  onProgress?: (status: string) => void;
+}): Promise<string> {
+  const base = normalizeApiBase(params.apiBase);
+  const tid = encodeURIComponent(params.taskId);
+  const pollUrl = joinApiUrl(base, `/videos/${tid}`);
+  const deadline = Date.now() + Math.max(5_000, params.timeoutMs);
+  let lastErr = "";
+  while (Date.now() < deadline) {
+    const polled = await proxyUpstream({
+      url: pollUrl,
+      method: "GET",
+      headers: { Authorization: `Bearer ${params.apiKey}` },
+      timeoutMs: 60_000,
+    });
+    if ((polled.status ?? 500) >= 400) {
+      lastErr = upstreamErrorDetail(polled) || `HTTP ${polled.status}`;
+      if (polled.status === 401) throw new Error(`上游返回 401，请核对供应商 API Key。详情：${lastErr.slice(0, 200)}`);
+    } else {
+      const payload = polled.json ?? (polled.text ? safeJson(polled.text) : null);
+      const mapped = mapVideoPollState(payload);
+      if (mapped.state === "failed") {
+        throw new LocalUpstreamJobError(mapped.error || "上游 3D 任务失败", params.taskId);
+      }
+      if (mapped.state === "succeeded") {
+        return extractModel3dUrl(payload) || joinApiUrl(base, `/videos/${tid}/content`);
+      }
+      params.onProgress?.(extractUpstreamStatus(payload) || mapped.state);
+    }
+    await sleep(LOCAL_MODEL3D_POLL_INTERVAL_MS);
+  }
+  throw new LocalUpstreamJobError(
+    `3D 任务超时（task_id=${params.taskId}）${lastErr ? `，末次错误：${lastErr}` : ""}。可在「生成任务」点「同步上游」再查`,
+    params.taskId
+  );
+}
+
+/** 下载上游 3D 结果并落成本机素材（category=model，导演台可直接选用） */
+export async function persistLocalModel3dResult(params: {
+  projectId: string;
+  url: string;
+  apiKey?: string;
+  title: string;
+}): Promise<{ assetId: string; fileUrl: string }> {
+  const rawUrl = params.url.trim();
+  if (!rawUrl.startsWith("http")) throw new Error("3D 模型结果地址无效");
+  const headers: Record<string, string> = {};
+  // 网关 /content 需要鉴权；第三方 CDN 直链带上 Key 也无害
+  if (params.apiKey) headers.Authorization = `Bearer ${normalizeApiKey(params.apiKey)}`;
+  const proxied = await proxyUpstream({ url: rawUrl, method: "GET", headers, timeoutMs: 600_000 });
+  if ((proxied.status ?? 500) >= 400) {
+    throw new Error(`3D 模型下载失败 HTTP ${proxied.status}：${upstreamErrorDetail(proxied).slice(0, 200)}`);
+  }
+  const b64 = (proxied.base64 || "").trim();
+  if (!b64 || !isGlbBase64(b64)) {
+    const preview = proxied.text || (proxied.json ? JSON.stringify(proxied.json) : "") || proxied.contentType || "";
+    throw new Error(
+      `上游返回的不是 GLB 模型文件（${rawUrl.slice(0, 96)}）。响应预览：${String(preview).slice(0, 200)}`
+    );
+  }
+  const id = crypto.randomUUID();
+  const fileName = `${id}.glb`;
+  const saved = await localStore().writeAsset(params.projectId, fileName, b64);
+  await localStore().registerAssetMeta(params.projectId, {
+    id,
+    fileName,
+    title: params.title.slice(0, 40) || "AI 3D 模型",
+    category: "model",
+    subcategory: MODEL3D_ASSET_SUBCATEGORY,
+    fileType: "model/gltf-binary",
+    fileSize: Math.floor((b64.length * 3) / 4),
+    createdAt: new Date().toISOString(),
+  });
+  return { assetId: id, fileUrl: saved.fileUrl };
+}
+
+/**
+ * 3D 模型生成（Tripo H3.1 等，经聚梦网关 /v1/videos）。
+ * 有 imageUrl 走 image_to_model，否则 text_to_model；成功后 GLB 落本机素材。
+ */
+export async function localGenerateModel3d(params: {
+  modelId: string;
+  projectId: string;
+  prompt: string;
+  /** 参考图（本机素材地址 / https）；有则图生 3D */
+  imageUrl?: string;
+  /** 素材库标题 */
+  title?: string;
+  textureQuality?: Model3dQuality;
+  geometryQuality?: Model3dQuality;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  onProgress?: (status: string) => void;
+}): Promise<{ assetId: string; fileUrl: string; providerTaskId: string; upstreamModel: string }> {
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到 3D 模型：${params.modelId}，请先在「设置」中添加 3D 模型`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  const upstreamModel = model.upstreamModel || model.name;
+  const prompt = params.prompt.trim();
+
+  const body: Record<string, unknown> = {
+    model: upstreamModel,
+    texture: true,
+    pbr: true,
+    texture_quality: params.textureQuality || "standard",
+    geometry_quality: params.geometryQuality || "standard",
+  };
+  // 聚梦文档示例：Tripo-H3.1 需带 model_version
+  if (/h3\.1/i.test(upstreamModel)) body.model_version = "v3.1-20260211";
+
+  const rawImage = (params.imageUrl || "").trim();
+  if (rawImage) {
+    // Tripo 需要上游能下载的图片地址：聚梦官方走 OSS / 官方文件上传，第三方必须配 OSS
+    const jumengCreds = await resolveJumengUploadCreds(params.modelId);
+    const ref = await resolveLocalImageUrlForUpstream(rawImage, {
+      preferPublicHttps: jumengCreds !== null,
+      requirePublicHttps: jumengCreds === null,
+      jumengUpload: jumengCreds,
+    });
+    if (!ref) throw new Error("参考图未能转换成上游可用地址，已中止");
+    const ext = /png/i.test(ref) ? "png" : /webp/i.test(ref) ? "webp" : "jpg";
+    body.type = "image_to_model";
+    // Tripo 原生字段为 file{type,url}；同时给 image_url 兼容网关映射
+    body.file = { type: ext, url: ref };
+    body.image_url = ref;
+    if (prompt) body.prompt = prompt;
+  } else {
+    if (!prompt) throw new Error("文生 3D 需要描述要生成的物体");
+    body.type = "text_to_model";
+    body.prompt = prompt;
+  }
+
+  const submitUrl = openAiCompatibleUrl(apiBase, "model3d");
+  const reqBody = JSON.stringify(body);
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: reqBody,
+    timeoutMs: 180_000,
+  });
+  if ((submit.status ?? 500) >= 400) {
+    const detail = upstreamErrorDetail(submit);
+    if (submit.status === 401) {
+      throw new Error(`上游返回 401（${submitUrl}）。请核对供应商 API Key。详情：${detail.slice(0, 200)}`);
+    }
+    if (/model_not_found|No available channel/i.test(detail)) {
+      throw new Error(
+        `上游没有「${upstreamModel}」的可用通道。请到供应商控制台核对模型名（如 Tripo/Tripo-H3.1）后在设置里修改。详情：${detail.slice(0, 160)}`
+      );
+    }
+    throw new Error(`3D 生成提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
+  }
+  const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const taskId = extractUpstreamTaskId(submitPayload);
+  if (!taskId) {
+    throw new Error(`上游未返回 3D 任务 id（${submitUrl}）。响应：${JSON.stringify(submitPayload).slice(0, 300)}`);
+  }
+  try {
+    await params.onProviderTaskId?.(taskId);
+  } catch {
+    /* ignore */
+  }
+
+  const resultUrl = await pollModel3dTaskLoop({
+    apiBase,
+    apiKey,
+    taskId,
+    timeoutMs: LOCAL_MODEL3D_POLL_TIMEOUT_MS,
+    onProgress: params.onProgress,
+  });
+  try {
+    const saved = await persistLocalModel3dResult({
+      projectId: params.projectId,
+      url: resultUrl,
+      apiKey,
+      title: params.title || prompt || "AI 3D 模型",
+    });
+    return { ...saved, providerTaskId: taskId, upstreamModel };
+  } catch (err) {
+    // 上游已生成成功：保留 task_id，失败后可在「生成任务」同步重下
+    throw new LocalUpstreamJobError(err instanceof Error ? err.message : String(err), taskId);
+  }
 }
 
 function safeJson(text: string): unknown {

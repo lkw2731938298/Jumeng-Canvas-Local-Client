@@ -1,4 +1,4 @@
-# 聚梦画布 · 本地版（Juming Canvas Local Client）
+# 聚梦画布 · 本地版（Jumeng Canvas Local Client）
 
 一个**完全跑在自己电脑上**的 AI 创作画布。浏览器打开、数据存本地磁盘，没有云端账号、没有服务器、没有积分扣费。
 
@@ -11,6 +11,17 @@
 | 依赖服务 | 无。不需要数据库、Docker、登录、联网鉴权 |
 | 模型来源 | 任意 OpenAI 兼容网关（聚梦、ComfyUI 及其它）由你自行配置 |
 | 许可证 | Apache-2.0 |
+| 软件包名（软著 APPID） | `com.lieka.jumengcanvas` |
+
+## 界面预览
+
+项目列表——所有项目存在本机，支持收藏、批量管理与回收站：
+
+<img src="docs/screenshot-projects.png" alt="项目列表" width="720">
+
+画布工作区——图片、视频、文本节点自由连线，连接的节点内容会一起作为上下文提交：
+
+<img src="docs/screenshot-canvas.png" alt="画布工作区" width="720">
 
 ## 交流群
 
@@ -26,7 +37,9 @@
 
 ### 方式 A：免安装完整包（推荐给最终用户）
 
-发布页下载的完整包内已含便携 Node 和全部依赖，**无需安装 Node.js**：
+**下载地址（百度网盘）**：https://pan.baidu.com/s/1Jx60MQiBSqn1EpZ-9_J5Ig?pwd=ztvv　提取码 `ztvv`
+
+完整包内已含便携 Node 和全部依赖，**无需安装 Node.js**：
 
 1. 解压到任意目录（路径别带特殊符号）
 2. 双击 `启动本机画布.bat`
@@ -213,6 +226,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Zustand · React Flow 
 
 | | |
 |---|---|
+| 免安装包下载 | https://pan.baidu.com/s/1Jx60MQiBSqn1EpZ-9_J5Ig?pwd=ztvv （提取码 `ztvv`） |
 | 交流 QQ 群 | 870365376 |
 | 聚梦 API 国内站 | https://www.jumengai.com/ |
 | 聚梦 API 海外站 | https://www.jumai.ai/ |

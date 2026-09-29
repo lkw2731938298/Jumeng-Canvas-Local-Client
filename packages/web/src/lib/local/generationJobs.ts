@@ -8,7 +8,7 @@ export type LocalGenerationJobStatus =
   | "succeeded"
   | "failed";
 
-export type LocalGenerationJobCategory = "image" | "video" | "audio" | "text" | "tool";
+export type LocalGenerationJobCategory = "image" | "video" | "audio" | "text" | "tool" | "model3d";
 
 export type LocalGenerationJob = {
   id: string;

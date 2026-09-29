@@ -121,6 +121,8 @@ export interface GenerationSubmitOptions {
   idempotencyKey?: string;
   quoteToken?: string;
   expectedPricingVersion?: number;
+  /** 用户停止助手时中断本地/云端提交与轮询 */
+  signal?: AbortSignal;
 }
 
 /** 从 PRICING_CHANGED 错误体取出可重试的报价凭证与选项快照 */
@@ -180,8 +182,13 @@ async function postMediaGenerate(
 
 /** 本地桌面：图片 / 视频经本机代理直连上游 */
 async function generateFromMediaNodeLocal(
-  request: MediaGenerationRequest
+  request: MediaGenerationRequest,
+  options?: GenerationSubmitOptions
 ): Promise<MediaGenerationResponse> {
+  if (options?.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
   if (request.category === "audio") {
     throw new Error(
       "本地版暂不支持音频节点直连生成；请先用文本/图片/视频模型，或在设置里用自定义 HTTP 模板接入 TTS"
@@ -317,6 +324,7 @@ async function generateFromMediaNodeLocal(
           videoUrls,
           onProviderTaskId: noteProviderTaskId,
           onSubmittedRefs: noteSubmittedRefs,
+          signal: options?.signal,
         });
         const model = await findLocalModel(request.model);
         const providers = await localStore().listProviders();
@@ -425,6 +433,7 @@ async function generateFromMediaNodeLocal(
         imageUrls,
         onProviderTaskId: noteProviderTaskId,
         onSubmittedRefs: noteSubmittedRefs,
+        signal: options?.signal,
       });
       const persisted = await persistLocalImageResult({
         projectId: request.projectId,
@@ -464,7 +473,7 @@ export async function generateFromMediaNode(
   options?: GenerationSubmitOptions
 ): Promise<MediaGenerationResponse> {
   if (isLocalDesktop) {
-    return generateFromMediaNodeLocal(request);
+    return generateFromMediaNodeLocal(request, options);
   }
   const controller = new AbortController();
   const timeoutMs =
@@ -474,6 +483,9 @@ export async function generateFromMediaNode(
         ? AUDIO_GENERATE_TIMEOUT_MS
         : DEFAULT_GENERATE_TIMEOUT_MS;
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const onUserAbort = () => controller.abort();
+  options?.signal?.addEventListener("abort", onUserAbort, { once: true });
+  if (options?.signal?.aborted) controller.abort();
 
   try {
     try {
@@ -503,6 +515,10 @@ export async function generateFromMediaNode(
       );
     }
   } catch (err) {
+    if (options?.signal?.aborted) {
+      const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+      throw new AgentTurnAbortedError();
+    }
     if (shouldAttemptRecovery(err)) {
       const recovered = await recoverLatestNodeGeneration(request.projectId, request.nodeId);
       if (recovered) return recovered;
@@ -510,5 +526,6 @@ export async function generateFromMediaNode(
     throw err;
   } finally {
     window.clearTimeout(timer);
+    options?.signal?.removeEventListener("abort", onUserAbort);
   }
 }

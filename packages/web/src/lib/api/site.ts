@@ -11,7 +11,7 @@ export function getSiteHomepage(): Promise<SiteHomepage> {
 
 export function getSiteFooter() {
   return Promise.resolve({
-    brandText: "开源画布",
+    brandText: "聚梦画布",
     copyright: "© Open Source",
     tagline: "",
     helpUrl: "",

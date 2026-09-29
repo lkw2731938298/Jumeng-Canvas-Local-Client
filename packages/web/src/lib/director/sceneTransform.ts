@@ -1,6 +1,7 @@
 "use client";
 
 import type { DirectorObject, DirectorSceneSettings, DirectorSceneState } from "@/types/director-scene";
+import { focusPointOnObject } from "@/lib/director/cameraFraming";
 import { rotationFromPositionLookAt } from "@/lib/director/shotPreview";
 
 /** 导演自由视角轨道目标：场景物件中心（约人模腰部高度） */
@@ -19,7 +20,7 @@ export function computeDirectorOrbitTarget(scene: DirectorSceneState): [number, 
   return [sx / n, sy / n + 0.9, sz / n];
 }
 
-/** 根据注视目标造具同步摄像机朝向 */
+/** 根据注视目标造具同步摄像机朝向（人物跟胸口，禁止跟脚底） */
 export function resolveCameraLookAt(
   camera: DirectorObject,
   objects: DirectorObject[]
@@ -27,7 +28,7 @@ export function resolveCameraLookAt(
   if (camera.kind !== "camera") return null;
   if (camera.lookAtMode === "target" && camera.lookAtObjectId) {
     const target = objects.find((o) => o.id === camera.lookAtObjectId);
-    if (target) return [...target.transform.position] as [number, number, number];
+    if (target) return focusPointOnObject(target, "medium");
   }
   return camera.lookAt ?? null;
 }

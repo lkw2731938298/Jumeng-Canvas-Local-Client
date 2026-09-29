@@ -244,7 +244,7 @@ export function ModelSeriesCascadeList({
                       type="button"
                       className={cn(
                         "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors",
-                        selected ? "bg-purple-500/25 text-white" : "hover:bg-purple-500/20"
+                        selected ? "bg-white/12 text-white" : "hover:bg-white/[0.08]"
                       )}
                       onClick={(e) => {
                         e.preventDefault();
@@ -309,7 +309,7 @@ export function ModelSeriesCascadeList({
               className={cn(
                 "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
                 active
-                  ? "bg-purple-500/20 text-white"
+                  ? "bg-white/12 text-white"
                   : hasSelected
                     ? "bg-white/[0.06] text-white/90"
                     : "text-white/75 hover:bg-white/[0.06] hover:text-white"

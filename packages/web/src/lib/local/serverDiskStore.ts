@@ -391,6 +391,69 @@ export function createServerDiskStore(): LocalDesktopApi {
     async clearGenerationJobs() {
       writeJson(fp("generation-jobs.json"), []);
     },
+    // 本地 Agent 会话：存项目目录下，随项目一起迁移/删除
+    async readAgentSession(projectId: string) {
+      return readJson<unknown | null>(
+        fp("projects", safeName(projectId), "agent-session.json"),
+        null
+      );
+    },
+    async writeAgentSession(projectId: string, session: unknown) {
+      writeJson(fp("projects", safeName(projectId), "agent-session.json"), session ?? null);
+    },
+    /**
+     * 扫描 dataRoot/agent-skills + ~/.codex/skills
+     */
+    async listAgentSkills() {
+      const { listDiskAgentSkills, ensureAgentSkillsDir } = await import(
+        "@/lib/local/agent/skills/disk"
+      );
+      ensureAgentSkillsDir(resolveDataRoot());
+      return listDiskAgentSkills(resolveDataRoot()).map(({ dir: _d, ...m }) => m);
+    },
+    async readAgentSkill(slug: string) {
+      const { readDiskAgentSkill } = await import("@/lib/local/agent/skills/disk");
+      const disk = readDiskAgentSkill(resolveDataRoot(), slug);
+      if (!disk) return null;
+      return {
+        slug: disk.slug,
+        name: disk.name,
+        description: disk.description,
+        body: disk.body,
+        references: disk.references,
+        source: disk.source,
+      };
+    },
+    async getAgentSkillsInfo() {
+      const { agentSkillsDir, codexSkillsDir, ensureAgentSkillsDir } = await import(
+        "@/lib/local/agent/skills/disk"
+      );
+      const dataRoot = resolveDataRoot();
+      const localDir = ensureAgentSkillsDir(dataRoot);
+      const codexDir = codexSkillsDir();
+      return {
+        localDir,
+        codexDir,
+        codexExists: fs.existsSync(codexDir),
+      };
+    },
+    async openAgentSkillsDir() {
+      const { ensureAgentSkillsDir, openDirectoryInOs } = await import(
+        "@/lib/local/agent/skills/disk"
+      );
+      const dir = ensureAgentSkillsDir(resolveDataRoot());
+      openDirectoryInOs(dir);
+      return { ok: true as const, dir };
+    },
+    async listCodexSkills() {
+      const { listCodexSkillsOnly } = await import("@/lib/local/agent/skills/disk");
+      return listCodexSkillsOnly().map(({ dir: _d, ...m }) => m);
+    },
+    async importCodexSkills(slugs: string[]) {
+      const { importCodexSkillsToLocal } = await import("@/lib/local/agent/skills/disk");
+      const list = Array.isArray(slugs) ? slugs.map(String) : [];
+      return importCodexSkillsToLocal(resolveDataRoot(), list);
+    },
   };
 }
 
@@ -399,4 +462,34 @@ export function readAssetFile(projectId: string, fileName: string): Buffer | nul
   const file = path.join(resolveDataRoot(), "projects", projectId, "assets", name);
   if (!fs.existsSync(file)) return null;
   return fs.readFileSync(file);
+}
+
+/** 导演台场景记录（本地版存磁盘：projects/{projectId}/director/{nodeId}.json） */
+export type LocalDirectorSceneRecord = {
+  projectId: string;
+  nodeId: string;
+  scene: unknown;
+  /** 与线上版字段对齐（节点参数 sceneStateKey 引用），本地为相对路径 */
+  ossKey: string;
+  updatedAt: string;
+};
+
+function directorSceneFile(projectId: string, nodeId: string) {
+  return path.join(resolveDataRoot(), "projects", safeName(projectId), "director", `${safeName(nodeId)}.json`);
+}
+
+export function readDirectorSceneFile(projectId: string, nodeId: string): LocalDirectorSceneRecord | null {
+  return readJson<LocalDirectorSceneRecord | null>(directorSceneFile(projectId, nodeId), null);
+}
+
+export function writeDirectorSceneFile(projectId: string, nodeId: string, scene: unknown): LocalDirectorSceneRecord {
+  const record: LocalDirectorSceneRecord = {
+    projectId,
+    nodeId,
+    scene,
+    ossKey: `projects/${safeName(projectId)}/director/${safeName(nodeId)}.json`,
+    updatedAt: new Date().toISOString(),
+  };
+  writeJson(directorSceneFile(projectId, nodeId), record);
+  return record;
 }

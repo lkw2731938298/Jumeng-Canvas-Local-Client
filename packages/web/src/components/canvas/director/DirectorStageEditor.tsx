@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, type MutableRefObject, type RefObject } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, View } from "@react-three/drei";
 import type { PerspectiveCamera, WebGLRenderer } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -10,8 +10,11 @@ import type {
   DirectorCameraState,
   DirectorObject,
   DirectorSceneState,
+  DirectorTransform,
   DirectorTransformMode,
 } from "@/types/director-scene";
+import { aspectRatioToNumber } from "@/lib/director/aspectRatio";
+import { resolveDirectorCameraWorldPose } from "@/lib/director/cameraWorldPose";
 import { DirectorStageEnvironment } from "./DirectorStageEnvironment";
 import { computeDirectorOrbitTarget } from "@/lib/director/sceneTransform";
 import { DirectorLensPreviewScene } from "./DirectorLensPreviewScene";
@@ -26,9 +29,15 @@ export interface DirectorStageCanvasProps {
   selectedObjectId: string | null;
   cameraPropViewMode: CameraPropViewMode | null;
   liveCameraRef: MutableRefObject<DirectorCameraState | null>;
+  /** 拖拽机位时的临时 transform，供镜头监视器与视锥对齐 */
+  liveCameraTransformRef: MutableRefObject<{ id: string; transform: DirectorTransform } | null>;
   transformMode: DirectorTransformMode;
   stageBodyRef: RefObject<HTMLDivElement | null>;
   mainViewRef: RefObject<HTMLDivElement | null>;
+  /** 画幅安全区轨道；进机位时主 View 追踪它，与监视器宽高比一致 */
+  filmGateRef?: RefObject<HTMLDivElement | null>;
+  /** true = 主 View 追踪 filmGateRef（第一人称 / 机位视角） */
+  useFilmGateTrack?: boolean;
   lensPreview?: DirectorLensPreviewSceneProps & {
     trackRef: RefObject<HTMLDivElement | null>;
   } | null;
@@ -77,6 +86,51 @@ function ActiveViewCamera({ state }: { state: DirectorCameraState }) {
     cam.fov = state.fov;
     cam.updateProjectionMatrix();
   }, [camera, state]);
+
+  return null;
+}
+
+/**
+ * 机位第一人称：位姿与造具/监视器一致；宽高比强制为场景画幅
+ *（主 View 此时应追踪 filmGateRef，size 即为画幅安全区）。
+ */
+function CameraFirstPersonRig({
+  cameraId,
+  objects,
+  settings,
+  liveTransformRef,
+  filmAspect,
+}: {
+  cameraId: string;
+  objects: DirectorObject[];
+  settings: DirectorSceneState["sceneSettings"];
+  liveTransformRef: MutableRefObject<{ id: string; transform: DirectorTransform } | null>;
+  filmAspect: number;
+}) {
+  const { camera } = useThree();
+  const objectsRef = useRef(objects);
+  const settingsRef = useRef(settings);
+  objectsRef.current = objects;
+  settingsRef.current = settings;
+
+  useFrame(() => {
+    const cam = camera as PerspectiveCamera;
+    const live = liveTransformRef.current;
+    const liveTransform = live?.id === cameraId ? live.transform : null;
+    const pose = resolveDirectorCameraWorldPose(
+      cameraId,
+      objectsRef.current,
+      settingsRef.current,
+      liveTransform
+    );
+    if (!pose) return;
+
+    cam.position.set(...pose.position);
+    cam.rotation.set(...pose.rotation);
+    cam.fov = pose.fov;
+    cam.aspect = filmAspect;
+    cam.updateProjectionMatrix();
+  });
 
   return null;
 }
@@ -165,6 +219,7 @@ function MainDirectorView({
   selectedObjectId,
   cameraPropViewMode,
   transformMode,
+  liveCameraTransformRef,
   onSelectObject,
   onObjectTransform,
   onCameraLiveTransform,
@@ -176,7 +231,7 @@ function MainDirectorView({
   panoramaUrl = null,
   mannequinEditMode = "transform",
   onBonePoseChange,
-}: Omit<DirectorStageCanvasProps, "stageBodyRef" | "mainViewRef" | "liveCameraRef">) {
+}: Omit<DirectorStageCanvasProps, "stageBodyRef" | "mainViewRef" | "liveCameraRef" | "lensPreview">) {
   const interactionLocksRef = useRef(0);
 
   const setInteracting = useCallback((active: boolean) => {
@@ -189,6 +244,7 @@ function MainDirectorView({
     selectedObject?.kind === "camera" && cameraPropViewMode === "firstPerson";
   const isDirectorView =
     scene.viewMode === "director" && !trackPreviewActive && !isCameraFirstPerson;
+  const filmAspect = aspectRatioToNumber(scene.sceneSettings?.aspectRatio ?? "16:9");
   const orbitTargetKey = useMemo(
     () =>
       scene.objects
@@ -229,7 +285,15 @@ function MainDirectorView({
         />
       ) : null}
 
-      {isDirectorView ? (
+      {isCameraFirstPerson && selectedObject ? (
+        <CameraFirstPersonRig
+          cameraId={selectedObject.id}
+          objects={scene.objects}
+          settings={scene.sceneSettings}
+          liveTransformRef={liveCameraTransformRef}
+          filmAspect={filmAspect}
+        />
+      ) : isDirectorView ? (
         <DirectorOrbitCameraBootstrap
           enabled={isDirectorView}
           cameraState={activeCamera}
@@ -255,7 +319,11 @@ function MainDirectorView({
 
 /** LibTV：全屏 Canvas + View.Port；主视口与侧栏 track 分视口实时渲染 */
 export function DirectorStageCanvas(props: DirectorStageCanvasProps) {
-  const { lensPreview, ...viewProps } = props;
+  const { lensPreview, filmGateRef, useFilmGateTrack = false, ...viewProps } = props;
+  const mainTrack =
+    useFilmGateTrack && filmGateRef
+      ? (filmGateRef as RefObject<HTMLElement>)
+      : (viewProps.mainViewRef as RefObject<HTMLElement>);
   const canvasCamera = useMemo(
     () => ({
       position: props.activeCamera.position as [number, number, number],
@@ -279,19 +347,25 @@ export function DirectorStageCanvas(props: DirectorStageCanvasProps) {
       <Suspense fallback={null}>
         <WebGLRendererCleanup />
         <View.Port />
-        <View track={viewProps.mainViewRef as RefObject<HTMLElement>} index={1}>
+        <View
+          // 切换全屏/画幅轨道时重建，避免 scissor 残留
+          key={useFilmGateTrack ? `film:${props.scene.sceneSettings?.aspectRatio ?? "16:9"}` : "full"}
+          track={mainTrack}
+          index={1}
+        >
           <MainDirectorView {...viewProps} />
         </View>
         {lensPreview ? (
+          // 画幅变化时重建 View，清空旧 scissor 区域残留帧
           <View
-            key={lensPreview.cameraId}
+            key={`${lensPreview.cameraId}:${lensPreview.scene.sceneSettings?.aspectRatio ?? "16:9"}`}
             track={lensPreview.trackRef as RefObject<HTMLElement>}
             index={2}
           >
             <DirectorLensPreviewScene
               scene={lensPreview.scene}
               cameraId={lensPreview.cameraId}
-              liveCameraRef={lensPreview.liveCameraRef}
+              liveTransformRef={props.liveCameraTransformRef}
               resolveCharacterModelUrl={props.resolveCharacterModelUrl}
               panoramaUrl={props.panoramaUrl}
             />

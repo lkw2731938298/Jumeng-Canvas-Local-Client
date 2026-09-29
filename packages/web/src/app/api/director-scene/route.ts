@@ -1,16 +1,12 @@
+/**
+ * 导演台场景读写（本地版）：直接存本机数据目录
+ * projects/{projectId}/director/{nodeId}.json，不再转发到不存在的远端后端。
+ */
 import { NextRequest } from "next/server";
-import { backendUrl } from "@/lib/api/backendProxy";
-import { authorizationFromRequest } from "@/lib/authCookie";
+import { readDirectorSceneFile, writeDirectorSceneFile } from "@/lib/local/serverDiskStore";
 
-function backendAuthHeaders(request: NextRequest): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const auth = authorizationFromRequest(
-    request.headers.get("Authorization"),
-    request.headers.get("Cookie")
-  );
-  if (auth) headers.Authorization = auth;
-  return headers;
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -19,13 +15,13 @@ export async function GET(request: NextRequest) {
   if (!projectId || !nodeId) {
     return Response.json({ error: "缺少 projectId 或 nodeId" }, { status: 400 });
   }
-  const target = backendUrl(`/api/v1/director-scenes/projects/${projectId}/nodes/${nodeId}`);
-  const res = await fetch(target, { headers: backendAuthHeaders(request), cache: "no-store" });
-  const text = await res.text();
-  return new Response(text, {
-    status: res.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  try {
+    const record = readDirectorSceneFile(projectId, nodeId);
+    if (!record) return Response.json({ error: "场景不存在" }, { status: 404 });
+    return Response.json(record);
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : "读取场景失败" }, { status: 400 });
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -35,16 +31,12 @@ export async function PUT(request: NextRequest) {
   if (!projectId || !nodeId) {
     return Response.json({ error: "缺少 projectId 或 nodeId" }, { status: 400 });
   }
-  const target = backendUrl(`/api/v1/director-scenes/projects/${projectId}/nodes/${nodeId}`);
-  const res = await fetch(target, {
-    method: "PUT",
-    headers: backendAuthHeaders(request),
-    body: JSON.stringify({ scene: body.scene }),
-    cache: "no-store",
-  });
-  const text = await res.text();
-  return new Response(text, {
-    status: res.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  if (!body.scene || typeof body.scene !== "object") {
+    return Response.json({ error: "缺少 scene" }, { status: 400 });
+  }
+  try {
+    return Response.json(writeDirectorSceneFile(projectId, nodeId, body.scene));
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : "保存场景失败" }, { status: 400 });
+  }
 }

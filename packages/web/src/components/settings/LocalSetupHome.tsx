@@ -52,6 +52,7 @@ const CAT_LABEL: Record<LocalModelCategory, string> = {
   image: "出图",
   video: "出视频",
   audio: "音频",
+  model3d: "3D 模型",
 };
 
 export function LocalSetupHome(props: Props) {
@@ -267,6 +268,7 @@ function SetupWizard(
       image: [],
       video: [],
       audio: [],
+      model3d: [],
     };
     for (const p of catalog) g[p.category].push(p);
     return g;
@@ -767,7 +769,7 @@ function SetupWizard(
             </div>
           )}
 
-          {(["text", "image", "video", "audio"] as const).map((cat) => {
+          {(["text", "image", "video", "audio", "model3d"] as const).map((cat) => {
             const list = grouped[cat];
             if (!list.length) return null;
             const selectedInCat = list.filter((p) => selectedIds.includes(p.id)).length;
@@ -872,6 +874,7 @@ function SetupWizard(
                   <option value="image">出图</option>
                   <option value="video">出视频</option>
                   <option value="audio">音频</option>
+                  <option value="model3d">3D 模型</option>
                 </select>
               </label>
               <button

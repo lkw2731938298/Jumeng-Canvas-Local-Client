@@ -34,6 +34,7 @@ const CAT_ZH: Record<LocalModel["category"], string> = {
   image: "出图",
   video: "出视频",
   audio: "音频",
+  model3d: "3D 模型",
 };
 
 type Props = {
@@ -55,7 +56,7 @@ type Props = {
   onTestModel: (id: string) => void;
   onAddModel: (cat: LocalModel["category"]) => void;
   onFillTools: (cat: LocalModel["category"]) => void;
-  countByCat: Record<"text" | "image" | "video" | "audio", number>;
+  countByCat: Record<"text" | "image" | "video" | "audio" | "model3d", number>;
   visibleModels: LocalModel[];
   modelsByCategory: (cat: string) => LocalModel[];
   toolGroups: [string, LocalCanvasToolDef[]][];
@@ -65,16 +66,19 @@ type Props = {
   backLabel: string;
   dataRoot: string;
   onDataRootChange?: (root: string) => void;
+  /** 只显示这些分步（设置页「模型服务」只放密钥 / 模型 / 画布工具） */
+  tabIds?: AdvancedTab[];
 };
 
 export function AdvancedSettings(props: Props) {
-  const tabs: { id: AdvancedTab; n: string; label: string; hint: string }[] = [
+  const allTabs: { id: AdvancedTab; n: string; label: string; hint: string }[] = [
     { id: "keys", n: "1", label: "密钥", hint: "改接口地址和 Key" },
     { id: "models", n: "2", label: "模型", hint: "开关、改名、核对平台模型名" },
     { id: "tools", n: "3", label: "画布工具", hint: "每个功能默认用哪个模型" },
     { id: "oss", n: "4", label: "参考图 OSS", hint: "公网 Bucket，带参考才能被上游拉取" },
     { id: "storage", n: "5", label: "数据位置", hint: "本机用户数据与素材保存目录" },
   ];
+  const tabs = props.tabIds ? allTabs.filter((t) => props.tabIds!.includes(t.id)) : allTabs;
 
   return (
     <>
@@ -91,7 +95,11 @@ export function AdvancedSettings(props: Props) {
           日常用外面的向导即可。这里只在你要改密钥、微调某个模型，指定画布工具模型，配置参考图公网
           OSS，或改本机数据/素材保存位置时才需要打开。
         </p>
-        <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+        <ol
+          className={`mt-3 grid gap-2 text-sm sm:grid-cols-2 ${
+            tabs.length <= 3 ? "lg:grid-cols-3" : "lg:grid-cols-5"
+          }`}
+        >
           {tabs.map((t) => (
             <li key={t.id}>
               <button
@@ -268,7 +276,7 @@ function ModelsPane(props: Props) {
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
         对话 {props.countByCat.text} · 出图 {props.countByCat.image} · 出视频{" "}
-        {props.countByCat.video} · 音频 {props.countByCat.audio}
+        {props.countByCat.video} · 音频 {props.countByCat.audio} · 3D 模型 {props.countByCat.model3d}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -278,6 +286,7 @@ function ModelsPane(props: Props) {
             ["image", "加出图模型"],
             ["video", "加出视频模型"],
             ["audio", "加音频模型"],
+            ["model3d", "加 3D 模型"],
           ] as const
         ).map(([cat, label]) => (
           <button
@@ -300,6 +309,7 @@ function ModelsPane(props: Props) {
             ["image", "出图"],
             ["video", "出视频"],
             ["audio", "音频"],
+            ["model3d", "3D 模型"],
           ] as const
         ).map(([id, label]) => {
           const n =
@@ -418,6 +428,7 @@ function ModelCard(props: {
             <option value="image">出图</option>
             <option value="video">出视频</option>
             <option value="audio">音频</option>
+            <option value="model3d">3D 模型（导演台）</option>
           </select>
         </label>
         <label className={labelCls}>

@@ -2,7 +2,7 @@
 
 /**
  * LibTV 风格：节点引用整块（缩略图 + 名称）。
- * 选择方式：画布点选（不提供列表选择器）。
+ * 可选画布选中 / @ 搜索 / 面板选节点列表。
  */
 
 import {
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { typeLabelForNode, type AgentNodeRef } from "@/lib/canvas/agentNodeRefs";
 
 function TypeIcon({ type, className }: { type: string; className?: string }) {
-  if (type === "image_input" || type === "director_stage") {
+  if (type === "image_input" || type === "director_stage" || type === "upload") {
     return <ImageIcon className={className} size={12} />;
   }
   if (type === "video_input") return <Clapperboard className={className} size={12} />;

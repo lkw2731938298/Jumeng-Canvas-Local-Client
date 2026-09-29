@@ -11,8 +11,13 @@ import type { GenerationSubmitOptions } from "./mediaGeneration";
 
 /** 本地桌面：跳过云端 Worker，直连用户配置的上游文本模型；并套用 textPromptKind 内置提示词 */
 async function generateFromTextNodeLocal(
-  request: TextGenerationRequest
+  request: TextGenerationRequest,
+  options?: GenerationSubmitOptions
 ): Promise<TextGenerationResponse> {
+  if (options?.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
   // 开源本地无后台 prompt-config：必须按 kind 拼 system/user，否则分镜表只会得到散文而不是 JSON
   const composed = composeLocalTextGeneration({
     content: request.content,
@@ -23,6 +28,7 @@ async function generateFromTextNodeLocal(
     modelId: request.model,
     prompt: composed.prompt,
     system: composed.system,
+    signal: options?.signal,
   });
   return {
     jobId: Date.now(),
@@ -39,13 +45,14 @@ export async function generateFromTextNode(
   options?: GenerationSubmitOptions
 ): Promise<TextGenerationResponse> {
   if (isLocalDesktop) {
-    return generateFromTextNodeLocal(request);
+    return generateFromTextNodeLocal(request, options);
   }
   return apiFetch<TextGenerationResponse>("/api/v1/text/generate", {
     method: "POST",
     headers: options?.idempotencyKey
       ? { "Idempotency-Key": options.idempotencyKey }
       : undefined,
+    signal: options?.signal,
     body: JSON.stringify({
       projectId: request.projectId,
       nodeId: request.nodeId,

@@ -10,13 +10,14 @@ function metaToProject(meta: {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  coverUrl?: string | null;
 }): Project {
   return {
     id: meta.id,
     projectNo: meta.id.slice(0, 8),
     title: meta.title,
     description: "",
-    coverUrl: undefined,
+    coverUrl: meta.coverUrl || undefined,
     ownerId: "local-user",
     createdAt: meta.createdAt,
     updatedAt: meta.updatedAt,
@@ -79,6 +80,7 @@ export async function updateProject(
   if (isLocalDesktop) {
     const meta = await localStore().updateProject(id, {
       ...(data.title !== undefined ? { title: data.title } : {}),
+      ...(data.coverUrl !== undefined ? { coverUrl: data.coverUrl } : {}),
     });
     return metaToProject(meta);
   }
@@ -92,7 +94,54 @@ export async function updateProject(
   });
 }
 
+/** 读取 File 为纯 base64（不含 data: 前缀） */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error("读取封面文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** 从本机素材地址中取出文件名（/api/local/asset?...&file=xxx） */
+function localAssetFileName(url: string | null | undefined): string | null {
+  if (!url || !url.startsWith("/api/local/asset")) return null;
+  try {
+    return new URL(url, "http://local").searchParams.get("file");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 本机封面：写入项目 assets 目录，文件名以 "." 开头，素材面板扫描时会跳过，不会混进素材列表。
+ * 每次上传用新文件名，避免浏览器缓存旧封面；成功后删掉上一张封面文件。
+ */
+async function uploadLocalProjectCover(projectId: string, file: File): Promise<Project> {
+  if (!file.type.startsWith("image/")) throw new ApiError(400, "封面只支持图片文件");
+  const store = localStore();
+  const prev = await store.getProject(projectId);
+  if (!prev) throw new ApiError(404, "项目不存在");
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || "png").toLowerCase();
+  const { fileUrl } = await store.writeAsset(
+    projectId,
+    `.cover-${Date.now()}.${ext}`,
+    await fileToBase64(file)
+  );
+  const meta = await store.updateProject(projectId, { coverUrl: fileUrl });
+  const oldFile = localAssetFileName(prev.coverUrl);
+  if (oldFile && oldFile !== localAssetFileName(fileUrl)) {
+    await store.deleteAsset(projectId, oldFile).catch(() => undefined);
+  }
+  return metaToProject(meta);
+}
+
 export async function uploadProjectCover(projectId: string, file: File): Promise<Project> {
+  if (isLocalDesktop) return uploadLocalProjectCover(projectId, file);
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch(withBasePath(`/api/projects/${projectId}/cover`), {

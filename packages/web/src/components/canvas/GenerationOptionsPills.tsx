@@ -85,8 +85,8 @@ export function GenerationOptionsPills({
                       "shrink-0 rounded-[10px] border font-semibold transition-colors",
                       isModal ? "px-3.5 py-2 text-sm" : "px-2.5 py-1 text-[13px]",
                       active
-                        ? "border-purple-500 bg-purple-500/35 text-white shadow-[0_0_0_1px_rgba(147,51,234,0.35)]"
-                        : "border-white/10 bg-white/[0.06] text-white/75 hover:border-purple-500/45 hover:bg-purple-500/12"
+                        ? "border-white/25 bg-white/15 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+                        : "border-white/10 bg-white/[0.06] text-white/75 hover:border-white/20 hover:bg-white/[0.1]"
                     )}
                   >
                     {item.label}

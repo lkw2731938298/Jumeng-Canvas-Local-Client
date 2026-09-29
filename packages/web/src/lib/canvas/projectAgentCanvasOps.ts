@@ -43,7 +43,7 @@ import { useCanvasStore } from "@/stores/canvasStore";
 export { AGENT_DEFAULT_IMAGE_T2I, AGENT_DEFAULT_VIDEO_R2V };
 
 /** 节点还没有 model 时，才用画布选择器/系统默认；助手已写入的 id 必须保留 */
-function fillDefaultModelIfEmpty(nodeId: string): void {
+export function fillDefaultModelIfEmpty(nodeId: string): void {
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   if (!node) return;
   const current = String(
@@ -67,7 +67,7 @@ function fillDefaultModelIfEmpty(nodeId: string): void {
 }
 
 /** 将 Agent params 写入节点（generationOptions 与已有合并并归一时长等） */
-function applyAgentParams(
+export function applyAgentParams(
   nodeId: string,
   incoming: Record<string, unknown>,
   durationByModel?: Map<string, { min: number; max: number }>
@@ -158,7 +158,7 @@ function markApplied(projectId: string, revision: number): void {
  * - 仅名称：仅当全画布唯一精确匹配时可用
  * - 本轮新建 tempId 走 tempMap
  */
-function resolveNodeRef(
+export function resolveNodeRef(
   id: string | undefined,
   name: string | undefined,
   tempMap: Map<string, string>
@@ -252,7 +252,7 @@ function clearAppliedMark(projectId: string): void {
   }
 }
 
-function defaultSourceHandle(nodeId: string): string | undefined {
+export function defaultSourceHandle(nodeId: string): string | undefined {
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   const t = node?.type || "";
   if (t === "text_input") return "text";
@@ -262,7 +262,7 @@ function defaultSourceHandle(nodeId: string): string | undefined {
   return undefined;
 }
 
-function setNodeLabel(nodeId: string, label: string): void {
+export function setNodeLabel(nodeId: string, label: string): void {
   useCanvasStore.setState((state) => ({
     nodes: state.nodes.map((n) =>
       n.id === nodeId ? { ...n, data: { ...n.data, label } } : n
@@ -270,7 +270,7 @@ function setNodeLabel(nodeId: string, label: string): void {
   }));
 }
 
-function addTypedNode(
+export function addTypedNode(
   type:
     | "text_input"
     | "image_input"

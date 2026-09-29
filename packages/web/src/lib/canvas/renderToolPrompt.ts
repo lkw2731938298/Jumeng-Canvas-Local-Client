@@ -1,3 +1,4 @@
+import { CREATIVE_TOOL_PROMPT_FALLBACKS } from "@/lib/admin/promptToolCategories";
 import type { ShotScale } from "@/lib/canvas/multiAnglePresets";
 import {
   describeAzimuthForPrompt,
@@ -553,6 +554,22 @@ export function findCreativeToolPrompt(
   const id = toolId?.trim();
   if (!id || !config?.items?.length) return undefined;
   return config.items.find((item) => item.id === id && item.enabled !== false);
+}
+
+/**
+ * 取创作工具提示词：优先后台配置；后台无该 id 条目（或整份配置缺失）时用内置兜底。
+ * 后台显式停用（enabled=false）则返回 undefined，不被兜底覆盖。
+ */
+export function resolveCreativeToolPrompt(
+  config: CreativeToolsPromptToolConfig | null | undefined,
+  toolId: string | null | undefined
+): CreativeToolPromptItem | undefined {
+  const id = toolId?.trim();
+  if (!id) return undefined;
+  const configured = config?.items?.find((item) => item.id === id);
+  if (configured) return configured.enabled !== false ? configured : undefined;
+  const fallback = CREATIVE_TOOL_PROMPT_FALLBACKS[id];
+  return fallback ? { id, label: fallback.label, prompt: fallback.prompt } : undefined;
 }
 
 export function validateTextGenConfig(config: TextGenPromptToolConfig): string[] {

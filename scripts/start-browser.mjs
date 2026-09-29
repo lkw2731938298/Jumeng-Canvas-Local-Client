@@ -235,7 +235,12 @@ async function main() {
     await waitReady(child);
   }
 
-  openBrowser(entry);
+  // 检查更新后的自动重启：原浏览器标签页会自行刷新，不再额外打开新标签
+  if (process.env.JUMENG_NO_OPEN_BROWSER === "1") {
+    log("skip open browser (JUMENG_NO_OPEN_BROWSER=1)");
+  } else {
+    openBrowser(entry);
+  }
   if (silent) {
     log("browser opened. stop with stop bat (or kill the Node process).");
   } else {

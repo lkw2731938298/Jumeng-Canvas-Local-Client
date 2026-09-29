@@ -1,5 +1,5 @@
 /**
- * 本机开源画布：用户数据 / 素材保存位置。
+ * 本机聚梦画布：用户数据 / 素材保存位置。
  * 引导文件固定在 monorepo data/ 下，指向实际 JumengCanvas 根目录。
  *
  * 优先级：引导文件 jumeng-data-location.json > 环境变量 > 默认 data/JumengCanvas
@@ -212,7 +212,7 @@ export function pickDirectoryDialog(initialDir?: string): string | null {
     const ps = [
       "Add-Type -AssemblyName System.Windows.Forms",
       "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-      "$d.Description = '选择开源画布数据保存文件夹（将在其下使用 JumengCanvas）'",
+      "$d.Description = '选择聚梦画布数据保存文件夹（将在其下使用 JumengCanvas）'",
       "$d.ShowNewFolderButton = $true",
       `if (Test-Path -LiteralPath '${escaped}') { $d.SelectedPath = '${escaped}' }`,
       "$r = $d.ShowDialog()",
@@ -241,7 +241,7 @@ export function pickDirectoryDialog(initialDir?: string): string | null {
     try {
       const out = execFileSync(
         "osascript",
-        ["-e", 'POSIX path of (choose folder with prompt "选择开源画布数据保存文件夹")'],
+        ["-e", 'POSIX path of (choose folder with prompt "选择聚梦画布数据保存文件夹")'],
         { encoding: "utf8", timeout: 600_000 }
       );
       const picked = String(out || "").trim().replace(/\/$/, "");

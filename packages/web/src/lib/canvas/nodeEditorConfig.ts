@@ -24,7 +24,7 @@ export const EDITOR_NODE_CONFIG: Record<EditorNodeType, EditorNodeConfig> = {
     promptParamKey: "content",
     category: "text",
     label: "文本",
-    placeholder: "输入或生成文本，可用 @ 引用素材槽中的上游节点内容…",
+    placeholder: "输入文本，或用 @ 引用上游…",
   },
   image_input: {
     promptParamKey: "prompt",
@@ -32,7 +32,7 @@ export const EDITOR_NODE_CONFIG: Record<EditorNodeType, EditorNodeConfig> = {
     category: "image",
     assetCategory: "image",
     label: "图片",
-    placeholder: "描述要如何生成或修改图片，可用 @ 引用上游文本或图片…",
+    placeholder: "描述画面，用 @ 引用上游文本或图片…",
   },
   video_input: {
     promptParamKey: "prompt",
@@ -40,7 +40,7 @@ export const EDITOR_NODE_CONFIG: Record<EditorNodeType, EditorNodeConfig> = {
     category: "video",
     assetCategory: "video",
     label: "视频",
-    placeholder: "描述要如何生成或修改视频，可用 @ 引用上游素材…",
+    placeholder: "描述视频，用 @ 引用上游素材…",
   },
   audio_input: {
     promptParamKey: "prompt",
@@ -48,7 +48,7 @@ export const EDITOR_NODE_CONFIG: Record<EditorNodeType, EditorNodeConfig> = {
     category: "audio",
     assetCategory: "audio",
     label: "音频",
-    placeholder: "描述要如何生成或修改音频，可用 @ 引用上游素材…",
+    placeholder: "描述音频，用 @ 引用上游素材…",
   },
 };
 

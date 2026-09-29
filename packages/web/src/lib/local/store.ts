@@ -108,6 +108,35 @@ function httpDiskApi(): LocalDesktopApi {
     updateGenerationJob: (id, patch) =>
       rpc<LocalGenerationJob | null>("updateGenerationJob", [id, patch]),
     clearGenerationJobs: () => rpc<void>("clearGenerationJobs"),
+    readAgentSession: (projectId) => rpc<unknown | null>("readAgentSession", [projectId]),
+    writeAgentSession: (projectId, session) =>
+      rpc<void>("writeAgentSession", [projectId, session]),
+    listAgentSkills: () =>
+      rpc<Array<{ slug: string; name: string; description: string; source?: string }>>(
+        "listAgentSkills"
+      ),
+    readAgentSkill: (slug) =>
+      rpc<{
+        slug: string;
+        name: string;
+        description: string;
+        body: string;
+        references?: Record<string, string>;
+        source?: string;
+      } | null>("readAgentSkill", [slug]),
+    getAgentSkillsInfo: () =>
+      rpc<{ localDir: string; codexDir: string; codexExists: boolean }>("getAgentSkillsInfo"),
+    openAgentSkillsDir: () => rpc<{ ok: boolean; dir: string }>("openAgentSkillsDir"),
+    listCodexSkills: () =>
+      rpc<Array<{ slug: string; name: string; description: string; source?: string }>>(
+        "listCodexSkills"
+      ),
+    importCodexSkills: (slugs) =>
+      rpc<{
+        imported: string[];
+        skipped: string[];
+        errors: Array<{ slug: string; error: string }>;
+      }>("importCodexSkills", [slugs]),
   };
 }
 
@@ -253,7 +282,8 @@ function browserLocalStorageApi(): LocalDesktopApi {
         const k = localStorage.key(i);
         if (!k || !k.startsWith(prefix)) continue;
         const fileName = k.slice(prefix.length);
-        if (!fileName) continue;
+        // "." 开头为项目封面等内部文件，与磁盘实现一致不计入素材
+        if (!fileName || fileName.startsWith(".")) continue;
         seen.add(fileName);
         const existing = byFile.get(fileName);
         if (existing) {
@@ -357,6 +387,31 @@ function browserLocalStorageApi(): LocalDesktopApi {
     },
     async clearGenerationJobs() {
       writeJson(LS.generationJobs, []);
+    },
+    // localStorage 兜底：按项目存本地 Agent 会话
+    async readAgentSession(projectId) {
+      return readJson<unknown | null>(`jm_local_agent_session_${projectId}`, null);
+    },
+    async writeAgentSession(projectId, session) {
+      writeJson(`jm_local_agent_session_${projectId}`, session ?? null);
+    },
+    async listAgentSkills() {
+      return [];
+    },
+    async readAgentSkill() {
+      return null;
+    },
+    async getAgentSkillsInfo() {
+      return { localDir: "", codexDir: "", codexExists: false };
+    },
+    async openAgentSkillsDir() {
+      throw new Error("浏览器 localStorage 模式不支持打开技能目录，请使用本机 Harness");
+    },
+    async listCodexSkills() {
+      return [];
+    },
+    async importCodexSkills() {
+      throw new Error("浏览器 localStorage 模式不支持导入技能");
     },
   };
 }

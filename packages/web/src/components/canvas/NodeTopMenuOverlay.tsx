@@ -28,7 +28,6 @@ import {
   Upload,
   UserRound,
   X,
-  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -45,6 +44,7 @@ import {
   CANVAS_VIDEO_TOP_MENU_MAX_WIDTH,
   getNodeWorldPosition,
 } from "@/lib/canvas/canvasOverlayTransform";
+import { CANVAS_MIST_GLASS_STYLE } from "@/components/canvas/AddNodeMenu";
 import { useNodeAssetMedia } from "@/lib/canvas/useNodeAssetMedia";
 import { usePromptSuffixTools, type PromptSuffixMenuItem } from "@/lib/canvas/usePromptSuffixTools";
 import { renderAppendPrompt } from "@/lib/canvas/renderToolPrompt";
@@ -161,10 +161,10 @@ function TopMenuActionButton({
       disabled={disabled}
       title={title}
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
         active
-          ? "bg-purple-500/20 text-white ring-1 ring-purple-400/35"
-          : "text-white/80 hover:bg-white/10 hover:text-white"
+          ? "bg-white/12 text-white ring-1 ring-white/15"
+          : "text-white/70 hover:bg-white/[0.08] hover:text-white"
       }`}
     >
       {icon ? (
@@ -282,13 +282,6 @@ function TopMenuDropdown({
                 </span>
               ) : null}
               <span className="flex-1">{item.label}</span>
-              {item.creditCost != null || item.creditLoading ? (
-                <ToolCreditCostBadge
-                  cost={item.creditCost}
-                  creditsEnabled={item.creditsEnabled !== false}
-                  loading={Boolean(item.creditLoading)}
-                />
-              ) : null}
               {item.withChevron ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-white/45" />
               ) : null}
@@ -348,44 +341,17 @@ function RotateAxisMenuIcon({ className }: { className?: string }) {
   );
 }
 
-/** 下拉项/按钮消耗算力：闪电 + 数字（与顶栏/生成条一致，文案放 title） */
-function ToolCreditCostBadge({
-  cost,
-  creditsEnabled,
-  loading,
-}: {
+/** 节点顶栏不再展示工具算力角标（扣费仍走提交链路） */
+function ToolCreditCostBadge(_props: {
   cost: number | undefined;
   creditsEnabled: boolean;
   loading: boolean;
 }) {
-  if (loading) {
-    return (
-      <span className="inline-flex items-center gap-0.5 text-[12px] tabular-nums text-white/40">
-        <Zap className="size-3 fill-current text-primary" aria-hidden />
-        <span>…</span>
-      </span>
-    );
-  }
-  if (cost == null) return null;
-  const title = formatCreditLabel(cost, creditsEnabled);
-  const display = cost > 0 ? cost.toLocaleString() : "—";
-  return (
-    <span
-      className="inline-flex items-center gap-0.5 text-[12px] tabular-nums text-white/45"
-      title={title}
-      aria-label={title}
-    >
-      <Zap className="size-3 fill-current text-primary" aria-hidden />
-      <span className="font-mono text-white/70">{display}</span>
-    </span>
-  );
+  return null;
 }
 
 const OVERLAY_STYLE = {
-  background: "rgba(18, 18, 28, 0.96)",
-  backdropFilter: "blur(24px)",
-  WebkitBackdropFilter: "blur(24px)",
-  border: "1px solid rgba(139, 92, 246, 0.35)",
+  ...CANVAS_MIST_GLASS_STYLE,
 } as const;
 
 function guessExtension(url: string, fallback: string): string {
@@ -2948,9 +2914,8 @@ export function NodeTopMenuOverlay() {
           <>
             {/* 图片顶栏改成截图同款的固定顺序入口，右侧只保留图标操作。 */}
             <TopMenuDropdown
-              label={portraitAdjustBusy ? "调节中…" : "人像质感调节"}
-              // 算力只在展开子项展示；外层仅保留 NEW
-              badge="NEW"
+              label={portraitAdjustBusy ? "调节中…" : "人像质感"}
+              // 外层不再挂 NEW，减少顶栏噪音
               open={portraitMenuOpen}
               onOpenChange={(next) => {
                 if (next) closeOtherImageMenus("portrait");
@@ -3337,14 +3302,14 @@ export function NodeTopMenuOverlay() {
               </>
             ) : framePickActive ? (
               <>
-                <span className="px-2 text-[13px] tabular-nums text-purple-200/90">
+                <span className="px-2 text-[13px] tabular-nums text-indigo-200/90">
                   选帧 {formatVideoTime(framePickTimeSec)}
                 </span>
                 <button
                   type="button"
                   disabled={savingFrame}
                   onClick={() => void handleSaveFrame()}
-                  className="inline-flex items-center gap-1 rounded-md bg-purple-500/25 px-2.5 py-1.5 text-[13px] text-purple-100 ring-1 ring-purple-400/35 transition-colors hover:bg-purple-500/35 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-md bg-white/12 px-2.5 py-1.5 text-[13px] text-white ring-1 ring-white/15 transition-colors hover:bg-white/18 disabled:opacity-50"
                 >
                   <Camera className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                   {savingFrame ? "保存中…" : "保存此帧"}
@@ -3363,7 +3328,7 @@ export function NodeTopMenuOverlay() {
             ) : (
               <>
                 {/* 剪辑模式：展示选区时长 + 导出 / 取消 */}
-                <span className="px-2 text-[13px] tabular-nums text-purple-200/90">
+                <span className="px-2 text-[13px] tabular-nums text-indigo-200/90">
                   {formatVideoTime(inlineVideoTrim?.inSec ?? 0)} –{" "}
                   {formatVideoTime(inlineVideoTrim?.outSec ?? 0)}
                   <span className="ml-1 text-white/40">
@@ -3378,7 +3343,7 @@ export function NodeTopMenuOverlay() {
                   type="button"
                   disabled={savingTrim}
                   onClick={() => void handleConfirmVideoTrim()}
-                  className="inline-flex items-center gap-1 rounded-md bg-purple-500/25 px-2.5 py-1.5 text-[13px] text-purple-100 ring-1 ring-purple-400/35 transition-colors hover:bg-purple-500/35 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-md bg-white/12 px-2.5 py-1.5 text-[13px] text-white ring-1 ring-white/15 transition-colors hover:bg-white/18 disabled:opacity-50"
                 >
                   <Scissors className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                   {savingTrim ? "导出中…" : "导出片段"}

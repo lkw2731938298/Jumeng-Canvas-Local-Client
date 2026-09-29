@@ -119,6 +119,10 @@ function mapFocusedContent(n: Node): CanvasSnapshotFocusedContent {
     truncatePreview(String(params.prompt || ""), textMax) || undefined;
   const content =
     truncatePreview(String(params.content || ""), textMax) || undefined;
+  const resourceKind = String(params.resourceKind || "").trim() || undefined;
+  const linkUrl = truncatePreview(String(params.linkUrl || ""), 500) || undefined;
+  const htmlContent =
+    truncatePreview(String(params.htmlContent || ""), textMax) || undefined;
   const shotCount = shotCountOf(params, isBoard);
   const rows = parseTableRowsParam(params.shots);
   const shotsPreview =
@@ -137,6 +141,9 @@ function mapFocusedContent(n: Node): CanvasSnapshotFocusedContent {
     type: String(n.type || "") || undefined,
     prompt,
     content,
+    ...(htmlContent ? { htmlContent } : {}),
+    ...(linkUrl ? { linkUrl } : {}),
+    ...(resourceKind ? { resourceKind } : {}),
     ...(shotCount != null ? { shotCount } : {}),
     ...(shotsPreview?.length ? { shotsPreview } : {}),
     generationOptions,
@@ -158,6 +165,8 @@ function buildLiveParams(
     if (
       !entry.prompt &&
       !entry.content &&
+      !entry.htmlContent &&
+      !entry.linkUrl &&
       !entry.shotCount &&
       !(entry.shotsPreview && entry.shotsPreview.length)
     ) {
@@ -166,6 +175,8 @@ function buildLiveParams(
     const cost =
       (entry.prompt?.length || 0) +
       (entry.content?.length || 0) +
+      (entry.htmlContent?.length || 0) +
+      (entry.linkUrl?.length || 0) +
       JSON.stringify(entry.shotsPreview || []).length;
     if (used + cost > MAX_LIVE_CHARS && Object.keys(out).length > 0) {
       break;

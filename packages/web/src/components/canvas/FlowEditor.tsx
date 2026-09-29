@@ -1408,6 +1408,11 @@ export function FlowEditor() {
         deleteKeyCode={isPointerMode ? ["Delete", "Backspace"] : null}
         onBeforeDelete={onBeforeDelete}
         connectionRadius={CANVAS_CONNECTION_RADIUS}
+        connectionLineStyle={{
+          stroke: "rgba(199, 210, 254, 0.9)",
+          strokeWidth: 2.5,
+          filter: "drop-shadow(0 0 6px rgba(199, 210, 254, 0.75))",
+        }}
         defaultEdgeOptions={{ type: "default", style: { strokeWidth: 2 }, animated: false, selectable: true, interactionWidth: 20 }}
         style={{ background: canvasSurface.bg }} minZoom={0.1} maxZoom={5}
         noDragClassName="nodrag"

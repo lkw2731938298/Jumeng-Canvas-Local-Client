@@ -49,6 +49,7 @@ export function DirectorCameraInspector({
   onCaptureScreenshot,
   capturing = false,
   aspectRatio = "16:9",
+  embedded = false,
 }: {
   object: DirectorObject;
   cameraObjects: DirectorObject[];
@@ -63,10 +64,13 @@ export function DirectorCameraInspector({
   onLookAtObjectChange: (objectId: string | null) => void;
   onLookAtChange: (axis: 0 | 1 | 2, value: number) => void;
   onFovChange: (fov: number) => void;
-  lensPreviewTrackRef: RefObject<HTMLDivElement | null>;
+  /** 不传则不在面板内渲染镜头预览（控制台版改由浮动监视器承载） */
+  lensPreviewTrackRef?: RefObject<HTMLDivElement | null>;
   onCaptureScreenshot: () => void;
   capturing?: boolean;
   aspectRatio?: DirectorAspectRatio;
+  /** 嵌入控制台检查器：隐藏标题、视角切换、拍摄按钮与机位下拉（由监视器 / 胶片条提供） */
+  embedded?: boolean;
 }) {
   const pos = object.transform.position;
   const lookAt = object.lookAt ?? [0, 1, 0];
@@ -76,25 +80,32 @@ export function DirectorCameraInspector({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2 border-b border-white/10 pb-2 text-[10px]">
-        <span className="text-white/80">属性</span>
-        <span className="text-white/35">·</span>
-        <span className="text-indigo-300">摄像机视图</span>
-      </div>
+      {!embedded ? (
+        <div className="flex gap-2 border-b border-white/10 pb-2 text-[10px]">
+          <span className="text-white/80">属性</span>
+          <span className="text-white/35">·</span>
+          <span className="text-indigo-300">摄像机视图</span>
+        </div>
+      ) : null}
 
-      <div className="overflow-hidden rounded-md border border-white/10">
-        <p className="border-b border-white/10 bg-black/40 px-2 py-1 text-[9px] text-white/40">
-          FOV {object.fov ?? 45}°
-        </p>
-        <div
-          ref={lensPreviewTrackRef}
-          className="pointer-events-none w-full bg-transparent"
-          style={{ aspectRatio: previewAspect }}
-        />
-      </div>
+      {lensPreviewTrackRef ? (
+        <div className="overflow-hidden rounded-md border border-white/10">
+          <p className="border-b border-white/10 bg-black/40 px-2 py-1 text-[9px] text-white/40">
+            FOV {object.fov ?? 45}°
+          </p>
+          <div
+            ref={lensPreviewTrackRef}
+            className="pointer-events-none w-full bg-transparent"
+            style={{ aspectRatio: previewAspect }}
+          />
+        </div>
+      ) : null}
 
-      <CameraViewModeToggle mode={cameraViewMode} onChange={onCameraViewModeChange} />
+      {!embedded ? (
+        <CameraViewModeToggle mode={cameraViewMode} onChange={onCameraViewModeChange} />
+      ) : null}
 
+      {!embedded ? (
       <button
         type="button"
         disabled={capturing}
@@ -108,6 +119,7 @@ export function DirectorCameraInspector({
         )}
         {capturing ? "拍摄中…" : "拍摄当前机位"}
       </button>
+      ) : null}
 
       <label className="flex flex-col gap-1">
         <span className="text-[10px] text-white/45">名称</span>
@@ -119,6 +131,7 @@ export function DirectorCameraInspector({
         />
       </label>
 
+      {!embedded ? (
       <label className="flex flex-col gap-1">
         <span className="text-[10px] text-white/45">切换机位</span>
         <select
@@ -133,6 +146,7 @@ export function DirectorCameraInspector({
           ))}
         </select>
       </label>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <span className="text-[10px] text-white/45">位置</span>

@@ -101,7 +101,8 @@ export function DirectorSceneObject({
   const { transform } = object;
   const isCamera = object.kind === "camera";
   const useMannequin = object.kind === "character" && isMannequinBuiltinModel(object.builtinModelId);
-  const useGlb = object.kind === "character" && Boolean(modelUrl) && !useMannequin;
+  // 人物与 GLB 模型道具都可渲染 GLB（道具归一化高度 1 米 × modelScale）
+  const useGlb = !isCamera && Boolean(modelUrl) && !useMannequin;
   const cameraAspect = aspectRatioToNumber(aspectRatio as Parameters<typeof aspectRatioToNumber>[0]);
 
   const syncGroupTransform = (group: Group) => {
@@ -171,6 +172,7 @@ export function DirectorSceneObject({
               url={modelUrl}
               directorObjectId={object.id}
               scaleMultiplier={object.modelScale ?? 1}
+              targetHeight={object.kind === "character" ? undefined : 1}
             />
           ) : (
             <mesh castShadow receiveShadow userData={{ directorObjectId: object.id }}>

@@ -3,9 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "main": "main.js",
+  "appId": "com.lieka.jumengcanvas",
   "scripts": {
     "start": "electron .",
     "dev": "electron ."
+  },
+  "build": {
+    "appId": "com.lieka.jumengcanvas",
+    "productName": "聚梦无限画布"
   },
   "devDependencies": {
     "electron": "^33.2.1"

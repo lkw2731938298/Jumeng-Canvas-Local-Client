@@ -99,8 +99,8 @@ export function ImageCreativeToolsButton({
           "relative flex size-8 items-center justify-center rounded-md text-white/70 transition-colors",
           disabled
             ? "cursor-not-allowed opacity-35"
-            : "hover:bg-purple-500/15 hover:text-white",
-          !disabled && open && "bg-purple-500/20 text-white"
+            : "hover:bg-white/[0.08] hover:text-white",
+          !disabled && open && "bg-white/12 text-white"
         )}
         aria-label="创作工具"
         aria-expanded={open}
@@ -119,7 +119,7 @@ export function ImageCreativeToolsButton({
       >
         <LayoutGrid className="size-[18px]" strokeWidth={1.75} />
         {hasCustomStyle ? (
-          <span className="absolute right-1 top-1 size-1.5 rounded-full bg-purple-400" aria-hidden />
+          <span className="absolute right-1 top-1 size-1.5 rounded-full bg-indigo-300" aria-hidden />
         ) : null}
       </button>
 

@@ -128,7 +128,7 @@ export function DirectorStageEnvironment({
               interactive={interactive}
               gridSnap={settings.gridSnap}
               showLabel={settings.showLabels}
-              modelUrl={obj.kind === "character" ? resolveCharacterModelUrl?.(obj) ?? null : null}
+              modelUrl={obj.kind !== "camera" ? resolveCharacterModelUrl?.(obj) ?? null : null}
               aspectRatio={aspectRatio}
               onSelect={onSelectObject ?? (() => {})}
               onBonePoseChange={onBonePoseChange}

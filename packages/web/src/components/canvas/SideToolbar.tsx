@@ -154,19 +154,22 @@ export function SideToolbar() {
     },
   ];
 
+  /** 侧栏分组：添加/库 / 工作台 */
+  const groupBreakAfter = new Set([3]);
+
   return (
     <>
     <AssetPanel isOpen={showAssetPanel} onClose={() => setShowAssetPanel(false)} />
     <MaterialLibraryPanel isOpen={showMaterialLibrary} onClose={() => setShowMaterialLibrary(false)} />
     <GroupLibraryPanel isOpen={showPresetPanel} onClose={() => setShowPresetPanel(false)} />
     <div
-      className="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-1.5 rounded-xl px-2 py-2.5"
+      className="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-1 rounded-2xl px-1.5 py-2"
       style={ADD_NODE_MENU_GLASS_STYLE}
     >
       {toolbarItems.map((item, index) => (
-        <div key={index} className="relative">
+        <div key={item.label} className="relative flex flex-col items-center">
           <button
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition-colors hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
             title={item.label}
             onClick={item.onClick}
             onMouseEnter={() => {
@@ -193,12 +196,15 @@ export function SideToolbar() {
               >
                 <div
                   className="absolute left-[-4px] top-1/2 h-2 w-2 -translate-y-1/2 rotate-45"
-                  style={{ background: "var(--canvas-glass-tint)" }}
+                  style={{ background: "rgba(16, 16, 24, 0.95)" }}
                 />
                 <AddNodeMenuList onSelect={handleAddNode} />
               </div>
             </>
           )}
+          {groupBreakAfter.has(index) ? (
+            <div className="my-1 h-px w-5 bg-white/10" aria-hidden />
+          ) : null}
         </div>
       ))}
     </div>

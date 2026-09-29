@@ -35,7 +35,7 @@ export function ApplyProjectSeo() {
     const no = projectSeoNumber(projectNo, projectId);
     if (!no) return;
     const seo = projectCanvasSeo(no);
-    const title = typeof seo.title === "string" ? seo.title : `${no}-开源画布`;
+    const title = typeof seo.title === "string" ? seo.title : `${no}-聚梦画布`;
     document.title = title;
     upsertMeta("keywords", no);
     upsertMeta("description", no);

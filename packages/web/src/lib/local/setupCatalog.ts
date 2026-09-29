@@ -72,6 +72,9 @@ export function catalogSourceLabel(source: CatalogSource): string {
 export function inferModelCategory(modelId: string): LocalModelCategory {
   const s = modelId.toLowerCase();
 
+  // 3D 生成优先（Tripo 走 /v1/videos，网关元数据常标成视频，须抢在视频规则前）
+  if (isModel3dId(s)) return "model3d";
+
   // 音频优先（含 music / tts，避免被 minimax 视频规则抢走）
   if (
     /(tts|whisper|speech|suno|voice|cosyvoice|asr|vocal|music)/.test(s) ||
@@ -313,11 +316,22 @@ export function inferCategoryFromUpstreamMeta(
   return null;
 }
 
+/** 3D 生成模型 id 关键词（Tripo / Rodin / 混元 3D / *-to-model） */
+export function isModel3dId(modelId: string): boolean {
+  const s = (modelId || "").toLowerCase();
+  return (
+    /(tripo|rodin|hunyuan-?3d|hunyuan3d|trellis|meshy)/.test(s) ||
+    /(text-to-model|image-to-model|text_to_model|image_to_model|to-3d|img2mesh)/.test(s)
+  );
+}
+
 /** 综合上游元数据 + id 关键词 */
 export function resolveModelCategory(
   modelId: string,
   meta?: Partial<UpstreamModelEntry> | null
 ): LocalModelCategory {
+  // 3D 模型 id 明确时不看元数据（网关把 Tripo 标成 openai-video）
+  if (isModel3dId(modelId)) return "model3d";
   const fromMeta = meta
     ? inferCategoryFromUpstreamMeta({
         endpointTypes: meta.endpointTypes || [],
@@ -458,7 +472,7 @@ export async function fetchAccountCatalog(params: {
   picks.sort((a, b) => {
     if (Boolean(a.isDiscount) !== Boolean(b.isDiscount)) return a.isDiscount ? -1 : 1;
     if (a.category !== b.category) {
-      const order = { image: 0, video: 1, text: 2, audio: 3 } as const;
+      const order = { image: 0, video: 1, text: 2, audio: 3, model3d: 4 } as const;
       return (order[a.category] ?? 9) - (order[b.category] ?? 9);
     }
     return a.displayName.localeCompare(b.displayName, "zh");
@@ -497,7 +511,7 @@ export function mergeCatalog(params: {
   }
   for (const p of params.account) byId.set(p.id, p);
   for (const m of params.manuals) byId.set(m.id, m);
-  const cats: LocalModelCategory[] = ["text", "image", "video", "audio"];
+  const cats: LocalModelCategory[] = ["text", "image", "video", "audio", "model3d"];
   return Array.from(byId.values()).sort((a, b) => {
     const d = cats.indexOf(a.category) - cats.indexOf(b.category);
     if (d !== 0) return d;

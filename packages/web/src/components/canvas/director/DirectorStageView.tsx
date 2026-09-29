@@ -3,13 +3,19 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Camera,
+  Aperture,
+  Box,
   Clapperboard,
-  Film,
+  Globe,
+  Lightbulb,
+  ListTree,
   Loader2,
-  Play,
-  Plus,
+  Move3d,
+  PersonStanding,
+  SlidersHorizontal,
   Video,
+  Wand2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -28,13 +34,8 @@ import {
   isGlbAsset,
   resolveCharacterModelUrl as resolveCharacterModelUrlFromAssets,
 } from "@/lib/director/characterModels";
-import { LIGHTING_PRESETS, type LightingPresetId } from "@/lib/director/lightingPresets";
-import {
-  createDefaultCameraTrack,
-  interpolateCameraTrack,
-  newCameraKeyframe,
-  trackFrameTimes,
-} from "@/lib/director/cameraTrack";
+import type { LightingPresetId } from "@/lib/director/lightingPresets";
+import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { normalizeDirectorScene } from "@/lib/director/sceneNormalize";
 import {
   defaultLensCaptureOptions,
@@ -42,7 +43,6 @@ import {
 } from "@/lib/director/lensCapture";
 import { findBuiltinModel } from "@/lib/director/builtinModels";
 import { syncCameraLookAtFromTransform, rotationFromPositionLookAt } from "@/lib/director/shotPreview";
-import { applyChannelsToNodeParams, uploadDirectorChannels } from "@/lib/director/uploadChannels";
 import { writeDirectorCaptureToLinkedShot } from "@/lib/canvas/storyboardNarrativeBootstrap";
 import { useProjectAssetManifest } from "@/lib/canvas/useProjectAssets";
 import { isMannequinBuiltinModel } from "@/components/canvas/director/DirectorMannequinModel";
@@ -66,14 +66,26 @@ import {
   type CameraPropViewMode,
 } from "@/types/director-scene";
 import type { DirectorCaptureApi } from "./SceneCaptureBridge";
-import { DirectorObjectList } from "./DirectorObjectList";
+import { DirectorOutliner } from "./DirectorOutliner";
+import { DirectorShotStrip } from "./DirectorShotStrip";
+import { DirectorLensMonitor } from "./DirectorLensMonitor";
+import { DirectorLightingCards } from "./DirectorLightingCards";
+import { DirectorSmartShots } from "./DirectorSmartShots";
+import { DirectorCompositionDoctor } from "./DirectorCompositionDoctor";
+import { GLASS_PANEL, PanelSection } from "./directorUi";
+import { framingToCameraFields } from "@/lib/director/cameraFraming";
 import { DirectorSceneInspector } from "./DirectorSceneInspector";
 import { DirectorModelInspector } from "./DirectorModelInspector";
 import { DirectorCameraInspector } from "./DirectorCameraInspector";
 import { DirectorBottomToolbar } from "./DirectorBottomToolbar";
 import { DirectorAspectOverlay } from "./DirectorAspectOverlay";
+import { DirectorFilmGateTrack } from "./DirectorFilmGateTrack";
 import { DirectorPosePanel } from "./DirectorPosePanel";
 import { MediaAssetPicker } from "@/components/canvas/nodes/MediaAssetPicker";
+import { DirectorAgentPanel } from "./DirectorAgentPanel";
+import { DirectorModel3dDialog } from "./DirectorModel3dDialog";
+import { registerDirectorLiveHost, useDirectorModel3dJobs } from "@/lib/director/model3dJobs";
+import type { DirectorAgentHost } from "@/lib/director/agent/session";
 
 export interface DirectorStageViewProps {
   projectId: string;
@@ -92,13 +104,6 @@ const DirectorStageEditor = dynamic(
     ),
   }
 );
-
-const PANEL_STYLE = {
-  background: "rgba(18, 18, 28, 0.96)",
-  backdropFilter: "blur(24px)",
-  WebkitBackdropFilter: "blur(24px)",
-  border: "1px solid rgba(99, 102, 241, 0.35)",
-} as const;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -127,7 +132,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [capturing, setCapturing] = useState(false);
-  const [exportingTrack, setExportingTrack] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [transformMode, setTransformMode] = useState<DirectorTransformMode>("translate");
   /** 人体模型右侧栏：坐标轴 ↔ 关节视口编辑 */
@@ -137,6 +141,10 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [cameraPropViewMode, setCameraPropViewMode] = useState<CameraPropViewMode>("thirdPerson");
   const [uploadingModel, setUploadingModel] = useState(false);
   const [uiFullscreen, setUiFullscreen] = useState(false);
+  /** 取景框三分线 / 中心十字构图辅助 */
+  const [showGuides, setShowGuides] = useState(false);
+  /** 未选中对象时右侧检查器的分页：环境 / 灯光 / 分镜 */
+  const [sceneTab, setSceneTab] = useState<"env" | "light" | "lens">("env");
   const [panoramaAssetPickerOpen, setPanoramaAssetPickerOpen] = useState(false);
 
   const modelFileRef = useRef<HTMLInputElement | null>(null);
@@ -144,9 +152,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const stageBodyRef = useRef<HTMLDivElement | null>(null);
   const mainViewRef = useRef<HTMLDivElement | null>(null);
+  /** 画幅安全区：进机位时主 View 追踪此节点，与监视器同宽高比 */
+  const filmGateRef = useRef<HTMLDivElement | null>(null);
   const lensPreviewTrackRef = useRef<HTMLDivElement | null>(null);
   const captureApiRef = useRef<DirectorCaptureApi | null>(null);
   const liveCameraRef = useRef<DirectorCameraState | null>(null);
+  /** 拖拽机位时的临时 transform，镜头监视器与第一人称共用 */
+  const liveCameraTransformRef = useRef<{ id: string; transform: DirectorObject["transform"] } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sceneLoadedRef = useRef(false);
   const trackRafRef = useRef<number | null>(null);
@@ -199,8 +211,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     }
     return scene.camera;
   }, [scene, trackTime, selectedCameraObject, cameraPropViewMode]);
-  const cameraTrack = scene?.cameraTrack ?? null;
-
   const lensCaptureOptions = useMemo(
     () => (scene ? defaultLensCaptureOptions(scene, selectedCameraObject?.id ?? null) : undefined),
     [scene, selectedCameraObject?.id]
@@ -226,6 +236,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         target: lookAt,
         fov: obj.fov ?? 45,
       };
+      liveCameraTransformRef.current = { id, transform };
     },
     [scene?.objects]
   );
@@ -305,6 +316,101 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     [scheduleSave]
   );
 
+  // ---------- 导演台 AI（对话搭场景 / 3D 生成） ----------
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [model3dDialogOpen, setModel3dDialogOpen] = useState(false);
+  /** 最新场景（AI 异步流程里读取，避免闭包拿到旧值） */
+  const sceneRef = useRef<DirectorSceneState | null>(null);
+  useEffect(() => {
+    sceneRef.current = scene;
+  }, [scene]);
+  const model3dJobs = useDirectorModel3dJobs(projectId, nodeId);
+  const model3dJobsRef = useRef(model3dJobs);
+  useEffect(() => {
+    model3dJobsRef.current = model3dJobs;
+  }, [model3dJobs]);
+
+  /** AI 整体替换场景（本轮 ops 结果 / 撤销快照） */
+  const replaceSceneFromAgent = useCallback(
+    (next: DirectorSceneState) => {
+      sceneRef.current = next;
+      patchScene(() => next);
+    },
+    [patchScene]
+  );
+
+  // 注册实时宿主：后台 3D 生成完成时直接替换占位物体
+  useEffect(() => {
+    if (!projectId || !nodeId) return;
+    return registerDirectorLiveHost(projectId, nodeId, {
+      getScene: () => sceneRef.current ?? createDefaultDirectorScene(),
+      patchScene,
+    });
+  }, [nodeId, patchScene, projectId]);
+
+  /** AI 截图：等视口渲染新场景 → 用指定摄像机截图 → 存素材 → 回写关联分镜 */
+  const captureFromCameraForAgent = useCallback(
+    async (cameraId: string): Promise<string> => {
+      // 等 React 提交 + three.js 渲染几帧（GLB 可能还在加载，多等一会）
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      await new Promise((r) => setTimeout(r, 600));
+      const api = captureApiRef.current;
+      const current = sceneRef.current;
+      if (!api || !current || !projectId) throw new Error("3D 视口尚未就绪");
+      const cam = current.objects.find((o) => o.id === cameraId);
+      const cameraState = cam ? cameraObjectToState(cam) : null;
+      if (!cam || !cameraState) throw new Error("找不到该摄像机");
+      const rgb = api.captureRgb(cameraState, {
+        ...defaultLensCaptureOptions(current, cameraId),
+        hideObjectIds: current.objects.filter((o) => o.kind === "camera").map((o) => o.id),
+      });
+      const shotIndex = (cam.screenshots?.length ?? 0) + 1;
+      const shotName = `${cam.name}-${String(shotIndex).padStart(2, "0")}`;
+      const file = await dataUrlToFile(rgb, `director-ai-${cam.id}-${Date.now()}.png`);
+      const asset = await uploadAsset({
+        file,
+        projectId,
+        category: "image",
+        subcategory: NODE_IMAGE_SUBCATEGORY,
+        title: shotName,
+      });
+      const screenshot = { id: `shot_${Date.now()}`, name: shotName, assetId: asset.id, createdAt: new Date().toISOString() };
+      patchScene((prev) => ({
+        ...prev,
+        objects: prev.objects.map((o) =>
+          o.id === cam.id ? { ...o, screenshots: [...(o.screenshots ?? []), screenshot] } : o
+        ),
+      }));
+      const linked = nodeId
+        ? writeDirectorCaptureToLinkedShot({ directorNodeId: nodeId, assetId: asset.id, cameraObjectId: cam.id })
+        : false;
+      return linked ? `已截图并回写关联分镜草图（素材 ${asset.id}）` : `已截图存入素材库（素材 ${asset.id}，未关联分镜）`;
+    },
+    [nodeId, patchScene, projectId]
+  );
+
+  const agentHost = useMemo<DirectorAgentHost>(
+    () => ({
+      projectId,
+      nodeId,
+      getScene: () => sceneRef.current ?? createDefaultDirectorScene(),
+      replaceScene: replaceSceneFromAgent,
+      capture: captureFromCameraForAgent,
+      imageAssets: assets
+        .filter((a) => a.category === "image")
+        .map((a) => ({ id: a.id, title: a.title || a.id, url: a.fileUrl })),
+      modelAssets: assets
+        .filter((a) => a.category === "model" || isGlbAsset(a))
+        .filter(isGlbAsset)
+        .map((a) => ({ id: a.id, title: a.title || a.id })),
+      pendingModel3d: () =>
+        model3dJobsRef.current
+          .filter((j) => j.status === "running")
+          .map((j) => ({ name: j.name, placeholderId: j.placeholderId, progress: j.progress })),
+    }),
+    [assets, captureFromCameraForAgent, nodeId, projectId, replaceSceneFromAgent]
+  );
+
   const handleObjectTransform = useCallback(
     (id: string, transform: DirectorObject["transform"]) => {
       patchScene((prev) => ({
@@ -319,6 +425,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         }),
       }));
       liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
     },
     [patchScene]
   );
@@ -326,6 +433,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const selectSceneObject = useCallback((id: string | null) => {
     setSelectedObjectId(id);
     liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
     if (!id) return;
     const obj = scene?.objects.find((o) => o.id === id);
     if (obj?.kind === "camera") {
@@ -337,6 +445,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (patch: Partial<DirectorObject>) => {
       if (!selectedObjectId) return;
       liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
       patchScene((prev) => ({
         ...prev,
         objects: prev.objects.map((obj) =>
@@ -351,6 +460,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (axis: 0 | 1 | 2, value: number) => {
       if (!selectedObject) return;
       liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
       const pos = [...selectedObject.transform.position] as [number, number, number];
       pos[axis] = value;
       handleObjectTransform(selectedObject.id, {
@@ -365,6 +475,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (axis: 0 | 1 | 2, value: number) => {
       if (!selectedObject || selectedObject.kind !== "camera") return;
       liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
       const lookAt = [...(selectedObject.lookAt ?? [0, 1, 0])] as [number, number, number];
       lookAt[axis] = value;
       handleObjectTransform(selectedObject.id, {
@@ -390,6 +501,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     [patchScene]
   );
 
+  // 旧「shotCameras + 机位视角」已被场景摄像机造具 +「进机位」替代；残留 shot 模式统一拉回自由视角
+  useEffect(() => {
+    if (scene?.viewMode === "shot") {
+      setViewMode("director");
+    }
+  }, [scene?.viewMode, setViewMode]);
+
   const addShotFromCurrentView = useCallback(() => {
     const current = captureApiRef.current?.getCurrentCamera();
     if (!current) {
@@ -402,20 +520,30 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         ...prev,
         shotCameras: [...prev.shotCameras, shot],
         activeShotCameraId: shot.id,
-        viewMode: "shot",
+        viewMode: "director",
       };
     });
     toast.success("已保存当前视角为机位");
   }, [patchScene]);
 
+  /** 点击书签标记：把自由视角相机挪到该书签，不再切入已废弃的 shot 锁定模式 */
   const selectShotCamera = useCallback(
     (id: string) => {
       setSelectedObjectId(null);
-      patchScene((prev) => ({
-        ...prev,
-        activeShotCameraId: id,
-        viewMode: "shot",
-      }));
+      patchScene((prev) => {
+        const shot = prev.shotCameras.find((c) => c.id === id);
+        if (!shot) return prev;
+        return {
+          ...prev,
+          activeShotCameraId: id,
+          viewMode: "director",
+          camera: {
+            position: [...shot.position] as [number, number, number],
+            target: [...shot.target] as [number, number, number],
+            fov: shot.fov,
+          },
+        };
+      });
     },
     [patchScene]
   );
@@ -593,6 +721,58 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     });
     toast.success("已添加摄像机");
   }, [patchScene]);
+
+  type CameraFramingFields = ReturnType<typeof framingToCameraFields>;
+
+  /** 智能分镜 / 构图医生：把取景字段写到指定机位（或新建） */
+  const applyFramingToCamera = useCallback(
+    (cameraId: string | null, fields: CameraFramingFields, label: string, asNew: boolean) => {
+      patchScene((prev) => {
+        if (!asNew && cameraId) {
+          return {
+            ...prev,
+            objects: prev.objects.map((obj) => {
+              if (obj.id !== cameraId || obj.kind !== "camera") return obj;
+              return {
+                ...obj,
+                name: obj.name,
+                fov: fields.fov,
+                lookAt: fields.lookAt,
+                lookAtMode: fields.lookAtMode,
+                lookAtObjectId: fields.lookAtObjectId,
+                transform: {
+                  ...obj.transform,
+                  position: fields.position,
+                  rotation: fields.rotation,
+                },
+              };
+            }),
+          };
+        }
+        const cam = newDirectorCameraObject(prev.objects, prev.objects.filter((o) => o.kind === "camera").length * 0.4, {
+          position: fields.position,
+          target: fields.lookAt,
+          fov: fields.fov,
+        });
+        cam.name = label.slice(0, 40);
+        cam.lookAt = fields.lookAt;
+        cam.lookAtMode = fields.lookAtMode;
+        cam.lookAtObjectId = fields.lookAtObjectId;
+        cam.transform = {
+          ...cam.transform,
+          position: fields.position,
+          rotation: fields.rotation,
+        };
+        setSelectedObjectId(cam.id);
+        setCameraPropViewMode("thirdPerson");
+        return { ...prev, objects: [...prev.objects, cam], viewMode: "director" };
+      });
+      liveCameraRef.current = null;
+      liveCameraTransformRef.current = null;
+      toast.success(asNew || !cameraId ? `已新建机位「${label}」` : `已修正「${label}」`);
+    },
+    [patchScene]
+  );
 
   const addBuiltinModel = useCallback(
     (builtinId: string) => {
@@ -898,50 +1078,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     setCameraPropViewMode("thirdPerson");
   }, []);
 
-  const handleCapture = useCallback(async () => {
-    if (!captureApiRef.current || !nodeId || !projectId || !scene || !lensCaptureOptions) return;
-    setCapturing(true);
-    try {
-      const cameraState = resolveCaptureCameraState() ?? resolveActiveCamera(scene);
-      const channels = captureApiRef.current.capture(
-        cameraState,
-        scene.objects,
-        lensCaptureOptions
-      );
-      const shotSuffix =
-        scene.viewMode === "shot" && scene.activeShotCameraId
-          ? `-${scene.shotCameras.find((c) => c.id === scene.activeShotCameraId)?.name ?? "机位"}`
-          : trackTime != null
-            ? `-t${trackTime.toFixed(1)}s`
-            : "";
-
-      const uploaded = await uploadDirectorChannels({
-        projectId,
-        nodeId: nodeId,
-        label,
-        suffix: shotSuffix,
-        channels,
-      });
-      applyNodeGeneratedMedia(nodeId, "imageUrl", uploaded.rgb.fileUrl, uploaded.rgb.id);
-      applyChannelsToNodeParams(updateNodeParam, nodeId, uploaded);
-      toast.success("五通道截图已写入画布节点");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "截图失败");
-    } finally {
-      setCapturing(false);
-    }
-  }, [
-    lensCaptureOptions,
-    nodeId,
-    label,
-    projectId,
-    resolveCaptureCameraState,
-    scene,
-    trackTime,
-    applyNodeGeneratedMedia,
-    updateNodeParam,
-  ]);
-
   /** 退出导演台前：把当前视口 RGB 写入节点，供卡片与下游参考图使用 */
   const persistExitPreview = useCallback(async () => {
     if (!captureApiRef.current || !nodeId || !projectId || !scene || !lensCaptureOptions) return;
@@ -985,61 +1121,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     return () => registerDirectorExitPreviewCapture(null);
   }, [persistExitPreview]);
 
-  const initCameraTrack = useCallback(() => {
-    patchScene((prev) => ({
-      ...prev,
-      cameraTrack: prev.cameraTrack ?? createDefaultCameraTrack(),
-    }));
-  }, [patchScene]);
-
-  const addTrackKeyframe = useCallback(() => {
-    const current = captureApiRef.current?.getCurrentCamera();
-    if (!current) return;
-    patchScene((prev) => {
-      const track = prev.cameraTrack ?? createDefaultCameraTrack();
-      const time = trackTime ?? track.keyframes.at(-1)?.time ?? 0;
-      const keyframe = newCameraKeyframe(time, current);
-      return {
-        ...prev,
-        cameraTrack: { ...track, keyframes: [...track.keyframes, keyframe].sort((a, b) => a.time - b.time) },
-      };
-    });
-    toast.success("已添加镜头关键帧");
-  }, [patchScene, trackTime]);
-
-  const exportTrackFrames = useCallback(async () => {
-    if (!captureApiRef.current || !scene?.cameraTrack || !nodeId || !projectId || !lensCaptureOptions) {
-      return;
-    }
-    if (scene.cameraTrack.keyframes.length < 2) {
-      toast.error("至少需要 2 个关键帧");
-      return;
-    }
-    setExportingTrack(true);
-    try {
-      const times = trackFrameTimes(scene.cameraTrack).slice(0, 24);
-      let count = 0;
-      for (const t of times) {
-        const cam = interpolateCameraTrack(scene.cameraTrack, t);
-        const rgb = captureApiRef.current.captureRgb(cam, lensCaptureOptions);
-        const file = await dataUrlToFile(rgb, `director-track-${nodeId}-${count}.png`);
-        await uploadAsset({
-          file,
-          projectId,
-          category: "image",
-          subcategory: NODE_IMAGE_SUBCATEGORY,
-          title: `${label} 轨迹帧 ${count + 1}`,
-        });
-        count += 1;
-      }
-      toast.success(`已导出 ${count} 张轨迹序列帧到素材库`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "导出失败");
-    } finally {
-      setExportingTrack(false);
-    }
-  }, [lensCaptureOptions, nodeId, label, projectId, scene?.cameraTrack]);
-
   useEffect(() => {
     if (!trackPlaying || !scene?.cameraTrack) return;
     const track = scene.cameraTrack;
@@ -1069,7 +1150,29 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        // 组合键只处理下方 Ctrl+数字 存机位
+      } else if (e.key === "Tab") {
+        // 专注模式：隐藏大纲 / 检查器 / 胶片条，只留视口与控制坞
+        e.preventDefault();
+        setUiFullscreen((v) => !v);
+        return;
+      } else if (e.key === "g" || e.key === "G") {
+        setShowGuides((v) => !v);
+        return;
+      } else if (e.key === "Escape") {
+        setSelectedObjectId(null);
+        return;
+      }
       if (e.key === "v" || e.key === "V") setTransformMode("translate");
       if (e.key === "r" || e.key === "R") setTransformMode("rotate");
       if (e.key === "s" || e.key === "S") setTransformMode("scale");
@@ -1104,7 +1207,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             ...prev,
             shotCameras,
             activeShotCameraId: updated.id,
-            viewMode: "shot" as const,
+            // 仅存书签，不切入已废弃的「机位视角」锁定模式
+            viewMode: "director" as const,
           };
         });
         toast.success(`机位 ${index + 1} 已更新`);
@@ -1124,161 +1228,402 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       ? "摄像机视角"
       : isCameraThirdPerson
         ? "第三人称"
-        : scene?.viewMode === "shot"
-          ? "机位视角"
-          : null;
+        : null;
   const aspectRatio = scene?.sceneSettings?.aspectRatio ?? "16:9";
 
-  const advancedPanel = scene ? (
-    <details className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-      <summary className="cursor-pointer text-[10px] text-white/45">高级：布光 / 轨迹 / 五通道</summary>
-      <div className="mt-2 flex flex-col gap-3">
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => setViewMode("director")}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs ${
-              scene.viewMode === "director" ? "bg-indigo-500/30 text-white" : "bg-white/5 text-white/50"
-            }`}
-          >
-            <Film className="h-3 w-3" />
-            自由视角
-          </button>
-          <button
-            type="button"
-            disabled={!scene.shotCameras.length}
-            onClick={() => setViewMode("shot")}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs disabled:opacity-30 ${
-              scene.viewMode === "shot" ? "bg-indigo-500/30 text-white" : "bg-white/5 text-white/50"
-            }`}
-          >
-            <Video className="h-3 w-3" />
-            机位视角
-          </button>
-        </div>
-        <select
-          value={scene.lighting.preset}
-          onChange={(e) => setLightingPreset(e.target.value as LightingPresetId)}
-          className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80"
-        >
-          {LIGHTING_PRESETS.map((p) => (
-            <option key={p.id} value={p.id} className="bg-zinc-900">
-              布光 · {p.label}
-            </option>
-          ))}
-        </select>
-        {cameraTrack ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  trackPlayFromRef.current = trackTime ?? 0;
-                  setTrackPlaying(true);
-                }}
-                disabled={trackPlaying || cameraTrack.keyframes.length < 2}
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-white/70 disabled:opacity-30"
-              >
-                <Play className="h-3.5 w-3.5" />
-              </button>
-              <button type="button" onClick={() => setTrackTime(null)} className="rounded-md bg-white/5 px-2 py-1 text-[10px] text-white/50">
-                退出轨迹
-              </button>
-              <button type="button" onClick={addTrackKeyframe} className="flex-1 rounded-md bg-indigo-500/20 py-1 text-[10px] text-indigo-100">
-                关键帧
-              </button>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={cameraTrack.duration}
-              step={0.1}
-              value={trackTime ?? 0}
-              onChange={(e) => setTrackTime(parseFloat(e.target.value))}
-              className="w-full accent-indigo-500"
-            />
-            <button
-              type="button"
-              disabled={exportingTrack || cameraTrack.keyframes.length < 2}
-              onClick={() => void exportTrackFrames()}
-              className="rounded-md bg-white/5 py-1.5 text-[10px] text-white/60 disabled:opacity-30"
-            >
-              导出轨迹序列
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={initCameraTrack} className="text-[10px] text-indigo-300">
-            启用镜头轨迹
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={capturing || loading}
-          onClick={() => void handleCapture()}
-          className="flex items-center justify-center gap-1.5 rounded-md bg-indigo-500/25 py-2 text-xs text-indigo-100 disabled:opacity-40"
-        >
-          {capturing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-          五通道截图
-        </button>
-      </div>
-    </details>
+  // ── 控制台布局派生数据 ──
+  const stageStats = useMemo(() => {
+    const objs = scene?.objects ?? [];
+    return {
+      characters: objs.filter((o) => o.kind === "character").length,
+      props: objs.filter((o) => o.kind !== "character" && o.kind !== "camera").length,
+      cameras: objs.filter((o) => o.kind === "camera").length,
+    };
+  }, [scene?.objects]);
+  const panelsVisible = !uiFullscreen && !!scene && !loading;
+  const model3dRunning = model3dJobs.some((j) => j.status === "running");
+  /** 视口中间可用区域的左右边界（避开浮动面板），供胶片条 / 控制坞 / 监视器定位 */
+  const centerLeft = panelsVisible ? "left-[calc(16rem+1.5rem)]" : "left-3";
+  const centerRight = agentOpen
+    ? "right-[calc(340px+1.5rem)]"
+    : panelsVisible
+      ? "right-[calc(18rem+1.5rem)]"
+      : "right-3";
+  const viewportBox = panelsVisible || agentOpen
+    ? `top-3 bottom-3 ${centerLeft} ${centerRight} rounded-2xl ring-1 ring-white/[0.07]`
+    : "inset-0";
+  const selectionTitle = selectedObject
+    ? selectedObject.kind === "camera"
+      ? { tag: "摄像机", tone: "bg-amber-400/15 text-amber-200", icon: <Video className="h-4 w-4 text-amber-300" /> }
+      : selectedObject.kind === "character"
+        ? { tag: "人物", tone: "bg-indigo-400/15 text-indigo-200", icon: <PersonStanding className="h-4 w-4 text-indigo-300" /> }
+        : { tag: "道具", tone: "bg-emerald-400/15 text-emerald-200", icon: <Box className="h-4 w-4 text-emerald-300" /> }
+    : null;
+
+  /** 未选中对象时的「分镜」分页：智能分镜 + 构图医生（已移除低频轨迹/五通道） */
+  const doctorCamera =
+    selectedCameraObject ?? scene?.objects.find((o) => o.kind === "camera") ?? null;
+  const lensTab = scene ? (
+    <div className="flex flex-col gap-4">
+      <DirectorSmartShots
+        objects={scene.objects}
+        selectedCameraId={selectedCameraObject?.id ?? null}
+        onApplyNew={(fields, label) => applyFramingToCamera(null, fields, label, true)}
+        onReplaceSelected={(fields, label) =>
+          applyFramingToCamera(selectedCameraObject?.id ?? null, fields, label, false)
+        }
+      />
+      <DirectorCompositionDoctor
+        camera={doctorCamera}
+        objects={scene.objects}
+        aspectRatio={aspectRatio}
+        onApplyFix={(fields, tipTitle) =>
+          applyFramingToCamera(doctorCamera?.id ?? null, fields, tipTitle, !doctorCamera)
+        }
+      />
+    </div>
   ) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col" style={PANEL_STYLE}>
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <Clapperboard className="h-4 w-4 text-indigo-300" />
-          <span className="text-sm font-medium text-white/90">3D 导演台</span>
-          {saveState === "saving" ? (
-            <span className="text-[10px] text-white/35">保存中…</span>
-          ) : saveState === "saved" ? (
-            <span className="text-[10px] text-emerald-400/80">已保存</span>
-          ) : saveState === "error" ? (
-            <span className="text-[10px] text-red-400/80">保存失败</span>
-          ) : null}
+    <div
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#08080f]"
+      style={{ border: "1px solid rgba(99, 102, 241, 0.28)" }}
+    >
+      {/* ── 顶栏：标识 / 场景统计 + 视角 / AI 导演 ── */}
+      <header className="relative z-40 flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.06] bg-[rgba(10,10,18,0.92)] px-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/25">
+            <Clapperboard className="h-3.5 w-3.5 text-white" />
+          </span>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="text-[13px] font-semibold tracking-wide text-white/90">导演控制台</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-white/35">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  saveState === "saving"
+                    ? "animate-pulse bg-amber-400"
+                    : saveState === "error"
+                      ? "bg-red-400"
+                      : saveState === "saved"
+                        ? "bg-emerald-400"
+                        : "bg-white/25"
+                }`}
+              />
+              <span className="max-w-[160px] truncate">{label}</span>
+              <span>
+                {saveState === "saving" ? "· 保存中" : saveState === "error" ? "· 保存失败" : saveState === "saved" ? "· 已保存" : ""}
+              </span>
+            </span>
+          </div>
         </div>
-        {/* 顶栏仅保留自由视角（orbit）；机位预览改由选中摄像机 / 高级面板进入 */}
-        <span className="w-16 text-right text-[10px] text-white/35">{label}</span>
-      </div>
+
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
+          <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1 text-[10px] text-white/55">
+            <span className="flex items-center gap-1"><PersonStanding className="h-3 w-3 text-indigo-300" />{stageStats.characters}</span>
+            <span className="flex items-center gap-1"><Box className="h-3 w-3 text-emerald-300" />{stageStats.props}</span>
+            <span className="flex items-center gap-1"><Video className="h-3 w-3 text-amber-300" />{stageStats.cameras}</span>
+          </div>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            disabled={loading || !scene}
+            onClick={() => setAgentOpen((v) => !v)}
+            title="用对话让 AI 摆人物、道具、机位和灯光"
+            className={`group relative flex items-center gap-1.5 overflow-hidden rounded-full px-3.5 py-1.5 text-xs font-medium text-white transition-all disabled:opacity-40 ${
+              agentOpen
+                ? "bg-white/15 ring-1 ring-white/20"
+                : "bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/20 hover:shadow-fuchsia-500/40"
+            }`}
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            {agentOpen ? "收起 AI 导演" : "AI 导演"}
+            {model3dRunning ? <Loader2 className="h-3 w-3 animate-spin text-amber-200" /> : null}
+          </button>
+        </div>
+      </header>
 
       <input ref={modelFileRef} type="file" accept={GLB_ACCEPT} multiple className="hidden" onChange={(e) => void handleModelFileChange(e)} />
 
-      <div ref={stageBodyRef} className="relative flex min-h-0 flex-1">
-        {!uiFullscreen ? (
+      {/* ── 舞台：3D 视口铺满，面板以浮层叠加 ── */}
+      <div ref={stageBodyRef} className="relative min-h-0 flex-1">
+        {/* 面板可见时视口收进两侧面板之间（取景框与截图范围一致）；专注模式铺满 */}
+        <div
+          ref={mainViewRef}
+          className={`director-stage-canvas pointer-events-auto absolute select-none overflow-hidden ${viewportBox}`}
+        >
+          {scene ? (
+            <DirectorFilmGateTrack
+              containerRef={mainViewRef}
+              trackRef={filmGateRef}
+              aspectRatio={aspectRatio}
+            />
+          ) : null}
+        </div>
+        {scene ? (
+          <div className={`pointer-events-none absolute z-[26] overflow-hidden ${viewportBox}`}>
+            <DirectorAspectOverlay containerRef={mainViewRef} aspectRatio={aspectRatio} showGuides={showGuides} />
+          </div>
+        ) : null}
+
+        {/* 视口 HUD：当前视角 / 操作提示 */}
+        {scene && !loading ? (
+          <div className={`pointer-events-none absolute top-6 z-30 flex justify-center ${centerLeft} ${centerRight}`}>
+            {viewBadge ? (
+              <span className="flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/20 px-3 py-1 text-[11px] text-indigo-100 backdrop-blur-md">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-300" />
+                {viewBadge}
+              </span>
+            ) : (
+              <span className="rounded-full bg-black/35 px-3 py-1 text-[10px] text-white/40 backdrop-blur-md">
+                左键旋转 · 右键平移 · 滚轮缩放 · V/R/S 变换 · G 构图线 · Tab 专注
+              </span>
+            )}
+          </div>
+        ) : null}
+
+        {/* 左：场景大纲 */}
+        {panelsVisible ? (
           <aside
-            className="relative z-20 flex w-48 shrink-0 flex-col overflow-x-hidden border-r border-white/10 bg-[rgba(18,18,28,0.98)] p-3"
+            className={`absolute bottom-3 left-3 top-3 z-30 flex w-64 flex-col p-3 ${GLASS_PANEL}`}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <p className="mb-2 text-xs font-medium text-white/70">场景</p>
-            <DirectorObjectList
+            <div className="mb-3 flex items-center gap-2">
+              <ListTree className="h-3.5 w-3.5 text-white/45" />
+              <span className="text-xs font-medium text-white/80">场景大纲</span>
+              <span className="ml-auto font-mono text-[10px] text-white/30">{scene?.objects.length ?? 0} 个对象</span>
+            </div>
+            <DirectorOutliner
               objects={scene?.objects ?? []}
               selectedId={selectedObjectId}
+              disabled={loading || !scene}
+              uploadingModel={uploadingModel}
               onSelect={selectSceneObject}
               onRemove={(id) => removeSelected(id)}
+              onAddBuiltin={addBuiltinModel}
+              onUploadModel={() => modelFileRef.current?.click()}
+              onAddCamera={addCameraObject}
+              onOpenModel3d={() => setModel3dDialogOpen(true)}
             />
           </aside>
         ) : null}
 
-        <div className="relative min-h-0 flex-1">
+        {/* 右：上下文检查器 */}
+        {panelsVisible && scene ? (
           <div
-            ref={mainViewRef}
-            className="director-stage-canvas pointer-events-auto absolute inset-3 select-none overflow-hidden rounded-lg border border-white/10"
+            className="absolute bottom-3 right-3 top-3 z-30 flex w-72 flex-col gap-3"
+            onPointerDown={(e) => e.stopPropagation()}
           >
-            {viewBadge ? (
-              <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-md bg-black/50 px-2 py-1 text-[10px] text-indigo-200">
-                {viewBadge}
+          {/* 导演监视器：选中摄像机时置于右栏顶部（主视口与画幅遮罩之外，镜头画面不被压暗） */}
+          {selectedCameraObject && !agentOpen ? (
+            <DirectorLensMonitor
+              camera={selectedCameraObject}
+              trackRef={lensPreviewTrackRef}
+              aspectRatio={aspectRatio}
+              viewMode={cameraPropViewMode}
+              capturing={capturing}
+              onViewModeChange={setCameraPropViewMode}
+              onCapture={() => void handleSelectedCameraScreenshot()}
+              onClose={() => setSelectedObjectId(null)}
+            />
+          ) : null}
+          <aside className={`flex min-h-0 flex-1 flex-col overflow-hidden ${GLASS_PANEL}`}>
+            <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-3 py-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06]">
+                {selectionTitle ? selectionTitle.icon : <SlidersHorizontal className="h-4 w-4 text-white/60" />}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="truncate text-xs font-medium text-white/90">
+                  {selectedObject ? selectedObject.name : "场景设置"}
+                </span>
+                <span className="text-[10px] text-white/35">
+                  {selectedObject ? "Esc 取消选中 · Delete 删除" : "未选中对象时调整整体环境"}
+                </span>
+              </div>
+              {selectionTitle ? (
+                <>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[9px] ${selectionTitle.tone}`}>{selectionTitle.tag}</span>
+                  <button
+                    type="button"
+                    title="取消选中"
+                    onClick={() => setSelectedObjectId(null)}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:bg-white/10 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              ) : null}
+            </div>
+
+            {!selectedObject ? (
+              <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
+                {(
+                  [
+                    { id: "env", label: "环境", icon: <Globe className="h-3 w-3" /> },
+                    { id: "light", label: "灯光", icon: <Lightbulb className="h-3 w-3" /> },
+                    { id: "lens", label: "分镜", icon: <Aperture className="h-3 w-3" /> },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSceneTab(tab.id)}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] transition-colors ${
+                      sceneTab === tab.id ? "bg-indigo-500/25 text-white" : "text-white/45 hover:bg-white/[0.05] hover:text-white/80"
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             ) : null}
+
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3 [contain:paint]">
+              {selectedCameraObject ? (
+                <>
+                  <DirectorCameraInspector
+                    embedded
+                    object={selectedCameraObject}
+                    cameraObjects={cameraObjects}
+                    targetObjects={targetObjects}
+                    assets={assets}
+                    cameraViewMode={cameraPropViewMode}
+                    onCameraViewModeChange={setCameraPropViewMode}
+                    onSelectCamera={selectCameraObject}
+                    onNameChange={(name) => updateSelectedObjectField({ name })}
+                    onPositionChange={setObjectPositionAxis}
+                    onLookAtModeChange={updateCameraLookAtMode}
+                    onLookAtObjectChange={updateCameraLookAtObject}
+                    onLookAtChange={setObjectLookAtAxis}
+                    onFovChange={(fov) => updateSelectedObjectField({ fov })}
+                    onCaptureScreenshot={() => void handleSelectedCameraScreenshot()}
+                    capturing={capturing}
+                    aspectRatio={aspectRatio}
+                  />
+                  <DirectorCompositionDoctor
+                    camera={selectedCameraObject}
+                    objects={scene.objects}
+                    aspectRatio={aspectRatio}
+                    onApplyFix={(fields, tipTitle) =>
+                      applyFramingToCamera(selectedCameraObject.id, fields, tipTitle, false)
+                    }
+                  />
+                </>
+              ) : selectedObject ? (
+                <>
+                  {selectedObject.kind === "character" && isMannequinBuiltinModel(selectedObject.builtinModelId) ? (
+                    <div className="flex rounded-xl bg-black/30 p-0.5">
+                      {(
+                        [
+                          { id: "transform", label: "物体变换", icon: <Move3d className="h-3 w-3" /> },
+                          { id: "pose", label: "关节摆姿", icon: <PersonStanding className="h-3 w-3" /> },
+                        ] as const
+                      ).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setMannequinEditMode(m.id)}
+                          className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] py-1.5 text-[11px] transition-colors ${
+                            mannequinEditMode === m.id ? "bg-indigo-500/35 text-white" : "text-white/50 hover:text-white/80"
+                          }`}
+                        >
+                          {m.icon}
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {selectedObject.kind === "character" && isMannequinBuiltinModel(selectedObject.builtinModelId) && mannequinEditMode === "pose" ? (
+                    <>
+                      <p className="rounded-lg bg-indigo-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-indigo-100/70">
+                        视口中直接拖拽关节手柄摆姿；也可用下方预设与数值微调。
+                      </p>
+                      <DirectorPosePanel
+                        bonePose={selectedObject.bonePose ?? createDefaultBonePose(selectedObject.gender ?? "male")}
+                        gender={selectedObject.gender ?? "male"}
+                        onPresetApply={applyBonePosePreset}
+                        onUpdateBone={(bone, rotation) => handleBonePoseChange(selectedObject.id, bone, rotation)}
+                      />
+                    </>
+                  ) : (
+                    <DirectorModelInspector
+                      object={selectedObject}
+                      onNameChange={(name) => updateSelectedObjectField({ name })}
+                      onColorChange={setObjectColor}
+                      onPositionChange={setObjectPositionAxis}
+                      onRotationChange={setObjectRotationAxis}
+                      onScaleChange={setObjectScaleAxis}
+                      onUniformScaleChange={setObjectUniformScale}
+                    />
+                  )}
+                  {selectedObject.kind === "character" && modelAssets.length > 0 ? (
+                    <PanelSection title="外观模型">
+                      <select
+                        value={selectedObject.modelAssetId ?? ""}
+                        onChange={(e) => assignCharacterModel(e.target.value || undefined)}
+                        className="w-full rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-xs text-white/80"
+                      >
+                        <option value="" className="bg-zinc-900">内置人模</option>
+                        {modelAssets.map((asset) => (
+                          <option key={asset.id} value={asset.id} className="bg-zinc-900">
+                            {asset.title}
+                          </option>
+                        ))}
+                      </select>
+                    </PanelSection>
+                  ) : null}
+                </>
+              ) : sceneTab === "env" ? (
+                <DirectorSceneInspector
+                  settings={scene.sceneSettings}
+                  panoramaPreviewUrl={panoramaPreviewUrl}
+                  onPatch={patchSceneSettings}
+                  onPanoramaUpload={() => setPanoramaAssetPickerOpen(true)}
+                />
+              ) : sceneTab === "light" ? (
+                <PanelSection title="布光预设">
+                  <DirectorLightingCards
+                    value={scene.lighting.preset}
+                    onChange={(id: LightingPresetId) => setLightingPreset(id)}
+                  />
+                  <p className="text-[10px] leading-relaxed text-white/30">
+                    光斑位置即灯位投影；也可以对 AI 导演说「换成逆光剪影」。
+                  </p>
+                </PanelSection>
+              ) : (
+                lensTab
+              )}
+            </div>
+          </aside>
           </div>
-          {scene ? (
-            <DirectorAspectOverlay containerRef={mainViewRef} aspectRatio={aspectRatio} />
-          ) : null}
-          {!loading && scene ? (
+        ) : null}
+
+        {/* 底部：机位胶片条 + 控制坞 */}
+        {!loading && scene ? (
+          <div
+            className={`pointer-events-none absolute bottom-6 z-30 flex flex-col items-center gap-1 px-3 ${centerLeft} ${centerRight}`}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {!uiFullscreen && cameraObjects.length > 0 ? (
+              <DirectorShotStrip
+                cameras={cameraObjects}
+                selectedId={selectedCameraObject?.id ?? null}
+                assets={assets}
+                onSelect={selectCameraObject}
+                onEnterView={(id) => {
+                  setSelectedObjectId(id);
+                  setCameraPropViewMode("firstPerson");
+                }}
+                onAdd={addCameraObject}
+              />
+            ) : null}
             <DirectorBottomToolbar
               transformMode={transformMode}
               aspectRatio={aspectRatio}
-              fullscreen={uiFullscreen}
+              focusMode={uiFullscreen}
+              showGuides={showGuides}
               uploadingModel={uploadingModel}
               onTransformModeChange={setTransformMode}
               onUploadModel={() => modelFileRef.current?.click()}
@@ -1286,125 +1631,27 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               onUploadPanorama={() => setPanoramaAssetPickerOpen(true)}
               onAddCamera={addCameraObject}
               onAspectRatioChange={(ratio: DirectorAspectRatio) => patchSceneSettings({ aspectRatio: ratio })}
+              onToggleGuides={() => setShowGuides((v) => !v)}
               onScreenshot={() => void handleToolbarScreenshot()}
-              onToggleFullscreen={() => setUiFullscreen((v) => !v)}
+              onToggleFocus={() => setUiFullscreen((v) => !v)}
             />
-          ) : null}
-          {loading || !scene || !activeCamera ? (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(18,18,28,0.85)] text-sm text-white/40">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              加载场景…
-            </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
-        {!uiFullscreen ? (
-          <aside
-            className="relative z-20 flex w-60 shrink-0 flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain border-l border-white/10 bg-[rgba(18,18,28,0.98)] p-3 [contain:paint]"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {selectedCameraObject ? (
-              <DirectorCameraInspector
-                object={selectedCameraObject}
-                cameraObjects={cameraObjects}
-                targetObjects={targetObjects}
-                assets={assets}
-                cameraViewMode={cameraPropViewMode}
-                onCameraViewModeChange={setCameraPropViewMode}
-                onSelectCamera={selectCameraObject}
-                onNameChange={(name) => updateSelectedObjectField({ name })}
-                onPositionChange={setObjectPositionAxis}
-                onLookAtModeChange={updateCameraLookAtMode}
-                onLookAtObjectChange={updateCameraLookAtObject}
-                onLookAtChange={setObjectLookAtAxis}
-                onFovChange={(fov) => updateSelectedObjectField({ fov })}
-                lensPreviewTrackRef={lensPreviewTrackRef}
-                onCaptureScreenshot={() => void handleSelectedCameraScreenshot()}
-                capturing={capturing}
-                aspectRatio={aspectRatio}
-              />
-            ) : selectedObject && selectedObject.kind !== "camera" ? (
-              <>
-                <DirectorModelInspector
-                  object={selectedObject}
-                  onNameChange={(name) => updateSelectedObjectField({ name })}
-                  onColorChange={setObjectColor}
-                  onPositionChange={setObjectPositionAxis}
-                  onRotationChange={setObjectRotationAxis}
-                  onScaleChange={setObjectScaleAxis}
-                  onUniformScaleChange={setObjectUniformScale}
-                />
-                {selectedObject.kind === "character" && isMannequinBuiltinModel(selectedObject.builtinModelId) ? (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-[10px] text-white/45">人体编辑</span>
-                      <div className="flex rounded-md border border-white/10 bg-white/5 p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setMannequinEditMode("transform")}
-                          className={`flex-1 rounded px-2 py-1.5 text-[11px] transition-colors ${
-                            mannequinEditMode === "transform"
-                              ? "bg-indigo-500/30 text-indigo-100"
-                              : "text-white/55 hover:bg-white/10 hover:text-white/80"
-                          }`}
-                        >
-                          坐标轴
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMannequinEditMode("pose")}
-                          className={`flex-1 rounded px-2 py-1.5 text-[11px] transition-colors ${
-                            mannequinEditMode === "pose"
-                              ? "bg-indigo-500/30 text-indigo-100"
-                              : "text-white/55 hover:bg-white/10 hover:text-white/80"
-                          }`}
-                        >
-                          关节
-                        </button>
-                      </div>
-                      <p className="text-[10px] leading-relaxed text-white/35">
-                        {mannequinEditMode === "pose"
-                          ? "视口显示关节手柄，可直接拖拽骨骼；物体坐标轴已关闭。"
-                          : "视口显示物体坐标轴；关节仍可在下方数值面板调整。"}
-                      </p>
-                    </div>
-                    <DirectorPosePanel
-                      bonePose={selectedObject.bonePose ?? createDefaultBonePose(selectedObject.gender ?? "male")}
-                      gender={selectedObject.gender ?? "male"}
-                      onPresetApply={applyBonePosePreset}
-                      onUpdateBone={(bone, rotation) => handleBonePoseChange(selectedObject.id, bone, rotation)}
-                    />
-                  </>
-                ) : null}
-                {selectedObject.kind === "character" ? (
-                  modelAssets.length > 0 ? (
-                    <select
-                      value={selectedObject.modelAssetId ?? ""}
-                      onChange={(e) => assignCharacterModel(e.target.value || undefined)}
-                      className="mt-2 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80"
-                    >
-                      <option value="" className="bg-zinc-900">内置人模 / 上传 GLB</option>
-                      {modelAssets.map((asset) => (
-                        <option key={asset.id} value={asset.id} className="bg-zinc-900">
-                          {asset.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null
-                ) : null}
-              </>
-            ) : scene ? (
-              <>
-                <DirectorSceneInspector
-                  settings={scene.sceneSettings}
-                  panoramaPreviewUrl={panoramaPreviewUrl}
-                  onPatch={patchSceneSettings}
-                  onPanoramaUpload={() => setPanoramaAssetPickerOpen(true)}
-                />
-                {advancedPanel}
-              </>
-            ) : null}
-          </aside>
+        {loading || !scene || !activeCamera ? (
+          <div className="absolute inset-0 z-[45] flex flex-col items-center justify-center gap-3 bg-[#08080f]">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/30 to-fuchsia-500/20">
+              <Clapperboard className="h-5 w-5 animate-pulse text-indigo-200" />
+            </span>
+            <span className="flex items-center gap-2 text-xs text-white/40">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              正在搭建舞台…
+            </span>
+          </div>
+        ) : null}
+
+        {agentOpen && scene && projectId && nodeId ? (
+          <DirectorAgentPanel key={`${projectId}:${nodeId}`} host={agentHost} onClose={() => setAgentOpen(false)} />
         ) : null}
 
         {!loading && scene && activeCamera ? (
@@ -1415,10 +1662,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             selectedObjectId={selectedObjectId}
             cameraPropViewMode={selectedCameraObject ? cameraPropViewMode : null}
             liveCameraRef={liveCameraRef}
+            liveCameraTransformRef={liveCameraTransformRef}
             transformMode={transformMode}
             mannequinEditMode={mannequinEditMode}
             stageBodyRef={stageBodyRef}
             mainViewRef={mainViewRef}
+            filmGateRef={filmGateRef}
+            useFilmGateTrack={isCameraFirstPerson}
             panoramaUrl={panoramaPreviewUrl}
             onSelectObject={selectSceneObject}
             onObjectTransform={handleObjectTransform}
@@ -1431,7 +1681,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                     trackRef: lensPreviewTrackRef,
                     scene,
                     cameraId: selectedCameraObject.id,
-                    liveCameraRef,
+                    liveTransformRef: liveCameraTransformRef,
                   }
                 : null
             }
@@ -1450,6 +1700,9 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           onClose={() => setPanoramaAssetPickerOpen(false)}
           overlayZIndex={120}
         />
+      ) : null}
+      {model3dDialogOpen && scene && projectId && nodeId ? (
+        <DirectorModel3dDialog host={agentHost} onClose={() => setModel3dDialogOpen(false)} />
       ) : null}
     </div>
   );

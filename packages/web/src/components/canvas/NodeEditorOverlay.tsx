@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { EdgeLabelRenderer, useReactFlow } from "@xyflow/react";
-import { ArrowLeftRight, ArrowUp, FileText, Globe, Image, Music, SlidersHorizontal, Sparkles, Video, Zap } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, FileText, Globe, Image, Music, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useSelectedCanvasNode } from "@/lib/canvas/useSelectedCanvasNode";
@@ -102,7 +102,7 @@ import {
   CANVAS_VIDEO_EDITOR_PANEL_WIDTH,
   getNodeWorldPosition,
 } from "@/lib/canvas/canvasOverlayTransform";
-import { formatCreditLabel } from "@/lib/api/credits";
+import { CANVAS_MIST_GLASS_STYLE } from "@/components/canvas/AddNodeMenu";
 import { invalidateCanvasCreditQueries, useCanvasStoreCreditBalance, useGenerationCreditQuote } from "@/lib/canvas/useGenerationCreditQuote";
 import {
   Tooltip,
@@ -265,16 +265,21 @@ function MaterialSlotBar({ slots }: { slots: MaterialSlot[] }) {
   const visibleSlots = slots.filter((slot) => slot.source !== "local");
   if (visibleSlots.length === 0) {
     return (
-      <div className="border-b border-white/10 px-3 py-2 text-[13px] text-white/30">
-        素材槽：连接上游节点后在此显示，输入 @ 可引用
+      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
+        <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[11px] font-medium text-white/40">
+          素材
+        </span>
+        <span className="text-[12px] text-white/28">连接上游后显示 · 提示词里输入 @ 可引用</span>
       </div>
     );
   }
 
   return (
     <TooltipProvider delay={200}>
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-white/10 px-3 py-2">
-        <span className="mr-1 text-[12px] uppercase tracking-wide text-white/35">素材槽</span>
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-3 py-2">
+        <span className="mr-0.5 rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[11px] font-medium text-white/40">
+          素材
+        </span>
         {visibleSlots.map((slot) => (
           <MaterialSlotChip key={`${slot.source}-${slot.nodeId}`} slot={slot} />
         ))}
@@ -486,7 +491,6 @@ export function NodeEditorOverlay() {
     quoteToken,
     total: creditTotal,
     creditsEnabled,
-    isLoading: quoteLoading,
     refetch: refetchQuote,
   } = useGenerationCreditQuote({
     model: model || undefined,
@@ -501,11 +505,6 @@ export function NodeEditorOverlay() {
     creditTotal > 0 &&
     creditBalanceData?.balance != null &&
     creditBalanceData.balance < creditTotal;
-  const generateCreditLabel = quoteLoading
-    ? "…"
-    : formatCreditLabel(creditTotal, creditsEnabled);
-  /** Compact zap+number for footer (screenshot style). */
-  const creditCostDisplay = quoteLoading ? "…" : creditTotal > 0 ? String(creditTotal) : "—";
 
   useEffect(() => {
     if (!isEditorNode || !selectedNodeId || !projectId || !config) return;
@@ -1470,10 +1469,8 @@ export function NodeEditorOverlay() {
 
   const overlayStyle = buildCanvasOverlayStyle(anchorX, anchorY, viewportZoom, "below", {
     width: panelWidth,
-    background: "rgba(18, 18, 28, 0.96)",
-    backdropFilter: "blur(24px)",
-    WebkitBackdropFilter: "blur(24px)",
-    border: "1px solid rgba(139, 92, 246, 0.35)",
+    ...CANVAS_MIST_GLASS_STYLE,
+    boxShadow: "0 18px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)",
     // 参数面板向上展开时抬高层级，避免被顶栏「编辑」下拉遮挡
     zIndex: generationOptionsExpanded ? CANVAS_OVERLAY_Z_EDITOR_EXPANDED : CANVAS_OVERLAY_Z_EDITOR,
   });
@@ -1603,7 +1600,7 @@ export function NodeEditorOverlay() {
                   key={slot.nodeId}
                   type="button"
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] ${
-                    idx === mentionIndex ? "bg-purple-500/20 text-white" : "text-white/70 hover:bg-white/5"
+                    idx === mentionIndex ? "bg-white/12 text-white" : "text-white/70 hover:bg-white/5"
                   }`}
                   onMouseDown={(e) => {
                     e.preventDefault();
@@ -1635,10 +1632,16 @@ export function NodeEditorOverlay() {
         <div className="flex items-center justify-between gap-2 px-2.5 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-visible">
             {modelOptions.length === 0 ? (
-              <span className="px-1 text-[13px] leading-snug text-amber-400/90">
-                {isTextNode
-                  ? "暂无已配置的文本模型。请在 config/llm-keys.env 填写 DOUBAO_ENDPOINT_ID 或 DEEPSEEK_API_KEY 后重启 API。"
-                  : "暂无已配置的模型。请在后台模型开关或 config/llm-keys.env 中启用后重试。"}
+              <span
+                className="inline-flex max-w-full items-center gap-1.5 truncate rounded-lg border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[12px] text-amber-100/85"
+                title={
+                  isTextNode
+                    ? "请在 config/llm-keys.env 填写 DOUBAO_ENDPOINT_ID 或 DEEPSEEK_API_KEY 后重启"
+                    : "请在设置页启用模型，或于 config/llm-keys.env 配置密钥后重启"
+                }
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/90" />
+                {isTextNode ? "未配置文本模型" : "未配置可用模型"}
               </span>
             ) : (
               <Select
@@ -1883,17 +1886,6 @@ export function NodeEditorOverlay() {
                 </span>
               </>
             ) : null}
-            <span
-              className="flex items-center gap-0.5 text-[13px] tabular-nums text-white/45"
-              title={
-                insufficientCredits
-                  ? `算力不足，需要 ${creditTotal}`
-                  : `本次消耗 ${generateCreditLabel}`
-              }
-            >
-              <Zap className="size-3.5 fill-current" aria-hidden />
-              <span>{creditCostDisplay}</span>
-            </span>
             <button
               type="button"
               onClick={handleGenerate}
@@ -1903,7 +1895,7 @@ export function NodeEditorOverlay() {
                   ? `算力不足，需要 ${creditTotal}`
                   : isGenerating
                     ? "生成中"
-                    : `生成 · ${generateCreditLabel}`
+                    : "生成"
               }
               aria-label={isGenerating ? "生成中" : "生成"}
               className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[#c9c9c9] text-black transition-colors hover:bg-[#d6d6d6] disabled:cursor-not-allowed disabled:opacity-40"

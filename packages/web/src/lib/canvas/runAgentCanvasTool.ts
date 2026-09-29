@@ -37,7 +37,7 @@ import { resolveCreativeGridToolModel } from "@/lib/canvas/resolveCreativeGridTo
 import { resolveNodeMediaUrl } from "@/lib/canvas/resolveNodeMediaUrl";
 import {
   applyVisualStyleToPrompt,
-  findCreativeToolPrompt,
+  resolveCreativeToolPrompt,
   type AppendPromptToolConfig,
   type CreativeToolsPromptToolConfig,
   type VisualStylesPromptToolConfig,
@@ -1247,18 +1247,17 @@ export async function runAgentCanvasTool(
       label = append.label;
       adminPrompt = append.content;
     } else {
+      let creative: CreativeToolsPromptToolConfig | null = null;
       try {
         const cfg = await getPromptConfig();
-        const creative = cfg.tools?.grid_9 as CreativeToolsPromptToolConfig | undefined;
-        const item = findCreativeToolPrompt(
-          creative?.kind === "creative_tools" ? creative : null,
-          tool
-        );
-        label = item?.label?.trim() || tool;
-        adminPrompt = item?.prompt?.trim() || "";
+        const raw = cfg.tools?.grid_9 as CreativeToolsPromptToolConfig | undefined;
+        creative = raw?.kind === "creative_tools" ? raw : null;
       } catch {
-        /* ignore */
+        /* 后台不可用：下面回退内置提示词 */
       }
+      const item = resolveCreativeToolPrompt(creative, tool);
+      label = item?.label?.trim() || tool;
+      adminPrompt = item?.prompt?.trim() || "";
     }
     if (!adminPrompt && !userPrompt) {
       toast.error(`请在后台配置「${label}」的提示词，或传入 params.userPrompt`);

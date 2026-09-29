@@ -6,6 +6,7 @@ import { AppThemeProvider } from "@/components/providers/AppThemeProvider";
 import { GlobalWatermarkProvider } from "@/components/providers/GlobalWatermarkProvider";
 import { ChunkReloadRecovery } from "@/components/ChunkReloadRecovery";
 import { DISCOVER_SEO } from "@/lib/pageSeo";
+import { APPEARANCE_BOOT_SCRIPT } from "@/lib/theme/appThemes";
 import "@/styles/selfHostedFonts";
 import "./globals.css";
 
@@ -14,12 +15,20 @@ export const metadata: Metadata = DISCOVER_SEO;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" className="dark" data-app-theme="dark" suppressHydrationWarning>
+    <html
+      lang="zh-CN"
+      className="dark"
+      data-app-theme="dark"
+      data-app-accent="violet"
+      data-app-glass="on"
+      data-app-glow="on"
+      suppressHydrationWarning
+    >
       <head>
-        {/* 首屏前同步 localStorage 主题，避免发现页等先渲染默认深色 */}
+        {/* 首屏前同步 localStorage 外观（底色/强调色/毛玻璃/光晕/缩放），避免闪烁 */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var id=localStorage.getItem("jm_app_theme_v1")||"dark";var dark=id==="dark"||id==="dark-blue"||id==="dark-green";var r=document.documentElement;r.dataset.appTheme=id;r.classList.toggle("dark",dark);r.style.colorScheme=dark?"dark":"light";}catch(e){}})();`,
+            __html: APPEARANCE_BOOT_SCRIPT,
           }}
         />
       </head>

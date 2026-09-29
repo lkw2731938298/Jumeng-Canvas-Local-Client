@@ -19,7 +19,8 @@ export type {
   LocalGenerationJobPatch,
 } from "./generationJobs";
 
-export type LocalModelCategory = "text" | "image" | "video" | "audio";
+/** model3d：3D 模型生成（如 Tripo，经 /v1/videos 异步任务，产出 GLB，供导演台使用） */
+export type LocalModelCategory = "text" | "image" | "video" | "audio" | "model3d";
 
 export type LocalEndpointMode = "openai_compatible" | "custom_template";
 
@@ -76,6 +77,8 @@ export interface LocalProjectMeta {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  /** 项目封面：本机为 /api/local/asset 地址，localStorage 兜底为 data URL */
+  coverUrl?: string | null;
 }
 
 /** 本机素材索引（不依赖独立 API 进程） */
@@ -165,6 +168,41 @@ export interface LocalDesktopApi {
     >
   ) => Promise<LocalGenerationJob | null>;
   clearGenerationJobs: () => Promise<void>;
+  /** 本地 Agent 会话（按项目持久化，结构由前端 localAgent/session.ts 定义）；Electron 旧 preload 可能缺失 */
+  readAgentSession?: (projectId: string) => Promise<unknown | null>;
+  writeAgentSession?: (projectId: string, session: unknown) => Promise<void>;
+  /** Agent 技能目录（Codex 式 SKILL.md）；可选 */
+  listAgentSkills?: () => Promise<
+    Array<{ slug: string; name: string; description: string; source?: string }>
+  >;
+  readAgentSkill?: (slug: string) => Promise<{
+    slug: string;
+    name: string;
+    description: string;
+    body: string;
+    references?: Record<string, string>;
+    source?: string;
+  } | null>;
+  /** 技能目录路径信息 */
+  getAgentSkillsInfo?: () => Promise<{
+    localDir: string;
+    codexDir: string;
+    codexExists: boolean;
+  }>;
+  /** 在系统文件管理器中打开画布技能目录 */
+  openAgentSkillsDir?: () => Promise<{ ok: boolean; dir: string }>;
+  /** 列出 ~/.codex/skills（仅供导入勾选） */
+  listCodexSkills?: () => Promise<
+    Array<{ slug: string; name: string; description: string; source?: string }>
+  >;
+  /** 把选中的 Codex 技能拷到本机 agent-skills */
+  importCodexSkills?: (
+    slugs: string[]
+  ) => Promise<{
+    imported: string[];
+    skipped: string[];
+    errors: Array<{ slug: string; error: string }>;
+  }>;
 }
 
 declare global {

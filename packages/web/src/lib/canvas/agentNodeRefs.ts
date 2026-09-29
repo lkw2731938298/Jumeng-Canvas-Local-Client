@@ -48,6 +48,18 @@ export function buildAgentNodeRef(
   if (!thumbUrl && urlKey) {
     thumbUrl = ensureHttpsOssUrl(String(params[urlKey] ?? "").trim()) || "";
   }
+  // 本机常见：imageUrl 仍在 params，或仅有相对 /api/local/asset
+  if (!thumbUrl) {
+    for (const k of ["imageUrl", "fileUrl", "url", "thumbUrl", "videoUrl"]) {
+      const u = String(params[k] ?? "").trim();
+      if (u) {
+        thumbUrl = u.startsWith("/") || u.startsWith("data:") || u.startsWith("blob:")
+          ? u
+          : ensureHttpsOssUrl(u) || u;
+        break;
+      }
+    }
+  }
   const hasMedia = Boolean(assetId || thumbUrl);
   return {
     nodeId: node.id,
@@ -57,6 +69,24 @@ export function buildAgentNodeRef(
     assetId,
     hasMedia,
   };
+}
+
+/** 异步补全 thumbUrl（本机 assetId → /api/local/asset） */
+export async function enrichAgentNodeRef(
+  projectId: string,
+  ref: AgentNodeRef
+): Promise<AgentNodeRef> {
+  if (ref.thumbUrl || !projectId || ref.nodeId.startsWith("upload:")) return ref;
+  try {
+    const { resolveNodeImageUrlAsync } = await import(
+      "@/lib/local/agent/tools/resolveCanvasMedia"
+    );
+    const url = await resolveNodeImageUrlAsync(projectId, ref.nodeId);
+    if (!url) return ref;
+    return { ...ref, thumbUrl: url, hasMedia: true };
+  } catch {
+    return ref;
+  }
 }
 
 /** 序列化为一行（发给 Agent） */

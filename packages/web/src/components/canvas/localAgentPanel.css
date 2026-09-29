@@ -1,0 +1,526 @@
+/* AI 助手浮层：借鉴项目画板卡片 + 导演台毛玻璃，独立视觉语言（青石色强调，避免默认紫） */
+
+.la-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 72px;
+  z-index: 50;
+  display: flex;
+  height: 3rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 1rem 0 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 88%, #0a1620), color-mix(in srgb, var(--primary) 55%, #142018));
+  color: var(--primary-foreground, #fff);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.15s;
+}
+
+.la-fab:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.32),
+    0 0 28px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.la-fab-icon {
+  display: flex;
+  height: 1.85rem;
+  width: 1.85rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.la-fab-label {
+  font-family: "Syne", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.la-fab-pulse {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  height: 0.65rem;
+  width: 0.65rem;
+  border-radius: 999px;
+  background: #fbbf24;
+  box-shadow: 0 0 0 2px var(--background, #0a0a0a);
+  animation: la-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes la-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+.la-shell {
+  position: fixed;
+  right: 1rem;
+  bottom: 128px;
+  z-index: 50;
+  display: flex;
+  height: min(620px, calc(100vh - 160px));
+  width: min(440px, calc(100vw - 1.5rem));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--primary));
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 50%),
+    color-mix(in srgb, var(--popover) 92%, transparent);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.38),
+    0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  animation: la-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes la-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.la-shell::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.35), transparent 42%);
+  opacity: 0.55;
+}
+
+.la-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  padding: 0.85rem 0.9rem 0.7rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--background) 35%, transparent), transparent);
+}
+
+.la-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.la-brand {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.la-brand-mark {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 75%, #fff), var(--primary));
+  color: var(--primary-foreground, #fff);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.la-brand-text {
+  min-width: 0;
+}
+
+.la-brand-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Syne", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+.la-brand-sub {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.la-icon-btn {
+  display: flex;
+  height: 1.85rem;
+  width: 1.85rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  color: var(--muted-foreground);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.la-icon-btn:hover:not(:disabled) {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  color: var(--foreground);
+}
+
+.la-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.la-icon-btn.is-on {
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.la-selects {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.la-select {
+  min-width: 0;
+  flex: 1;
+  height: 1.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  padding: 0 0.45rem;
+  font-size: 0.68rem;
+  color: var(--foreground);
+  outline: none;
+}
+
+.la-select:focus {
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+.la-skill-bar {
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.68rem;
+  color: var(--foreground);
+}
+
+.la-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.la-history {
+  display: flex;
+  width: 9.5rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: color-mix(in srgb, var(--background) 45%, transparent);
+  animation: la-hist-in 0.22s ease;
+}
+
+@keyframes la-hist-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.la-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.55rem 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.la-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.2rem 0.35rem 0.5rem;
+}
+
+.la-history-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.4rem;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.la-history-item:hover {
+  background: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.la-history-item.is-active {
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.la-history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: 550;
+  color: var(--foreground);
+}
+
+.la-history-meta {
+  font-size: 0.58rem;
+  color: var(--muted-foreground);
+}
+
+.la-history-del {
+  margin-top: 0.15rem;
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  font-size: 0.58rem;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.la-history-item:hover .la-history-del {
+  opacity: 1;
+}
+
+.la-history-del:hover {
+  color: var(--destructive, #ef4444);
+}
+
+.la-messages {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow-y: auto;
+  padding: 0.75rem 0.85rem;
+}
+
+.la-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 0.5rem 0.15rem 1rem;
+}
+
+.la-empty-kicker {
+  font-family: "Syne", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+}
+
+.la-empty-desc {
+  max-width: 22rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+.la-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.la-example {
+  display: block;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--background) 55%, transparent);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.la-example:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  transform: translateX(2px);
+}
+
+.la-example:disabled {
+  opacity: 0.45;
+}
+
+.la-bubble {
+  max-width: 92%;
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.la-bubble.user {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--foreground);
+}
+
+.la-bubble.assistant {
+  margin-right: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  color: color-mix(in srgb, var(--foreground) 92%, transparent);
+}
+
+.la-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+
+.la-foot {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--background) 40%, transparent);
+  padding: 0.55rem 0.65rem 0.7rem;
+}
+
+.la-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--background) 75%, transparent);
+  padding: 0.35rem;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.la-composer:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.la-composer textarea {
+  max-height: 7rem;
+  min-height: 2.25rem;
+  flex: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: 0.4rem 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--foreground);
+  outline: none;
+}
+
+.la-send {
+  display: flex;
+  height: 2.15rem;
+  width: 2.15rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.la-send:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.la-send:disabled {
+  opacity: 0.4;
+}
+
+.la-send.is-stop {
+  background: var(--destructive, #dc2626);
+  color: #fff;
+}
+
+.la-pop {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 100%;
+  left: 0.65rem;
+  z-index: 5;
+  margin-bottom: 0.35rem;
+  max-height: 15rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--popover);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}

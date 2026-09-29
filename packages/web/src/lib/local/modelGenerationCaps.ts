@@ -62,7 +62,7 @@ export type ModelCanvasCaps = {
 };
 
 export type ModelCapsInput = {
-  category?: "text" | "image" | "video" | "audio";
+  category?: "text" | "image" | "video" | "audio" | "model3d";
   upstreamModel?: string;
   name?: string;
   displayName?: string;

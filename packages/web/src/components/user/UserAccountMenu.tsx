@@ -3,7 +3,6 @@
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Settings, User } from "lucide-react";
-import { useAppTheme } from "@/components/providers/AppThemeProvider";
 import { AppThemePicker } from "@/components/user/AppThemePicker";
 import { GlobalWatermarkToggle } from "@/components/user/GlobalWatermarkToggle";
 
@@ -13,6 +12,8 @@ interface UserAccountMenuProps {
   variant?: "canvas" | "projects";
   /** 自定义触发器：传入时替换默认账户胶囊，保留 hover 下拉。 */
   trigger?: React.ReactNode;
+  /** 下拉位置：below 在触发器下方右对齐；side 在触发器右侧底对齐（左侧竖栏头像用） */
+  menuPosition?: "below" | "side";
 }
 
 /** 开源本地版账户菜单：仅设置 / 主题 / 水印 */
@@ -20,9 +21,9 @@ export function UserAccountMenu({
   displayName,
   variant = "canvas",
   trigger,
+  menuPosition = "below",
 }: UserAccountMenuProps) {
   const router = useRouter();
-  const { themeId, selectTheme } = useAppTheme();
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -109,7 +110,9 @@ export function UserAccountMenu({
 
       <div
         ref={menuRef}
-        className={`user-account-menu absolute right-0 top-full z-40 mt-0 w-56 rounded-xl border py-1 ${menuClass}`}
+        className={`user-account-menu absolute z-40 w-56 rounded-xl border py-1 ${
+          menuPosition === "side" ? "bottom-0 left-full ml-2" : "right-0 top-full mt-0"
+        } ${menuClass}`}
         style={{
           display: "none",
           backdropFilter: "blur(24px)",
@@ -135,12 +138,7 @@ export function UserAccountMenu({
         </button>
         <div className={`my-1 border-t ${dividerClass}`} />
         <GlobalWatermarkToggle itemClass={itemClass} labelClass={labelClass} />
-        <AppThemePicker
-          value={themeId}
-          onChange={selectTheme}
-          itemClass={itemClass}
-          labelClass={labelClass}
-        />
+        <AppThemePicker itemClass={itemClass} labelClass={labelClass} />
       </div>
     </div>
   );

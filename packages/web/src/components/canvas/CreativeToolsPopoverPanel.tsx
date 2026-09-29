@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -20,11 +19,10 @@ import { VisualStylePickerDialog } from "./VisualStylePickerDialog";
 import { useVisualStyles } from "@/lib/canvas/useVisualStyles";
 import {
   DEFAULT_VISUAL_STYLE_ID,
-  findCreativeToolPrompt,
+  resolveCreativeToolPrompt,
   type CreativeToolsPromptToolConfig,
 } from "@/lib/canvas/renderToolPrompt";
 import { getPromptConfig } from "@/lib/api/promptConfig";
-import { formatCreditLabel } from "@/lib/api/credits";
 import {
   CREATIVE_TOOLS_CANVAS_TOOL,
   buildCreativeToolSubmitPrompt,
@@ -32,58 +30,40 @@ import {
 } from "@/lib/canvas/runCreativeToolDirectGenerate";
 import { resolveCreativeGridToolModel } from "@/lib/canvas/resolveCreativeGridToolModel";
 import type { StoryboardSheetKind } from "@/lib/canvas/runStoryboardSheetGenerate";
+import { CANVAS_MIST_GLASS_STYLE } from "@/components/canvas/AddNodeMenu";
 
 function CreativeToolRow({
   item,
   disabled,
   disabledReason,
   busy,
-  creditCost,
-  creditLoading,
-  creditsEnabled,
-  showCredit,
   onSelect,
 }: {
   item: CreativeToolItem;
   disabled?: boolean;
   disabledReason?: string;
   busy?: boolean;
-  creditCost?: number;
-  creditLoading?: boolean;
-  creditsEnabled?: boolean;
-  /** 会触发扣费的生成项才展示算力（画风选择除外） */
-  showCredit?: boolean;
   onSelect: (item: CreativeToolItem) => void;
 }) {
   const Icon = item.icon;
-  const creditTitle =
-    showCredit && !creditLoading && creditCost != null
-      ? formatCreditLabel(creditCost, creditsEnabled !== false)
-      : undefined;
   return (
     <button
       type="button"
       disabled={disabled || busy}
-      title={
-        disabled
-          ? disabledReason || "当前模型不支持"
-          : creditTitle
-            ? `${item.label} · ${creditTitle}`
-            : item.label
-      }
+      title={disabled ? disabledReason || "当前模型不支持" : item.label}
       onClick={() => onSelect(item)}
       className={cn(
         "group flex w-full items-start gap-2.5 rounded-[10px] border border-transparent px-2 py-2 text-left transition-colors",
         disabled || busy
           ? "cursor-not-allowed opacity-35"
-          : "hover:border-purple-500/35 hover:bg-purple-500/15 active:bg-purple-500/25"
+          : "hover:border-white/15 hover:bg-white/[0.08] active:bg-white/[0.12]"
       )}
     >
       <span
         className={cn(
           "relative mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-[8px] border border-white/10 bg-[#1a1a28] text-white/80 transition-colors",
           !(disabled || busy) &&
-            "group-hover:border-purple-500/45 group-hover:bg-purple-500/20 group-hover:text-white"
+            "group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white"
         )}
       >
         <Icon className="size-[15px]" strokeWidth={1.75} />
@@ -94,7 +74,7 @@ function CreativeToolRow({
         ) : null}
         {item.badge ? (
           <span
-            className="absolute -right-0.5 -top-0.5 size-[6px] rounded-full bg-purple-400 shadow-[0_0_0_1.5px_#14141f]"
+            className="absolute -right-0.5 -top-0.5 size-[6px] rounded-full bg-indigo-300 shadow-[0_0_0_1.5px_#14141f]"
             aria-hidden
           />
         ) : null}
@@ -109,18 +89,6 @@ function CreativeToolRow({
           >
             {busy ? `${item.label}…` : item.label}
           </span>
-          {showCredit ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-white/45"
-              title={creditTitle}
-              aria-label={creditTitle}
-            >
-              <Zap className="size-3 fill-current text-primary" aria-hidden />
-              <span className="font-mono text-white/70">
-                {creditLoading ? "…" : creditCost != null && creditCost > 0 ? creditCost.toLocaleString() : "—"}
-              </span>
-            </span>
-          ) : null}
         </span>
         {item.description ? (
           <span
@@ -143,7 +111,7 @@ interface CreativeToolsPopoverPanelProps {
   visualStyleId: string;
   onVisualStyleChange: (styleId: string) => void;
   modelName?: string;
-  /** 各画布工具固定算力（按 toolId；子功能缺省回退 grid_9） */
+  /** 各画布工具固定算力（兼容调用方传入；节点卡片不再展示） */
   costByTool?: Record<string, number | undefined>;
   creditLoading?: boolean;
   creditsEnabled?: boolean;
@@ -164,8 +132,8 @@ export function CreativeToolsPopoverPanel({
   visualStyleId,
   onVisualStyleChange,
   modelName,
-  costByTool,
-  creditLoading,
+  costByTool: _costByTool,
+  creditLoading: _creditLoading,
   creditsEnabled = true,
   onItemSelected,
   onGeneratingChange,
@@ -190,15 +158,6 @@ export function CreativeToolsPopoverPanel({
     const raw = promptConfig?.tools?.grid_9;
     return raw?.kind === "creative_tools" ? (raw as CreativeToolsPromptToolConfig) : null;
   }, [promptConfig?.tools?.grid_9]);
-
-  const creditForItem = useCallback(
-    (itemId: string) => {
-      const direct = costByTool?.[itemId];
-      if (direct != null) return direct;
-      return costByTool?.[CREATIVE_TOOLS_CANVAS_TOOL];
-    },
-    [costByTool]
-  );
 
   const isNarrativeEntry = useCallback(
     (item: CreativeToolItem) => item.id === "storyboard" || item.id === "blocking_storyboard",
@@ -258,7 +217,8 @@ export function CreativeToolsPopoverPanel({
         return;
       }
 
-      const adminItem = findCreativeToolPrompt(creativeToolsConfig, item.id);
+      // 后台无配置（开源本地无后端）时回退内置提示词
+      const adminItem = resolveCreativeToolPrompt(creativeToolsConfig, item.id);
       const label = adminItem?.label?.trim() || item.label;
       const adminPrompt = adminItem?.prompt?.trim() || "";
       if (!adminPrompt) {
@@ -346,9 +306,10 @@ export function CreativeToolsPopoverPanel({
     <>
       <div
         className={cn(
-          "overflow-hidden rounded-2xl border border-purple-500/30 bg-[#14141f]/[0.98] px-2.5 py-3 text-white shadow-2xl backdrop-blur-md ring-1 ring-white/10",
+          "overflow-hidden rounded-2xl px-2.5 py-3 text-white ring-1 ring-white/5",
           className
         )}
+        style={CANVAS_MIST_GLASS_STYLE}
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
@@ -380,10 +341,6 @@ export function CreativeToolsPopoverPanel({
                                 ? "请先上传参考图片"
                                 : undefined
                           }
-                          showCredit={!isStylePicker && !isNarrative}
-                          creditCost={creditForItem(item.id)}
-                          creditLoading={creditLoading}
-                          creditsEnabled={creditsEnabled}
                           onSelect={(selected) => void handleSelect(selected)}
                         />
                       );

@@ -1,37 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Palette } from "lucide-react";
-import { APP_THEMES, getAppThemeDefinition, type AppThemeDefinition, type AppThemeId } from "@/lib/theme/appThemes";
+import { Check, ChevronDown, Palette } from "lucide-react";
+import { useAppTheme } from "@/components/providers/AppThemeProvider";
+import { ACCENTS, THEME_MODES, accentColor } from "@/lib/theme/appThemes";
 import { cn } from "@/lib/utils";
 
 interface AppThemePickerProps {
-  value: AppThemeId;
-  onChange: (id: AppThemeId) => void;
   className?: string;
   itemClass?: string;
   labelClass?: string;
 }
 
-function ThemeSwatch({ theme, size = "sm" }: { theme: AppThemeDefinition; size?: "sm" | "md" }) {
-  const dim = size === "sm" ? "h-4 w-4" : "h-5 w-5";
-  return (
-    <span className={cn("flex shrink-0 overflow-hidden rounded-full border border-border", dim)}>
-      <span className="h-full w-1/2" style={{ background: theme.preview.bg }} />
-      <span className="h-full w-1/2" style={{ background: theme.preview.accent }} />
-    </span>
-  );
-}
-
+/** 用户菜单里的快捷外观切换：主题模式 + 强调色，选择后立即保存（完整外观见设置页） */
 export function AppThemePicker({
-  value,
-  onChange,
   className,
   itemClass = "text-foreground/80 hover:bg-muted hover:text-foreground",
   labelClass = "text-muted-foreground",
 }: AppThemePickerProps) {
   const [open, setOpen] = useState(false);
-  const current = getAppThemeDefinition(value);
+  const { savedAppearance, updateAppearance, theme } = useAppTheme();
+  const modeLabel = THEME_MODES.find((m) => m.id === savedAppearance.mode)?.label ?? "深色";
 
   return (
     <div
@@ -43,21 +32,17 @@ export function AppThemePicker({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className={cn(
-          "flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors",
-          itemClass
-        )}
+        className={cn("flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors", itemClass)}
       >
         <Palette className={cn("h-4 w-4 shrink-0", labelClass)} />
         <span className="min-w-0 flex-1 text-left">全局主题</span>
-        <ThemeSwatch theme={current} />
-        <span className={cn("max-w-[4rem] truncate text-xs", labelClass)}>{current.label}</span>
+        <span
+          className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
+          style={{ background: theme.preview.accent }}
+        />
+        <span className={cn("max-w-[4rem] truncate text-xs", labelClass)}>{modeLabel}</span>
         <ChevronDown
-          className={cn(
-            "h-4 w-4 shrink-0 transition-transform duration-200",
-            labelClass,
-            open && "rotate-180"
-          )}
+          className={cn("h-4 w-4 shrink-0 transition-transform duration-200", labelClass, open && "rotate-180")}
         />
       </button>
 
@@ -68,29 +53,45 @@ export function AppThemePicker({
         )}
       >
         <div className="overflow-hidden">
-          <div className="space-y-0.5 px-3 pb-2 pt-0.5">
-            {APP_THEMES.map((theme) => {
-              const active = theme.id === value;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => onChange(theme.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
-                    active ? "bg-primary/15 ring-1 ring-primary/30" : "hover:bg-muted/60"
-                  )}
-                >
-                  <ThemeSwatch theme={theme} size="md" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-foreground">{theme.label}</span>
-                    <span className="block truncate text-[10px] text-muted-foreground">
-                      {theme.description}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+          <div className="space-y-2 px-3 pb-2 pt-0.5">
+            <div className="grid grid-cols-3 gap-1">
+              {THEME_MODES.map((m) => {
+                const active = m.id === savedAppearance.mode;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => updateAppearance({ mode: m.id })}
+                    className={cn(
+                      "rounded-md px-1.5 py-1 text-xs transition-colors",
+                      active ? "bg-primary/15 text-foreground ring-1 ring-primary/40" : "text-muted-foreground hover:bg-muted/60"
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between px-0.5">
+              {ACCENTS.map((a) => {
+                const active = a.id === savedAppearance.accent;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    title={a.label}
+                    onClick={() => updateAppearance({ accent: a.id })}
+                    className={cn(
+                      "flex h-5 w-5 items-center justify-center rounded-full transition-transform hover:scale-110",
+                      active && "ring-2 ring-foreground/70 ring-offset-1 ring-offset-popover"
+                    )}
+                    style={{ background: accentColor(a.id, theme.isDark) }}
+                  >
+                    {active ? <Check className="h-3 w-3 text-white" /> : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

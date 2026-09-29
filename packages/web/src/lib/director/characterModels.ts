@@ -22,6 +22,12 @@ export function resolveCharacterModelUrl(
   object: DirectorObject,
   assets: Asset[] | Map<string, Asset> | undefined
 ): string | null {
+  // 道具：仅 GLB 素材（AI 生成 / 用户上传的 3D 模型）走模型渲染
+  if (object.kind === "prop") {
+    if (object.shape !== "model" || !object.modelAssetId) return null;
+    const asset = lookupAsset(assets, object.modelAssetId);
+    return asset && isGlbAsset(asset) ? asset.fileUrl : null;
+  }
   if (object.kind !== "character") return null;
   if (object.modelAssetId) {
     const asset = lookupAsset(assets, object.modelAssetId);

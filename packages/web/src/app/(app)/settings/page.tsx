@@ -1,12 +1,22 @@
 "use client";
 
 /**
- * 开源本地版设置：默认向导/摘要；高级设置分密钥、模型、画布工具三块。
+ * 本地设置：左侧三个分组
+ * - 外观：主题 / 强调色 / 毛玻璃 / 光晕 / 网格吸附 / 缩放（AppearanceSettingsPanel）
+ * - 模型服务（默认）：接入向导 / 摘要 + 高级设置（密钥、模型、画布工具）
+ * - 存储空间：数据位置 + 参考图 OSS
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Cpu, Database, Palette } from "lucide-react";
 import { HuabuPublicShell } from "@/components/huabu/HuabuPublicShell";
+import { AppearanceSettingsPanel } from "@/components/settings/AppearanceSettingsPanel";
+import { useAppTheme } from "@/components/providers/AppThemeProvider";
+import { DataLocationSettingsPanel } from "@/components/settings/DataLocationSettingsPanel";
+import { UserOssSettingsPanel } from "@/components/settings/UserOssSettingsPanel";
+import pkg from "../../../../package.json";
+import "./settingsPage.css";
 import {
   LocalSetupHome,
   type WizardIntent,
@@ -35,6 +45,10 @@ function uid() {
 }
 
 type TabId = AdvancedTab;
+type SettingsGroup = "appearance" | "models" | "storage";
+
+/** 版本号取自 web 包 package.json */
+const APP_VERSION = pkg.version;
 
 const EMPTY_MODEL = (category: LocalModel["category"] = "text"): LocalModel => {
   const id = uid();
@@ -78,6 +92,7 @@ const CAT_ZH: Record<LocalModel["category"], string> = {
   image: "出图",
   video: "出视频",
   audio: "音频",
+  model3d: "3D 模型",
 };
 
 export default function LocalSettingsPage() {
@@ -93,29 +108,33 @@ export default function LocalSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [pane, setPane] = useState<"home" | "advanced">("home");
   const [wizard, setWizard] = useState<WizardIntent | null>(null);
+  /** 当前分组：默认模型服务 */
+  const [group, setGroup] = useState<SettingsGroup>("models");
+  const [storageTab, setStorageTab] = useState<"storage" | "oss">("storage");
+  const { discardAppearance } = useAppTheme();
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const api = localStore();
-      const [p, m, root, tools] = await Promise.all([
-        api.listProviders(),
-        api.listModels(),
-        api.getDataRoot(),
-        api.readToolModels(),
-      ]);
-      setProviders(p);
-      setModels(m);
-      setDataRoot(root);
-      setToolModels(tools);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // 离开设置页时丢弃未保存的外观预览（切换分组不丢）
+  useEffect(() => () => discardAppearance(), [discardAppearance]);
 
+  // 首次加载：结果在异步回调里写入 state（loading 初始即为 true），避免 effect 内同步 setState
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let alive = true;
+    const api = localStore();
+    Promise.all([api.listProviders(), api.listModels(), api.getDataRoot(), api.readToolModels()])
+      .then(([p, m, root, tools]) => {
+        if (!alive) return;
+        setProviders(p);
+        setModels(m);
+        setDataRoot(root);
+        setToolModels(tools);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const persistSetup = async (next: {
     providers: LocalProvider[];
@@ -169,7 +188,7 @@ export default function LocalSettingsPage() {
   };
 
   const countByCat = useMemo(() => {
-    const c = { text: 0, image: 0, video: 0, audio: 0 };
+    const c = { text: 0, image: 0, video: 0, audio: 0, model3d: 0 };
     for (const m of models) {
       if (m.category in c) c[m.category as keyof typeof c] += 1;
     }
@@ -195,7 +214,7 @@ export default function LocalSettingsPage() {
         .filter((m) => modelFilter === "all" || m.category === modelFilter)
         .slice()
         .sort((a, b) => {
-          const catOrder = { text: 0, image: 1, video: 2, audio: 3 } as const;
+          const catOrder = { text: 0, image: 1, video: 2, audio: 3, model3d: 4 } as const;
           const d = catOrder[a.category] - catOrder[b.category];
           if (d !== 0) return d;
           return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
@@ -236,14 +255,78 @@ export default function LocalSettingsPage() {
     toast.success(`已将${CAT_ZH[cat]}类工具设为 ${first}`);
   };
 
+  const groups: { id: SettingsGroup; label: string; icon: typeof Palette }[] = [
+    { id: "appearance", label: "外观", icon: Palette },
+    { id: "models", label: "模型服务", icon: Cpu },
+    { id: "storage", label: "存储空间", icon: Database },
+  ];
+
   return (
-    <HuabuPublicShell>
-      <div className="mx-auto max-w-5xl px-6 py-10 text-foreground">
-        <h1 className="text-2xl font-semibold tracking-tight">本地设置</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          把你的 API 接到这台电脑上的画布：粘贴密钥、勾选模型，就可以生成文字、图片和视频。
-          数据只存在本机，没有登录，也不走云端算力。
-        </p>
+    <HuabuPublicShell page="settings">
+      <div className="st-wrap">
+        <section className="st-panel jm-panel" aria-label="设置">
+          <header className="st-head">
+            <h1>设置</h1>
+            <p>本地工作区 · 版本 {APP_VERSION}</p>
+          </header>
+
+          <div className="st-body">
+            <nav className="st-nav" aria-label="设置分组">
+              {groups.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={group === id ? "active" : undefined}
+                  aria-current={group === id ? "page" : undefined}
+                  onClick={() => setGroup(id)}
+                >
+                  <Icon size={15} strokeWidth={1.8} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="st-content jm-scroll">
+              {group === "appearance" ? (
+                <AppearanceSettingsPanel />
+              ) : group === "storage" ? (
+                <div className="st-legacy">
+                  <div className="st-section-head">
+                    <h2>存储空间</h2>
+                    <p>本机数据保存位置与参考图公网 OSS</p>
+                  </div>
+                  <div className="st-subtabs" role="tablist" aria-label="存储空间">
+                    {[
+                      { id: "storage" as const, label: "数据位置" },
+                      { id: "oss" as const, label: "参考图 OSS" },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={storageTab === t.id}
+                        className={`jm-pill${storageTab === t.id ? " active" : ""}`}
+                        onClick={() => setStorageTab(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  {storageTab === "storage" ? (
+                    <DataLocationSettingsPanel onDataRootChange={setDataRoot} />
+                  ) : (
+                    <UserOssSettingsPanel />
+                  )}
+                </div>
+              ) : (
+      <div className="st-legacy">
+        <div className="st-section-head">
+          <h2>模型服务</h2>
+          <p>
+            把你的 API 接到这台电脑上的画布：粘贴密钥、勾选模型，就可以生成文字、图片和视频。
+            数据只存在本机，没有登录，也不走云端算力。
+          </p>
+        </div>
         {pane === "home" && (!isSetupComplete(providers, models) || wizard) && (
           <button
             type="button"
@@ -305,8 +388,14 @@ export default function LocalSettingsPage() {
             }
             dataRoot={dataRoot}
             onDataRootChange={setDataRoot}
+            tabIds={["keys", "models", "tools"]}
           />
         )}
+      </div>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </HuabuPublicShell>
   );
