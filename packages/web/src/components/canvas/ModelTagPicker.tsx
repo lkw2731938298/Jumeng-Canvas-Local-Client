@@ -40,7 +40,7 @@ export function ModelTagPicker({
 
   return (
     <div
-      className="sticky top-0 z-10 -mx-1 mb-1 border-b border-white/10 bg-[#1a1a28] px-2 pb-2 pt-1"
+      className="shrink-0 border-b border-white/10 bg-[#1a1a28] px-2 pb-2 pt-1.5"
       // 避免点标签时关闭 / 误选 Select
       onPointerDown={(e) => e.preventDefault()}
       onMouseDown={(e) => e.preventDefault()}

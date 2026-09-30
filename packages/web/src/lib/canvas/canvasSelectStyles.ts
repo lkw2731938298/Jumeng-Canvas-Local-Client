@@ -13,6 +13,10 @@ export const CANVAS_SELECT_CONTENT_CLASS =
 export const MODEL_SELECT_CONTENT_CLASS =
   "z-[2000] max-h-[min(320px,var(--available-height))] !w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-24px))] border-white/10 bg-[#1a1a28] p-1 text-white/85 shadow-xl ring-white/10 [&_[data-slot=select-scroll-up-button]]:hidden [&_[data-slot=select-scroll-down-button]]:hidden";
 
+/** 模型下拉：外层不滚，搜索/标签固定，仅列表区滚动（List 需传高给内部 flex） */
+export const MODEL_SELECT_MENU_CONTENT_CLASS =
+  "z-[2000] !flex !max-h-[min(360px,var(--available-height))] !w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-24px))] !flex-col !overflow-hidden border-white/10 bg-[#1a1a28] p-0 text-white/85 shadow-xl ring-white/10 [&_[data-slot=select-scroll-up-button]]:hidden [&_[data-slot=select-scroll-down-button]]:hidden [&_[id$='-list']]:!flex [&_[id$='-list']]:min-h-0 [&_[id$='-list']]:!flex-1 [&_[id$='-list']]:!flex-col";
+
 export const CANVAS_SELECT_ITEM_CLASS =
   "text-[13px] text-white/80 focus:bg-purple-500/20 focus:text-white data-highlighted:bg-purple-500/20 data-highlighted:text-white";
 

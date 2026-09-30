@@ -1,6 +1,9 @@
-import { Sparkles } from "lucide-react";
+/**
+ * 聚梦画布品牌标：使用本地 logo 图片（public/brand/logo.png）。
+ * 项目页顶栏与画布顶栏共用此组件。
+ */
+import { withBasePath } from "@/lib/basePath";
 
-/** 聚梦画布品牌标：蓝紫渐变圆角方块 + 白色星芒（内联样式，任何页面可直接用） */
 export function JmBrandMark({ size = 30, className }: { size?: number; className?: string }) {
   return (
     <span
@@ -14,12 +17,24 @@ export function JmBrandMark({ size = 30, className }: { size?: number; className
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.3),
-        color: "#fff",
-        background: "linear-gradient(135deg, #7c7dff 0%, #56b4ff 55%, #22a4ff 100%)",
-        boxShadow: "0 6px 18px rgba(64, 140, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35)",
+        overflow: "hidden",
+        background: "transparent",
       }}
     >
-      <Sparkles size={Math.round(size * 0.5)} strokeWidth={2.2} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- 静态品牌资源，无需 next/image 优化 */}
+      <img
+        src={withBasePath("/brand/logo.png")}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block",
+        }}
+      />
     </span>
   );
 }

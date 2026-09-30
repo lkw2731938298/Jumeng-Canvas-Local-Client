@@ -176,25 +176,73 @@ html[data-app-theme="light"] .pb-card {
   background: var(--jm-accent);
 }
 
-/* 选中四角把手（仅视觉） */
+/* 选中四角缩放把手 */
 .pb-handle {
   position: absolute;
-  width: 9px;
-  height: 9px;
+  z-index: 6;
+  width: 12px;
+  height: 12px;
+  padding: 0;
   border: 1.5px solid var(--jm-accent);
   border-radius: 2px;
   background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  touch-action: none;
 }
 
-.pb-handle.tl { left: -5px; top: -5px; }
-.pb-handle.tr { right: -5px; top: -5px; }
-.pb-handle.bl { left: -5px; bottom: -5px; }
-.pb-handle.br { right: -5px; bottom: -5px; }
+.pb-handle.tl { left: -6px; top: -6px; transform-origin: top left; }
+.pb-handle.tr { right: -6px; top: -6px; transform-origin: top right; }
+.pb-handle.bl { left: -6px; bottom: -6px; transform-origin: bottom left; }
+.pb-handle.br { right: -6px; bottom: -6px; transform-origin: bottom right; }
 
-/* 选中悬浮工具栏（按缩放反向缩放，保持屏幕尺寸不变） */
+.pb-handle:hover {
+  background: color-mix(in srgb, var(--jm-accent) 14%, #fff);
+}
+
+/* 选中态顶部旋转钮：贴在卡片上沿正中，工具栏在其上方 */
+.pb-rotate-handle {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  z-index: 5;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--jm-accent);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jm-accent);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  cursor: grab;
+  transform-origin: center bottom;
+  touch-action: none;
+}
+
+.pb-rotate-handle:hover {
+  background: color-mix(in srgb, var(--jm-accent) 12%, #fff);
+}
+
+.pb-rotate-handle:active {
+  cursor: grabbing;
+}
+
+.pb-rotate-handle::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1.5px;
+  height: 12px;
+  background: var(--jm-accent);
+  transform: translateX(-50%);
+}
+
+/* 选中悬浮工具栏：抬高，给顶部旋转钮留空，避免重叠 */
 .pb-toolbar {
   position: absolute;
-  bottom: calc(100% + 14px);
+  bottom: calc(100% + 52px);
   left: 50%;
   display: flex;
   gap: 4px;

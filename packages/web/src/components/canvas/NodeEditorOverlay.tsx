@@ -51,7 +51,7 @@ import { withMaterialUsageBillingOptions } from "@/lib/canvas/materialUsageBilli
 import { DEFAULT_VISUAL_STYLE_ID } from "@/lib/canvas/renderToolPrompt";
 import { HdUpscalePanel } from "@/components/canvas/HdUpscalePanel";
 import { ModelTagPicker } from "@/components/canvas/ModelTagPicker";
-import { ModelSeriesCascadeList } from "@/components/canvas/ModelSeriesCascadeList";
+import { ModelFlatFavoriteList } from "@/components/canvas/ModelFlatFavoriteList";
 import { isHdUpscaleToolMode } from "@/lib/canvas/createHdUpscaleNode";
 import { isLibraryUiLockedParams } from "@/lib/canvas/materialLibrary";
 import {
@@ -137,6 +137,7 @@ import { ModelBrandMark } from "./ModelBrandMark";
 import {
   MODEL_SELECT_CONTENT_CLASS,
   MODEL_SELECT_ITEM_CLASS,
+  MODEL_SELECT_MENU_CONTENT_CLASS,
   MODEL_SELECT_TRIGGER_CLASS,
 } from "@/lib/canvas/canvasSelectStyles";
 import {
@@ -1663,17 +1664,13 @@ export function NodeEditorOverlay() {
                   </span>
                 </SelectTrigger>
                 <SelectContent
-                  className={cn(
-                    MODEL_SELECT_CONTENT_CLASS,
-                    // 右侧系列飞出层需要不被裁切
-                    "!overflow-visible max-h-none"
-                  )}
+                  className={MODEL_SELECT_MENU_CONTENT_CLASS}
                   side="bottom"
                   sideOffset={6}
                   align="start"
                   alignItemWithTrigger={false}
                 >
-                  {/* 能力标签：点击过滤系列下的模型 */}
+                  {/* 能力标签：固定顶部，不随列表滚动 */}
                   <ModelTagPicker
                     category={mediaCategory}
                     modelOptions={modelOptions}
@@ -1685,12 +1682,11 @@ export function NodeEditorOverlay() {
                       {activeModelTagId ? "该标签下暂无模型" : "暂无模型"}
                     </div>
                   ) : (
-                    <ModelSeriesCascadeList
-                      key={selectedNodeId ?? "model-cascade"}
+                    <ModelFlatFavoriteList
+                      key={selectedNodeId ?? "model-flat"}
                       open={modelSelectOpen}
                       options={filteredModelOptions}
                       selectedModel={model}
-                      category={mediaCategory ?? undefined}
                       onSelectModel={(name) => {
                         handleModelChange(name);
                         setModelSelectOpen(false);

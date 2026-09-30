@@ -3,7 +3,7 @@
 /**
  * 我的画布（项目画板）：
  * - 项目以卡片摆在可平移 / 缩放的画板上，单击选中、双击打开、拖动改位置（存本机）
- * - 选中卡片显示四角把手与悬浮工具栏：收藏 / 更多（修改项目名、上传封面）/ 移入回收站
+ * - 选中卡片显示四角缩放把手、顶部旋转钮与悬浮工具栏：收藏 / 更多 / 移入回收站
  * - 保留原有功能：全部 / 收藏 / 回收站、搜索（Ctrl+K）、批量管理、恢复 / 永久删除、改名、封面
  */
 
@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  RotateCw,
   Search,
   Star,
   Trash2,
@@ -40,18 +41,23 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/authStore";
 import {
-  CARD_H,
-  CARD_W,
   NEW_CARD_ID,
   SLOT_H,
   assignMissingPositions,
+  cardSize,
+  clampScale,
   hashId,
   loadBoardLayout,
+  normalizeRotation,
+  poseFromResizeAnchor,
+  resizeAnchor,
+  rotationOf,
   saveBoardLayout,
+  scaleOf,
   snapPoint,
-  tiltFor,
   type BoardLayout,
   type BoardPoint,
+  type ResizeCorner,
 } from "@/lib/projects/boardLayout";
 import type { Project } from "@/types";
 import "./projectsBoard.css";
@@ -63,8 +69,8 @@ type View = { x: number; y: number; k: number };
 
 /** 默认视图：左侧让出竖栏，顶部让出标题 / 分类 */
 const DEFAULT_VIEW: View = { x: 150, y: 170, k: 1 };
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 2;
+const ZOOM_MIN = 0.2;
+const ZOOM_MAX = 3;
 /** 指针移动超过该距离（屏幕 px）才算拖动，否则视为点击 */
 const DRAG_THRESHOLD = 4;
 /** 小地图尺寸 */
@@ -116,7 +122,7 @@ function clampZoom(k: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
 }
 
-/** 拖动会话：卡片拖动或画板平移 */
+/** 拖动会话：卡片拖动、缩放、旋转或画板平移 */
 type DragSession =
   | {
       kind: "card";
@@ -126,8 +132,31 @@ type DragSession =
       startY: number;
       origin: BoardPoint;
       moved: boolean;
-      /** 最近一次拖动到的坐标 */
       last?: BoardPoint;
+    }
+  | {
+      kind: "resize";
+      id: string;
+      pointerId: number;
+      corner: ResizeCorner;
+      ax: number;
+      ay: number;
+      startDist: number;
+      originS: number;
+      originR?: number;
+      moved: boolean;
+      last?: BoardPoint;
+    }
+  | {
+      kind: "rotate";
+      id: string;
+      pointerId: number;
+      centerX: number;
+      centerY: number;
+      startPointerAngle: number;
+      originR: number;
+      moved: boolean;
+      lastR?: number;
     }
   | {
       kind: "pan";
@@ -137,6 +166,16 @@ type DragSession =
       origin: View;
       moved: boolean;
     };
+
+/** 拷贝姿态时保留 r / s */
+function keepPose(base: BoardPoint, next: { x: number; y: number }): BoardPoint {
+  return {
+    x: next.x,
+    y: next.y,
+    ...(typeof base.r === "number" ? { r: base.r } : {}),
+    ...(typeof base.s === "number" ? { s: base.s } : {}),
+  };
+}
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -481,10 +520,11 @@ export default function ProjectsPage() {
     let maxY = -Infinity;
     for (const id of boardIds) {
       const p = layoutRef.current[id] ?? { x: 0, y: 0 };
+      const { w, h } = cardSize(p);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x + CARD_W);
-      maxY = Math.max(maxY, p.y + CARD_H);
+      maxX = Math.max(maxX, p.x + w);
+      maxY = Math.max(maxY, p.y + h);
     }
     const padX = 110;
     const padTop = 150;
@@ -499,7 +539,7 @@ export default function ProjectsPage() {
     });
   }, [boardIds, boardSize]);
 
-  // 滚轮：以指针为中心缩放（需非 passive 才能阻止页面缩放 / 滚动）
+  // 滚轮 / 触控板捏合：以指针为中心缩放（capture 避免被壳层抢走）
   useEffect(() => {
     const el = boardRef.current;
     if (!el) return;
@@ -510,27 +550,48 @@ export default function ProjectsPage() {
       const s = rect.width / el.clientWidth || 1;
       const cx = (e.clientX - rect.left) / s;
       const cy = (e.clientY - rect.top) / s;
-      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+      // 触控板捏合常带 ctrlKey；鼠标滚轮按档位放大步长
+      let dy = e.deltaY;
+      if (e.deltaMode === 1) dy *= 16; // 行
+      if (e.deltaMode === 2) dy *= 320; // 页
+      const intensity = e.ctrlKey || e.metaKey ? 0.012 : 0.0022;
+      const factor = Math.exp(-dy * intensity);
       zoomAt(viewRef.current.k * factor, cx, cy);
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => el.removeEventListener("wheel", onWheel, true);
   }, [zoomAt]);
 
-  // Ctrl+K 聚焦搜索；Esc 取消选中
+  // Ctrl/Cmd + − = 0：缩放；Esc 取消选中；Ctrl+K 搜索
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
-      } else if (e.key === "Escape") {
+        return;
+      }
+      if (e.key === "Escape") {
         setActiveId(null);
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        zoomAt(viewRef.current.k * 1.2, boardSize.w / 2, boardSize.h / 2);
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        zoomAt(viewRef.current.k / 1.2, boardSize.w / 2, boardSize.h / 2);
+      } else if (e.key === "0") {
+        e.preventDefault();
+        zoomAt(1, boardSize.w / 2, boardSize.h / 2);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [zoomAt, boardSize.w, boardSize.h]);
 
   // ---------- 拖动 / 平移 ----------
   const onBoardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -551,23 +612,119 @@ export default function ProjectsPage() {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("[data-card-ui]")) return;
     e.stopPropagation();
+    const cur = layoutRef.current[id] ?? { x: 0, y: 0 };
     dragRef.current = {
       kind: "card",
       id,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      origin: layoutRef.current[id] ?? { x: 0, y: 0 },
+      origin: { ...cur },
       moved: false,
     };
     // 在卡片自身捕获指针：move 仍冒泡到画板处理，且双击事件目标保持为卡片
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
+  /** 选中态顶部旋转钮：绕卡片中心拖动改角度 */
+  const onRotatePointerDown = (e: React.PointerEvent<HTMLElement>, id: string) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const pos = layoutRef.current[id] ?? { x: 0, y: 0 };
+    const { w, h } = cardSize(pos);
+    const v = viewRef.current;
+    const board = boardRef.current?.getBoundingClientRect();
+    const s = screenScale();
+    if (!board) return;
+    const centerX = board.left + (pos.x + w / 2) * v.k * s + v.x * s;
+    const centerY = board.top + (pos.y + h / 2) * v.k * s + v.y * s;
+    dragRef.current = {
+      kind: "rotate",
+      id,
+      pointerId: e.pointerId,
+      centerX,
+      centerY,
+      startPointerAngle: Math.atan2(e.clientY - centerY, e.clientX - centerX),
+      originR: rotationOf(id, layoutRef.current),
+      moved: false,
+    };
+    (e.currentTarget.closest("[data-card]") as HTMLElement | null)?.setPointerCapture(e.pointerId);
+  };
+
+  /** 四角把手：对角固定，等比缩放卡片 */
+  const onResizePointerDown = (
+    e: React.PointerEvent<HTMLElement>,
+    id: string,
+    corner: ResizeCorner
+  ) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const pos = layoutRef.current[id] ?? { x: 0, y: 0 };
+    const { w, h } = cardSize(pos);
+    const { ax, ay } = resizeAnchor(corner, pos.x, pos.y, w, h);
+    const v = viewRef.current;
+    const board = boardRef.current?.getBoundingClientRect();
+    const scr = screenScale();
+    if (!board) return;
+    // 指针 → 世界坐标
+    const wx = (e.clientX - board.left) / scr / v.k - v.x / v.k;
+    const wy = (e.clientY - board.top) / scr / v.k - v.y / v.k;
+    const startDist = Math.hypot(wx - ax, wy - ay) || 1;
+    dragRef.current = {
+      kind: "resize",
+      id,
+      pointerId: e.pointerId,
+      corner,
+      ax,
+      ay,
+      startDist,
+      originS: scaleOf(pos),
+      originR: typeof pos.r === "number" ? pos.r : undefined,
+      moved: false,
+    };
+    (e.currentTarget.closest("[data-card]") as HTMLElement | null)?.setPointerCapture(e.pointerId);
+  };
+
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     const s = screenScale();
+    if (d.kind === "rotate") {
+      const ang = Math.atan2(e.clientY - d.centerY, e.clientX - d.centerX);
+      const deltaDeg = ((ang - d.startPointerAngle) * 180) / Math.PI;
+      if (!d.moved && Math.abs(deltaDeg) < 0.8) return;
+      d.moved = true;
+      setDraggingId(d.id);
+      let nextR = normalizeRotation(d.originR + deltaDeg);
+      if (e.shiftKey) nextR = Math.round(nextR / 15) * 15;
+      d.lastR = nextR;
+      setLayout((cur) => {
+        const base = cur[d.id] ?? { x: 0, y: 0 };
+        return { ...cur, [d.id]: { ...base, r: nextR } };
+      });
+      return;
+    }
+    if (d.kind === "resize") {
+      const v = viewRef.current;
+      const board = boardRef.current?.getBoundingClientRect();
+      if (!board) return;
+      const wx = (e.clientX - board.left) / s / v.k - v.x / v.k;
+      const wy = (e.clientY - board.top) / s / v.k - v.y / v.k;
+      const dist = Math.hypot(wx - d.ax, wy - d.ay);
+      if (!d.moved && Math.abs(dist - d.startDist) < 4) return;
+      d.moved = true;
+      setDraggingId(d.id);
+      let nextS = clampScale(d.originS * (dist / d.startDist));
+      if (e.shiftKey) nextS = clampScale(Math.round(nextS * 4) / 4); // 0.25 档
+      const next = poseFromResizeAnchor(d.corner, d.ax, d.ay, nextS, {
+        ...(typeof d.originR === "number" ? { r: d.originR } : {}),
+      });
+      d.last = next;
+      setLayout((cur) => ({ ...cur, [d.id]: next }));
+      return;
+    }
     const dx = (e.clientX - d.startX) / s;
     const dy = (e.clientY - d.startY) / s;
     if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
@@ -580,7 +737,10 @@ export default function ProjectsPage() {
       setView({ ...d.origin, x: d.origin.x + dx, y: d.origin.y + dy });
     } else {
       const k = viewRef.current.k;
-      let p = { x: d.origin.x + dx / k, y: d.origin.y + dy / k };
+      let p = keepPose(d.origin, {
+        x: d.origin.x + dx / k,
+        y: d.origin.y + dy / k,
+      });
       if (appearance.gridSnap) p = snapPoint(p);
       d.last = p;
       setLayout((cur) => ({ ...cur, [d.id]: p }));
@@ -593,20 +753,42 @@ export default function ProjectsPage() {
     dragRef.current = null;
     if (d.kind === "pan") {
       setPanning(false);
-      // 点击空白处取消选中
       if (!d.moved) setActiveId(null);
+      return;
+    }
+    if (d.kind === "rotate") {
+      setDraggingId(null);
+      if (d.moved) {
+        const base = layoutRef.current[d.id] ?? { x: 0, y: 0 };
+        const r = d.lastR ?? base.r;
+        const next = {
+          ...layoutRef.current,
+          [d.id]: { ...base, ...(typeof r === "number" ? { r } : {}) },
+        };
+        layoutRef.current = next;
+        saveBoardLayout(userId, next);
+        setActiveId(d.id);
+      }
+      return;
+    }
+    if (d.kind === "resize") {
+      setDraggingId(null);
+      if (d.moved) {
+        const next = d.last ? { ...layoutRef.current, [d.id]: d.last } : layoutRef.current;
+        layoutRef.current = next;
+        saveBoardLayout(userId, next);
+        setActiveId(d.id);
+      }
       return;
     }
     setDraggingId(null);
     if (d.moved) {
-      // 以拖动会话记录的最终坐标为准，避免最后一次 move 尚未渲染
       const next = d.last ? { ...layoutRef.current, [d.id]: d.last } : layoutRef.current;
       layoutRef.current = next;
       saveBoardLayout(userId, next);
       if (d.id !== NEW_CARD_ID) setActiveId(d.id);
       return;
     }
-    // 未拖动：视为点击
     if (d.id === NEW_CARD_ID) {
       if (!createMutation.isPending) createMutation.mutate();
       return;
@@ -624,10 +806,11 @@ export default function ProjectsPage() {
     let maxY = vw.y + vw.h;
     for (const id of boardIds) {
       const p = layout[id] ?? { x: 0, y: 0 };
+      const { w, h } = cardSize(p);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x + CARD_W);
-      maxY = Math.max(maxY, p.y + CARD_H);
+      maxX = Math.max(maxX, p.x + w);
+      maxY = Math.max(maxY, p.y + h);
     }
     const pad = 80;
     minX -= pad;
@@ -681,7 +864,12 @@ export default function ProjectsPage() {
             <div
               data-card
               className={`pb-new-card${draggingId === NEW_CARD_ID ? " dragging" : ""}`}
-              style={{ left: pointOf(NEW_CARD_ID).x, top: pointOf(NEW_CARD_ID).y, width: CARD_W, height: CARD_H }}
+              style={{
+                left: pointOf(NEW_CARD_ID).x,
+                top: pointOf(NEW_CARD_ID).y,
+                width: cardSize(pointOf(NEW_CARD_ID)).w,
+                height: cardSize(pointOf(NEW_CARD_ID)).h,
+              }}
               role="button"
               tabIndex={0}
               aria-label="进入创作：新建项目"
@@ -703,12 +891,14 @@ export default function ProjectsPage() {
 
           {visibleProjects.map((project) => {
             const p = pointOf(project.id);
+            const size = cardSize(p);
             const isFav = favoriteIds.includes(project.id);
             const checked = selectedIds.includes(project.id);
             const active = activeId === project.id && !selectMode;
             const dragging = draggingId === project.id;
             const coverSrc = resolveProjectCoverDisplayUrl(project.coverUrl);
-            const tilt = active || dragging ? 0 : tiltFor(project.id);
+            const tilt = rotationOf(project.id, layout);
+            const scalePct = Math.round(scaleOf(p) * 100);
             return (
               <article
                 key={project.id}
@@ -717,8 +907,8 @@ export default function ProjectsPage() {
                 style={{
                   left: p.x,
                   top: p.y,
-                  width: CARD_W,
-                  height: CARD_H,
+                  width: size.w,
+                  height: size.h,
                   transform: `rotate(${tilt}deg)`,
                   zIndex: dragging ? 30 : active ? 20 : undefined,
                 }}
@@ -768,10 +958,36 @@ export default function ProjectsPage() {
 
                 {active ? (
                   <>
-                    <span className="pb-handle tl" aria-hidden="true" />
-                    <span className="pb-handle tr" aria-hidden="true" />
-                    <span className="pb-handle bl" aria-hidden="true" />
-                    <span className="pb-handle br" aria-hidden="true" />
+                    {(
+                      [
+                        ["tl", "nwse-resize"],
+                        ["tr", "nesw-resize"],
+                        ["bl", "nesw-resize"],
+                        ["br", "nwse-resize"],
+                      ] as const
+                    ).map(([corner, cursor]) => (
+                      <button
+                        key={corner}
+                        type="button"
+                        className={`pb-handle ${corner}`}
+                        data-card-ui
+                        title={`拖动缩放（当前 ${scalePct}%，Shift 吸附 25%）`}
+                        aria-label={`拖动${corner}角缩放`}
+                        style={{ cursor, transform: `scale(${1 / view.k})` }}
+                        onPointerDown={(e) => onResizePointerDown(e, project.id, corner)}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      className="pb-rotate-handle"
+                      data-card-ui
+                      title={`拖动旋转（当前 ${tilt}°，按住 Shift 吸附 15°）`}
+                      aria-label="拖动旋转卡片"
+                      style={{ transform: `translateX(-50%) scale(${1 / view.k})` }}
+                      onPointerDown={(e) => onRotatePointerDown(e, project.id)}
+                    >
+                      <RotateCw size={12} strokeWidth={2.2} />
+                    </button>
                     <div
                       className="pb-toolbar"
                       data-card-ui
@@ -986,20 +1202,20 @@ export default function ProjectsPage() {
           </div>
         ) : null}
 
-        {/* 底部缩放控制 */}
+        {/* 底部缩放控制：滚轮 / Ctrl± / 按钮 */}
         <div className="pb-zoom" data-board-ui>
-          <button type="button" aria-label="缩小" onClick={() => zoomBy(1 / 1.2)}>
+          <button type="button" aria-label="缩小" title="缩小（Ctrl+-）" onClick={() => zoomBy(1 / 1.2)}>
             <Minus size={14} strokeWidth={2} />
           </button>
           <button
             type="button"
             className="pb-zoom-value"
-            title="重置为 100%"
+            title="重置为 100%（Ctrl+0）"
             onClick={() => zoomAt(1, boardSize.w / 2, boardSize.h / 2)}
           >
             {Math.round(view.k * 100)}%
           </button>
-          <button type="button" aria-label="放大" onClick={() => zoomBy(1.2)}>
+          <button type="button" aria-label="放大" title="放大（Ctrl+=）" onClick={() => zoomBy(1.2)}>
             <Plus size={14} strokeWidth={2} />
           </button>
           <button type="button" className="pb-zoom-fit" onClick={fitView}>
@@ -1038,12 +1254,18 @@ export default function ProjectsPage() {
           })()}
           {boardIds.map((id) => {
             const p = pointOf(id);
+            const size = cardSize(p);
             const m = minimap.toMini(p.x, p.y);
             return (
               <span
                 key={id}
                 className={`pb-mini-card${id === activeProject?.id ? " active" : ""}${id === NEW_CARD_ID ? " new" : ""}`}
-                style={{ left: m.x, top: m.y, width: CARD_W * minimap.scale, height: CARD_H * minimap.scale }}
+                style={{
+                  left: m.x,
+                  top: m.y,
+                  width: size.w * minimap.scale,
+                  height: size.h * minimap.scale,
+                }}
               />
             );
           })}
