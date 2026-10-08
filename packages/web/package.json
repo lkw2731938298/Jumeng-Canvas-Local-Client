@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/web",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3456",

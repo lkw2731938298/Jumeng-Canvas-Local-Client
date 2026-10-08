@@ -407,19 +407,34 @@ function hydrateWorkflowFromJson(flowJson: string): { nodes: AppNode[]; edges: E
   }
 }
 
-/** Remap legacy per-media target handles to unified `ref_in`. */
+/** Remap legacy per-media target handles to unified `ref_in`；连线描边色跟随终点节点卡片色 */
 function normalizeEdges(edges: Edge[], nodes: AppNode[]): Edge[] {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   return edges.map((edge) => {
+    let next = edge;
     const target = nodeMap.get(edge.target);
-    if (!target) return edge;
+    if (!target) return next;
     const def = NODE_REGISTRY[target.type || ""];
-    if (!def) return edge;
+    if (!def) return next;
+
     const inputIds = new Set(def.inputs.map((port) => port.id));
-    if (!inputIds.has(REFERENCE_INPUT_ID)) return edge;
-    const handle = edge.targetHandle;
-    if (!handle || inputIds.has(handle)) return edge;
-    return { ...edge, targetHandle: REFERENCE_INPUT_ID };
+    if (inputIds.has(REFERENCE_INPUT_ID)) {
+      const handle = edge.targetHandle;
+      if (handle && !inputIds.has(handle)) {
+        next = { ...next, targetHandle: REFERENCE_INPUT_ID };
+      }
+    }
+
+    // 终点节点类型色 → 连线描边（与卡片主色一致）
+    const edgeColor = hexToRgba(def.color || "#8b5cf6", 0.72);
+    const prevStroke = (next.style as { stroke?: string } | undefined)?.stroke;
+    if (prevStroke !== edgeColor) {
+      next = {
+        ...next,
+        style: { ...(next.style || {}), stroke: edgeColor, strokeWidth: 2 },
+      };
+    }
+    return next;
   });
 }
 
@@ -995,7 +1010,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return;
     }
     get().pushHistory();
-    const hexColor = sourceNode ? (NODE_REGISTRY[sourceNode.type || ""]?.color || "#8b5cf6") : "#8b5cf6";
+    // 连线颜色跟随终点节点卡片色
+    const hexColor = targetNode
+      ? NODE_REGISTRY[targetNode.type || ""]?.color || "#8b5cf6"
+      : "#8b5cf6";
     const edgeColor = hexToRgba(hexColor, 0.72);
     set((s) => {
       const edges = addEdge(
@@ -1190,7 +1208,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       return;
     }
     get().pushHistory();
-    const hexColor = sourceNode ? (NODE_REGISTRY[sourceNode.type || ""]?.color || "#8b5cf6") : "#8b5cf6";
+    // 连线颜色跟随终点节点卡片色
+    const hexColor = targetNode
+      ? NODE_REGISTRY[targetNode.type || ""]?.color || "#8b5cf6"
+      : "#8b5cf6";
     const edgeColor = hexToRgba(hexColor, 0.72);
     // 新建边打上 connectFlashAt，边组件播一次短闪后自清
     set((state) => {
@@ -1850,8 +1871,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const srcId = isStr ? (oldToNew[String(src)] || "") : idMap[Number(src)];
       const tgtId = isStr ? (oldToNew[String(tgt)] || "") : idMap[Number(tgt)];
       if (!srcId || !tgtId) return null;
-      const srcType = tNodes[srcIdx]?.type || "";
-      const hex = NODE_REGISTRY[srcType]?.color || "#8b5cf6";
+      const tgtType = tNodes[tgtIdx]?.type || "";
+      const hex = NODE_REGISTRY[tgtType]?.color || "#8b5cf6";
       const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
       return { id: `xy-edge__${srcId}-${tgtId}`, source: srcId, target: tgtId, sourceHandle: te.sourceHandle ?? undefined, targetHandle: te.targetHandle ?? undefined, style: { stroke: `rgba(${r},${g},${b},0.72)`, strokeWidth: 2 } };
     }).filter(function(e) { return e !== null; }) as Edge[];
@@ -2329,8 +2350,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const source = idMap[e.sourceTempId];
         const target = idMap[e.targetTempId];
         if (!source || !target) return null;
-        const srcType = snapshot.nodes.find((n) => n.tempId === e.sourceTempId)?.type || "";
-        const hex = NODE_REGISTRY[srcType]?.color || "#8b5cf6";
+        // 连线颜色跟随终点节点卡片色
+        const tgtType = snapshot.nodes.find((n) => n.tempId === e.targetTempId)?.type || "";
+        const hex = NODE_REGISTRY[tgtType]?.color || "#8b5cf6";
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);

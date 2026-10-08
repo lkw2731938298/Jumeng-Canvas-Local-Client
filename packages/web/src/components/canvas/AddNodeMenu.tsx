@@ -10,6 +10,7 @@ import {
   Music,
   Video,
 } from "lucide-react";
+import { NODE_REGISTRY } from "@/types/node-registry";
 
 /** 画布轻雾玻璃：节点周边 chrome / 侧栏 / 弹层共用 */
 export const CANVAS_MIST_GLASS_STYLE = {
@@ -29,15 +30,21 @@ export interface AddNodeOption {
   icon: ReactNode;
 }
 
+/** 菜单图标色 = 对应节点卡片主色（NODE_REGISTRY.color） */
+function nodeIcon(type: string, Icon: typeof FileText): ReactNode {
+  const color = NODE_REGISTRY[type]?.color || "#a1a1aa";
+  return <Icon className="h-4 w-4 shrink-0" style={{ color }} strokeWidth={2} />;
+}
+
 /** 画布可添加节点清单（工具栏 / 双击菜单共用；一键出海 / 提示词节点不从菜单暴露） */
 export const ADD_NODE_OPTIONS: AddNodeOption[] = [
-  { type: "text_input", label: "文本节点", icon: <FileText className="h-4 w-4" /> },
-  { type: "storyboard_grid", label: "分镜表", icon: <LayoutGrid className="h-4 w-4" /> },
-  { type: "image_input", label: "图片节点", icon: <Image className="h-4 w-4" /> },
-  { type: "video_input", label: "视频节点", icon: <Video className="h-4 w-4" /> },
-  { type: "audio_input", label: "音频节点", icon: <Music className="h-4 w-4" /> },
-  { type: "document_input", label: "文档/链接", icon: <Globe className="h-4 w-4" /> },
-  { type: "director_stage", label: "导演台", icon: <Clapperboard className="h-4 w-4" /> },
+  { type: "text_input", label: "文本节点", icon: nodeIcon("text_input", FileText) },
+  { type: "storyboard_grid", label: "分镜表", icon: nodeIcon("storyboard_grid", LayoutGrid) },
+  { type: "image_input", label: "图片节点", icon: nodeIcon("image_input", Image) },
+  { type: "video_input", label: "视频节点", icon: nodeIcon("video_input", Video) },
+  { type: "audio_input", label: "音频节点", icon: nodeIcon("audio_input", Music) },
+  { type: "document_input", label: "文档/链接", icon: nodeIcon("document_input", Globe) },
+  { type: "director_stage", label: "导演台", icon: nodeIcon("director_stage", Clapperboard) },
 ];
 
 interface AddNodeMenuListProps {

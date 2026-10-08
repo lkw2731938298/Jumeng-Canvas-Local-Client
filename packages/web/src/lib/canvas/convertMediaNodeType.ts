@@ -105,20 +105,36 @@ export function convertMediaNodeType(nodeId: string, targetType: MediaNodeType):
   // 模型按品类绑定，换类型后清掉以免视频模型留在图片节点上
   delete nextParams.model;
 
+  // 终点卡片色 → 连线描边；本节点作终点时需随类型切换重着色
+  const edgeColor = (() => {
+    const hex = def.color || "#8b5cf6";
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},0.72)`;
+  })();
+
   const nextEdges: Edge[] = store.edges.map((e) => {
-    if (e.source !== nodeId) return e;
-    if (e.sourceHandle === oldHandle || e.sourceHandle == null || e.sourceHandle === "") {
-      return { ...e, sourceHandle: newHandle };
+    let next = e;
+    if (e.source === nodeId) {
+      if (e.sourceHandle === oldHandle || e.sourceHandle == null || e.sourceHandle === "") {
+        next = { ...next, sourceHandle: newHandle };
+      } else if (
+        e.sourceHandle === "image" ||
+        e.sourceHandle === "video" ||
+        e.sourceHandle === "audio"
+      ) {
+        // 历史脏数据：源句柄写成了错误的媒体类型时一并纠正
+        next = { ...next, sourceHandle: newHandle };
+      }
     }
-    // 历史脏数据：源句柄写成了错误的媒体类型时一并纠正
-    if (
-      e.sourceHandle === "image" ||
-      e.sourceHandle === "video" ||
-      e.sourceHandle === "audio"
-    ) {
-      return { ...e, sourceHandle: newHandle };
+    if (e.target === nodeId) {
+      next = {
+        ...next,
+        style: { ...(next.style || {}), stroke: edgeColor, strokeWidth: 2 },
+      };
     }
-    return e;
+    return next;
   });
 
   useCanvasStore.setState({

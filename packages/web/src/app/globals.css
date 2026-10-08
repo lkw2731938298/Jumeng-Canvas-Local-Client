@@ -377,27 +377,7 @@
   animation: canvas-edge-connect-flash 0.7s ease-out forwards;
 }
 
-/**
- * Chokcoco 式流光：pathLength=1 时 dasharray 总和为 1，
- * dashoffset 从 0 → -1 即完整绕路径一圈。
- */
-@keyframes canvas-edge-flow {
-  to {
-    stroke-dashoffset: -1;
-  }
-}
-
-.canvas-edge-flow {
-  opacity: 0.95;
-  animation: canvas-edge-flow 2.2s linear infinite;
-}
-
-.canvas-edge-flow-head {
-  opacity: 1;
-  animation: canvas-edge-flow 2.2s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.95))
-    drop-shadow(0 0 10px rgba(165, 180, 252, 0.85));
-}
+/* 连线流光已改为 CanvasBezierEdge 粒子光轨（rAF），不再使用 CSS dash 动画 */
 
 .react-flow__node[class*="react-flow__node-"] {
   background: transparent !important;
