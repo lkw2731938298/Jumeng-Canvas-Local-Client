@@ -64,6 +64,8 @@ export interface DirectorObject {
   name: string;
   transform: DirectorTransform;
   color: string;
+  /** 模型外观贴图（项目图片资产 id）；有值时材质使用 map，纯色作备用/清除后回退 */
+  colorMapAssetId?: string;
   pose?: string;
   /** 关节骨骼姿势（预览版人模 rig） */
   bonePose?: DirectorBonePose;
@@ -119,6 +121,10 @@ export interface DirectorSceneState {
   activeShotCameraId: string | null;
   lighting: {
     preset: string;
+    /** 灯组水平旋转（度） */
+    yawDeg?: number;
+    /** 灯组俯仰偏移（度） */
+    pitchDeg?: number;
   };
   cameraTrack: DirectorCameraTrack | null;
   sceneSettings: DirectorSceneSettings;

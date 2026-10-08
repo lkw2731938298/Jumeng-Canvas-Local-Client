@@ -76,6 +76,7 @@ export interface DirectorLensPreviewSceneProps {
   /** 拖拽摄像机造具时的临时 transform，保证监视器与视锥同步 */
   liveTransformRef: MutableRefObject<{ id: string; transform: DirectorTransform } | null>;
   resolveCharacterModelUrl?: (object: DirectorObject) => string | null;
+  resolveColorMapUrl?: (object: DirectorObject) => string | null;
 }
 
 export function DirectorLensPreviewScene({
@@ -83,6 +84,7 @@ export function DirectorLensPreviewScene({
   cameraId,
   liveTransformRef,
   resolveCharacterModelUrl,
+  resolveColorMapUrl,
   panoramaUrl = null,
 }: DirectorLensPreviewSceneProps & { panoramaUrl?: string | null }) {
   const filmAspect = aspectRatioToNumber(scene.sceneSettings?.aspectRatio ?? "16:9");
@@ -109,6 +111,7 @@ export function DirectorLensPreviewScene({
         panoramaUrl={panoramaUrl}
         interactive={false}
         resolveCharacterModelUrl={resolveCharacterModelUrl}
+        resolveColorMapUrl={resolveColorMapUrl}
       />
     </>
   );

@@ -1,5 +1,6 @@
 import type { CharacterPoseId } from "@/lib/director/characterPoses";
-import type { LightingPresetId } from "@/lib/director/lightingPresets";
+import type { DirectorLightingState, LightingPresetId } from "@/lib/director/lightingPresets";
+import { DEFAULT_LIGHTING_STATE } from "@/lib/director/lightingPresets";
 import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { rotationFromPositionLookAt } from "@/lib/director/shotPreview";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
@@ -30,7 +31,7 @@ export type DirectorObject = Omit<SharedDirectorObject, "pose" | "lighting"> & {
 
 export type DirectorSceneState = Omit<SharedDirectorSceneState, "objects" | "lighting"> & {
   objects: DirectorObject[];
-  lighting: { preset: LightingPresetId };
+  lighting: DirectorLightingState;
 };
 
 export type {
@@ -79,7 +80,7 @@ export function createDefaultDirectorScene(): DirectorSceneState {
     shotCameras: [],
     viewMode: "director",
     activeShotCameraId: null,
-    lighting: { preset: "classic_three_point" },
+    lighting: { ...DEFAULT_LIGHTING_STATE },
     cameraTrack: null,
     sceneSettings: { ...DEFAULT_DIRECTOR_SCENE_SETTINGS },
   };

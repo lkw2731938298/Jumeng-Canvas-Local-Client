@@ -7,10 +7,10 @@ import { Loader2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectAssetManifest } from "@/lib/canvas/useProjectAssets";
 
-const VideoEditorWorkspace = dynamic(
+const OpenCutClassicHost = dynamic(
   () =>
-    import("@/components/canvas/editor/VideoEditorWorkspace").then(
-      (m) => m.VideoEditorWorkspace
+    import("@/components/canvas/editor/OpenCutClassicHost").then(
+      (m) => m.OpenCutClassicHost
     ),
   {
     ssr: false,
@@ -23,8 +23,23 @@ const VideoEditorWorkspace = dynamic(
   }
 );
 
-/** 完整剪辑页：项目级全屏剪辑工作区 */
+/** 剪辑页：嵌入 OpenCut classic */
 export default function VideoEditorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="canvas-fullscreen flex flex-1 items-center justify-center bg-black text-sm text-white/40">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          加载剪辑台…
+        </div>
+      }
+    >
+      <VideoEditorPageInner />
+    </Suspense>
+  );
+}
+
+function VideoEditorPageInner() {
   const params = useParams<{ id: string }>();
   const projectId = params.id ?? "";
 
@@ -80,16 +95,7 @@ export default function VideoEditorPage() {
 
   return (
     <div className="canvas-fullscreen flex flex-col bg-black">
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-white/40">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            加载剪辑台…
-          </div>
-        }
-      >
-        <VideoEditorWorkspace projectId={projectId} />
-      </Suspense>
+      <OpenCutClassicHost projectId={projectId} />
     </div>
   );
 }

@@ -42,6 +42,7 @@ export interface DirectorStageCanvasProps {
     trackRef: RefObject<HTMLDivElement | null>;
   } | null;
   resolveCharacterModelUrl?: (object: DirectorObject) => string | null;
+  resolveColorMapUrl?: (object: DirectorObject) => string | null;
   panoramaUrl?: string | null;
   /** 人体模型：坐标轴变换 vs 视口关节拖拽（互斥） */
   mannequinEditMode?: "transform" | "pose";
@@ -228,6 +229,7 @@ function MainDirectorView({
   onCaptureReady,
   trackPreviewActive = false,
   resolveCharacterModelUrl,
+  resolveColorMapUrl,
   panoramaUrl = null,
   mannequinEditMode = "transform",
   onBonePoseChange,
@@ -273,6 +275,7 @@ function MainDirectorView({
         onCameraLiveTransform={onCameraLiveTransform}
         onDragChange={setInteracting}
         resolveCharacterModelUrl={resolveCharacterModelUrl}
+        resolveColorMapUrl={resolveColorMapUrl}
         mannequinEditMode={mannequinEditMode}
         onBonePoseChange={onBonePoseChange}
       />
@@ -367,6 +370,7 @@ export function DirectorStageCanvas(props: DirectorStageCanvasProps) {
               cameraId={lensPreview.cameraId}
               liveTransformRef={props.liveCameraTransformRef}
               resolveCharacterModelUrl={props.resolveCharacterModelUrl}
+              resolveColorMapUrl={props.resolveColorMapUrl}
               panoramaUrl={props.panoramaUrl}
             />
           </View>

@@ -33,12 +33,12 @@ const MALE_WAIST_SCALE = 1.22;
 
 function cloneAndTint(material: THREE.Material, color: string): THREE.Material {
   const tinted = material.clone();
-  if ((tinted as THREE.MeshStandardMaterial).color) {
-    (tinted as THREE.MeshStandardMaterial).color.set(color);
-  }
+  const std = tinted as THREE.MeshStandardMaterial;
+  if (std.color) std.color.set(color);
   return tinted;
 }
 
+/** 初次克隆材质并上色（只在建 rig 时调用） */
 function tintSkinnedMeshes(root: THREE.Object3D, color: string) {
   root.traverse((obj) => {
     const skinned = obj as THREE.SkinnedMesh;
@@ -48,6 +48,45 @@ function tintSkinnedMeshes(root: THREE.Object3D, color: string) {
     skinned.material = Array.isArray(skinned.material)
       ? skinned.material.map((m) => cloneAndTint(m, color))
       : cloneAndTint(skinned.material, color);
+  });
+}
+
+/**
+ * 就地更新颜色/贴图。
+ * 人模关节默认 metalness=0.5，贴图失败或未降金属度时会整身发灰白——有贴图时强制哑光。
+ */
+function applySkinnedAppearance(
+  root: THREE.Object3D,
+  color: string,
+  colorMap: THREE.Texture | null
+) {
+  root.traverse((obj) => {
+    const skinned = obj as THREE.SkinnedMesh;
+    if (!skinned.isSkinnedMesh) return;
+    const mats = Array.isArray(skinned.material) ? skinned.material : [skinned.material];
+    for (const m of mats) {
+      const std = m as THREE.MeshStandardMaterial;
+      if (!std || !("color" in std)) continue;
+      if (std.userData.origMetalness == null && typeof std.metalness === "number") {
+        std.userData.origMetalness = std.metalness;
+      }
+      if (std.userData.origRoughness == null && typeof std.roughness === "number") {
+        std.userData.origRoughness = std.roughness;
+      }
+      if (colorMap) {
+        std.color.set("#ffffff");
+        std.map = colorMap;
+        // 关节网原本金属度 0.5，不关掉会把贴纸打成灰金属
+        std.metalness = 0;
+        std.roughness = 0.55;
+      } else {
+        std.color.set(color);
+        std.map = null;
+        if (typeof std.userData.origMetalness === "number") std.metalness = std.userData.origMetalness;
+        if (typeof std.userData.origRoughness === "number") std.roughness = std.userData.origRoughness;
+      }
+      std.needsUpdate = true;
+    }
   });
 }
 
@@ -203,6 +242,7 @@ function MannequinPickVolume({
 function DirectorMannequinModelInner({
   directorObjectId,
   color,
+  colorMap = null,
   gender = "male",
   bonePose,
   scaleMultiplier = 1,
@@ -213,6 +253,7 @@ function DirectorMannequinModelInner({
 }: {
   directorObjectId: string;
   color: string;
+  colorMap?: THREE.Texture | null;
   gender?: DirectorCharacterGender;
   bonePose: DirectorBonePose;
   scaleMultiplier?: number;
@@ -227,6 +268,8 @@ function DirectorMannequinModelInner({
   const rigRef = useRef<RigState | null>(null);
   const [mounted, setMounted] = useState(false);
   const { invalidate } = useThree();
+  const colorMapRef = useRef(colorMap);
+  colorMapRef.current = colorMap;
 
   /** 拖拽关节时同步主网格与选中描边，避免橙色描边滞留在旧姿势 */
   const applyLiveBonePose = useCallback(
@@ -249,6 +292,7 @@ function DirectorMannequinModelInner({
     if (!root) return;
 
     const rig = createRig(gltfScene, color, gender, directorObjectId, scaleMultiplier);
+    if (colorMapRef.current) applySkinnedAppearance(rig.mesh, color, colorMapRef.current);
     rigRef.current = rig;
     root.add(rig.mesh);
     applyBonePose(rig.skeletonMain.boneMap, rig.skeletonMain.bindPose, bonePose);
@@ -268,9 +312,9 @@ function DirectorMannequinModelInner({
   useEffect(() => {
     const rig = rigRef.current;
     if (!rig) return;
-    tintSkinnedMeshes(rig.mesh, color);
+    applySkinnedAppearance(rig.mesh, color, colorMap);
     invalidate();
-  }, [color, invalidate]);
+  }, [color, colorMap, invalidate]);
 
   useEffect(() => {
     const rig = rigRef.current;
@@ -353,6 +397,7 @@ class MannequinErrorBoundary extends Component<BoundaryProps, { hasError: boolea
 export function DirectorMannequinModel({
   directorObjectId,
   color,
+  colorMap = null,
   gender = "male",
   bonePose,
   scaleMultiplier = 1,
@@ -364,6 +409,7 @@ export function DirectorMannequinModel({
 }: {
   directorObjectId: string;
   color: string;
+  colorMap?: THREE.Texture | null;
   gender?: DirectorCharacterGender;
   bonePose?: DirectorBonePose;
   scaleMultiplier?: number;
@@ -379,6 +425,7 @@ export function DirectorMannequinModel({
       <DirectorMannequinModelInner
         directorObjectId={directorObjectId}
         color={color}
+        colorMap={colorMap}
         gender={gender}
         bonePose={resolvedPose}
         scaleMultiplier={scaleMultiplier}

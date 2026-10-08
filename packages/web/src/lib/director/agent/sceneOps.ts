@@ -488,9 +488,18 @@ export function applyDirectorOps(
             fail(op, `未知布光预设 ${preset}，可选：${LIGHTING_PRESETS.map((p) => p.id).join(" / ")}`);
             break;
           }
-          ctx.scene = { ...ctx.scene, lighting: { preset } };
+          const nextLighting = { ...ctx.scene.lighting, preset };
+          const hasYaw = op.yawDeg !== undefined && op.yawDeg !== null && op.yawDeg !== "";
+          const hasPitch = op.pitchDeg !== undefined && op.pitchDeg !== null && op.pitchDeg !== "";
+          if (hasYaw) nextLighting.yawDeg = Math.min(180, Math.max(-180, num(op.yawDeg, 0)));
+          if (hasPitch) nextLighting.pitchDeg = Math.min(45, Math.max(-45, num(op.pitchDeg, 0)));
+          ctx.scene = { ...ctx.scene, lighting: nextLighting };
           changed = true;
-          ok(op, `布光已切换为「${LIGHTING_PRESETS.find((p) => p.id === preset)!.label}」`);
+          const angleNote =
+            hasYaw || hasPitch
+              ? `（水平 ${nextLighting.yawDeg ?? 0}° / 俯仰 ${nextLighting.pitchDeg ?? 0}°）`
+              : "";
+          ok(op, `布光已切换为「${LIGHTING_PRESETS.find((p) => p.id === preset)!.label}」${angleNote}`);
           break;
         }
         case "set_scene": {

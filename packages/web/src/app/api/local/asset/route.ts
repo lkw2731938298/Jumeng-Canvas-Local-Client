@@ -7,6 +7,12 @@ import { readAssetFile } from "@/lib/local/serverDiskStore";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+} as const;
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId") || "";
@@ -16,7 +22,7 @@ export async function GET(req: Request) {
   }
   try {
     const buf = readAssetFile(projectId, file);
-    if (!buf) return new NextResponse("Not Found", { status: 404 });
+    if (!buf) return new NextResponse("Not Found", { status: 404, headers: { ...CORS } });
     const lower = file.toLowerCase();
     const type = lower.endsWith(".png")
       ? "image/png"
@@ -42,10 +48,19 @@ export async function GET(req: Request) {
       headers: {
         "Content-Type": type,
         "Cache-Control": "private, max-age=3600",
+        // OpenCut classic（:3100）iframe 拉素材需要 CORS
+        ...CORS,
       },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 400, headers: { ...CORS } });
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: { ...CORS },
+  });
 }

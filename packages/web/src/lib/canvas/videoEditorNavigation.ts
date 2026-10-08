@@ -57,7 +57,15 @@ export function selectedComposeNodeId(): string | null {
   if (!params) return null;
   const mode = String(params.toolMode ?? "").trim();
   const meta = params.composeMeta;
-  if (mode === "video_compose" && meta && typeof meta === "object") {
+  // 旧多轨 compose + OpenCut classic 成片均可再开
+  if (
+    (mode === "video_compose" || mode === "opencut_compose") &&
+    meta &&
+    typeof meta === "object"
+  ) {
+    return node.id;
+  }
+  if (typeof params.opencutProjectId === "string" && params.opencutProjectId.trim()) {
     return node.id;
   }
   return null;

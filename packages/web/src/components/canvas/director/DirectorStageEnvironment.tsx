@@ -24,6 +24,7 @@ export function DirectorStageEnvironment({
   onCameraLiveTransform,
   onDragChange,
   resolveCharacterModelUrl,
+  resolveColorMapUrl,
   onBonePoseChange,
 }: {
   scene: DirectorSceneState;
@@ -39,6 +40,8 @@ export function DirectorStageEnvironment({
   onCameraLiveTransform?: (id: string, transform: DirectorObject["transform"]) => void;
   onDragChange?: (dragging: boolean) => void;
   resolveCharacterModelUrl?: (object: DirectorObject) => string | null;
+  /** 解析物体模型颜色贴图 URL */
+  resolveColorMapUrl?: (object: DirectorObject) => string | null;
   onBonePoseChange?: (id: string, bone: string, rotation: [number, number, number]) => void;
 }) {
   const settings = scene.sceneSettings;
@@ -69,7 +72,11 @@ export function DirectorStageEnvironment({
           hasPanorama ? panoramaRadius * 2.5 : 55,
         ]}
       />
-      <DirectorLighting presetId={scene.lighting.preset} />
+      <DirectorLighting
+        presetId={scene.lighting.preset}
+        yawDeg={scene.lighting.yawDeg ?? 0}
+        pitchDeg={scene.lighting.pitchDeg ?? 0}
+      />
 
       {hasPanorama ? (
         <DirectorPanoramaSphere imageUrl={panoramaUrl} settings={settings.panorama!} />
@@ -129,6 +136,7 @@ export function DirectorStageEnvironment({
               gridSnap={settings.gridSnap}
               showLabel={settings.showLabels}
               modelUrl={obj.kind !== "camera" ? resolveCharacterModelUrl?.(obj) ?? null : null}
+              colorMapUrl={obj.kind !== "camera" ? resolveColorMapUrl?.(obj) ?? null : null}
               aspectRatio={aspectRatio}
               onSelect={onSelectObject ?? (() => {})}
               onBonePoseChange={onBonePoseChange}

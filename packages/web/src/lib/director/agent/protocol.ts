@@ -148,7 +148,7 @@ position 可写 [x,z]（自动贴地）或 [x,y,z]。target / camera 等引用�
     ③ 手动 position:[x,y,z] + lookAt:[x,y,z]
   , fov?(度)}
 - update_camera {target, 同 add_camera 字段}
-- set_lighting {preset: ${lights}}
+- set_lighting {preset: ${lights}, yawDeg?(水平角-180~180), pitchDeg?(俯仰-45~45)}
 - set_scene {skyColor?, aspectRatio?:"16:9"|"9:16"|"1:1"|"4:3"|"3:4"|"21:9"|"2.35:1", ground?:{visible,opacity}, panoramaAssetId?, panoramaRotation?, clearPanorama?}
 - read_object {target} —— 读回物体完整参数（含骨骼角度）
 - capture {camera?} —— 用该摄像机截图，存入素材库并写回关联分镜草图

@@ -1,10 +1,10 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import type { Group } from "three";
-import { snapTransform } from "@/lib/director/gridSnap";
+import type { Group, Texture } from "three";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
 import { aspectRatioToNumber } from "@/lib/director/aspectRatio";
+import { useColorMapTexture } from "@/lib/director/useColorMapTexture";
 import type { DirectorObject, DirectorTransformMode } from "@/types/director-scene";
 import { DoubleSide } from "three";
 import { DirectorCameraProp } from "./DirectorCameraProp";
@@ -13,25 +13,66 @@ import { DirectorMannequinModel, isMannequinBuiltinModel } from "./DirectorManne
 import { DirectorObjectHeadLabel } from "./DirectorObjectHeadLabel";
 import { useDirectorTransformRegistry } from "./directorTransformRegistry";
 
-function CapsulePlaceholder({ color }: { color: string }) {
+/** 造具有贴图时用不受光材质，否则 MeshStandard 在暗光下会把彩色图打成灰白 */
+function PropMaterial({
+  color,
+  colorMap,
+  roughness = 0.55,
+  metalness = 0.05,
+  side,
+}: {
+  color: string;
+  colorMap: Texture | null;
+  roughness?: number;
+  metalness?: number;
+  side?: typeof DoubleSide;
+}) {
+  if (colorMap) {
+    return (
+      <meshBasicMaterial
+        key={colorMap.uuid}
+        map={colorMap}
+        color="#ffffff"
+        toneMapped={false}
+        side={side}
+      />
+    );
+  }
+  return (
+    <meshStandardMaterial
+      color={color}
+      roughness={roughness}
+      metalness={metalness}
+      side={side}
+    />
+  );
+}
+
+function CapsulePlaceholder({ color, map }: { color: string; map?: Texture | null }) {
   return (
     <>
       <capsuleGeometry args={[0.35, 1.2, 8, 16]} />
-      <meshStandardMaterial color={color} roughness={0.55} metalness={0.05} />
+      <PropMaterial color={color} colorMap={map ?? null} />
     </>
   );
 }
 
-function ShapeGeometry({ object }: { object: DirectorObject }) {
+function ShapeGeometry({
+  object,
+  colorMap,
+}: {
+  object: DirectorObject;
+  colorMap: Texture | null;
+}) {
   const { shape, color } = object;
   if (shape === "capsule" || (object.kind === "character" && shape === "model")) {
-    return <CapsulePlaceholder color={color} />;
+    return <CapsulePlaceholder color={color} map={colorMap} />;
   }
   if (shape === "sphere") {
     return (
       <>
         <sphereGeometry args={[0.5, 24, 24]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
+        <PropMaterial color={color} colorMap={colorMap} />
       </>
     );
   }
@@ -39,7 +80,7 @@ function ShapeGeometry({ object }: { object: DirectorObject }) {
     return (
       <>
         <cylinderGeometry args={[0.4, 0.4, 1, 24]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
+        <PropMaterial color={color} colorMap={colorMap} />
       </>
     );
   }
@@ -47,7 +88,7 @@ function ShapeGeometry({ object }: { object: DirectorObject }) {
     return (
       <>
         <coneGeometry args={[0.5, 1, 24]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
+        <PropMaterial color={color} colorMap={colorMap} />
       </>
     );
   }
@@ -55,14 +96,14 @@ function ShapeGeometry({ object }: { object: DirectorObject }) {
     return (
       <>
         <planeGeometry args={[2, 2]} />
-        <meshStandardMaterial color={color} roughness={0.6} metalness={0.05} side={DoubleSide} />
+        <PropMaterial color={color} colorMap={colorMap} side={DoubleSide} />
       </>
     );
   }
   return (
     <>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={color} roughness={0.6} metalness={0.05} />
+      <PropMaterial color={color} colorMap={colorMap} roughness={0.6} />
     </>
   );
 }
@@ -77,6 +118,7 @@ export function DirectorSceneObject({
   gridSnap = false,
   showLabel = false,
   modelUrl = null,
+  colorMapUrl = null,
   aspectRatio = "16:9",
   onSelect,
   onBonePoseChange,
@@ -91,6 +133,8 @@ export function DirectorSceneObject({
   gridSnap?: boolean;
   showLabel?: boolean;
   modelUrl?: string | null;
+  /** 模型颜色贴图 URL（对应 colorMapAssetId） */
+  colorMapUrl?: string | null;
   aspectRatio?: string;
   onSelect: (id: string) => void;
   onBonePoseChange?: (id: string, bone: string, rotation: [number, number, number]) => void;
@@ -104,6 +148,11 @@ export function DirectorSceneObject({
   // 人物与 GLB 模型道具都可渲染 GLB（道具归一化高度 1 米 × modelScale）
   const useGlb = !isCamera && Boolean(modelUrl) && !useMannequin;
   const cameraAspect = aspectRatioToNumber(aspectRatio as Parameters<typeof aspectRatioToNumber>[0]);
+  // 仅基础造具加载贴图；人模 / 角色 GLB 忽略 colorMapUrl
+  const allowColorMap =
+    object.kind === "prop" &&
+    ["box", "sphere", "cylinder", "cone", "plane"].includes(object.shape);
+  const colorMap = useColorMapTexture(allowColorMap ? colorMapUrl : null);
 
   const syncGroupTransform = (group: Group) => {
     group.position.set(...transform.position);
@@ -173,10 +222,16 @@ export function DirectorSceneObject({
               directorObjectId={object.id}
               scaleMultiplier={object.modelScale ?? 1}
               targetHeight={object.kind === "character" ? undefined : 1}
+              color={object.color}
             />
           ) : (
-            <mesh castShadow receiveShadow userData={{ directorObjectId: object.id }}>
-              <ShapeGeometry object={object} />
+            <mesh
+              key={colorMap ? `tex-${colorMap.uuid}` : "solid"}
+              castShadow={!colorMap}
+              receiveShadow={!colorMap}
+              userData={{ directorObjectId: object.id }}
+            >
+              <ShapeGeometry object={object} colorMap={allowColorMap ? colorMap : null} />
             </mesh>
           )}
         </group>

@@ -128,6 +128,28 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     [assets]
   );
 
+  /** 刚上传的贴图 URL（manifest 刷新前也能立刻喂给 3D） */
+  const [colorMapUrlOverrides, setColorMapUrlOverrides] = useState<Record<string, string>>({});
+
+  /** 仅基础造具（立方体/球/柱/锥/面）可用贴图；人模与摄像机不加贴图 */
+  const objectSupportsColorMap = useCallback((object: DirectorObject) => {
+    if (object.kind !== "prop") return false;
+    return ["box", "sphere", "cylinder", "cone", "plane"].includes(object.shape);
+  }, []);
+
+  /** 造具颜色贴图：优先用上传即时 URL，再查项目资产 */
+  const resolveColorMapUrl = useCallback(
+    (object: DirectorObject) => {
+      if (!objectSupportsColorMap(object)) return null;
+      const override = colorMapUrlOverrides[object.id];
+      if (override) return override;
+      const id = object.colorMapAssetId;
+      if (!id) return null;
+      return lookupAsset(assets, id)?.fileUrl ?? null;
+    },
+    [assets, colorMapUrlOverrides, objectSupportsColorMap]
+  );
+
   const [scene, setScene] = useState<DirectorSceneState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -140,6 +162,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [trackPlaying, setTrackPlaying] = useState(false);
   const [cameraPropViewMode, setCameraPropViewMode] = useState<CameraPropViewMode>("thirdPerson");
   const [uploadingModel, setUploadingModel] = useState(false);
+  const [uploadingColorMap, setUploadingColorMap] = useState(false);
   const [uiFullscreen, setUiFullscreen] = useState(false);
   /** 取景框三分线 / 中心十字构图辅助 */
   const [showGuides, setShowGuides] = useState(false);
@@ -564,7 +587,21 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const setLightingPreset = useCallback(
     (preset: LightingPresetId) => {
-      patchScene((prev) => ({ ...prev, lighting: { preset } }));
+      patchScene((prev) => ({
+        ...prev,
+        lighting: { ...prev.lighting, preset },
+      }));
+    },
+    [patchScene]
+  );
+
+  /** 调节灯组水平角 / 俯仰，与预设叠加 */
+  const patchLightingAngles = useCallback(
+    (patch: { yawDeg?: number; pitchDeg?: number }) => {
+      patchScene((prev) => ({
+        ...prev,
+        lighting: { ...prev.lighting, ...patch },
+      }));
     },
     [patchScene]
   );
@@ -1029,6 +1066,50 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (color: string) => updateSelectedObjectField({ color }),
     [updateSelectedObjectField]
   );
+
+  /** 上传图片作为当前造具贴图（人模不可用） */
+  const handleColorMapUpload = useCallback(
+    async (file: File) => {
+      if (!projectId || !selectedObject || !objectSupportsColorMap(selectedObject)) {
+        toast.error("仅立方体 / 球体 / 圆柱 / 圆锥 / 平面可上传贴图");
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        toast.error("请选择图片文件");
+        return;
+      }
+      setUploadingColorMap(true);
+      try {
+        const asset = await uploadAsset({
+          file,
+          projectId,
+          category: "image",
+          subcategory: NODE_IMAGE_SUBCATEGORY,
+          title: `${selectedObject.name}-贴图`,
+        });
+        // 立刻挂上 fileUrl，不等 manifest 刷新（否则 3D 侧 colorMapUrl 为空）
+        setColorMapUrlOverrides((prev) => ({ ...prev, [selectedObject.id]: asset.fileUrl }));
+        updateSelectedObjectField({ colorMapAssetId: asset.id });
+        toast.success("造具贴图已上传");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "贴图上传失败");
+      } finally {
+        setUploadingColorMap(false);
+      }
+    },
+    [objectSupportsColorMap, projectId, selectedObject, updateSelectedObjectField]
+  );
+
+  const clearObjectColorMap = useCallback(() => {
+    if (selectedObjectId) {
+      setColorMapUrlOverrides((prev) => {
+        const next = { ...prev };
+        delete next[selectedObjectId];
+        return next;
+      });
+    }
+    updateSelectedObjectField({ colorMapAssetId: undefined });
+  }, [selectedObjectId, updateSelectedObjectField]);
 
   const updateCameraLookAtMode = useCallback(
     (lookAtMode: "manual" | "target") => {
@@ -1552,6 +1633,20 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                       object={selectedObject}
                       onNameChange={(name) => updateSelectedObjectField({ name })}
                       onColorChange={setObjectColor}
+                      onColorMapFile={
+                        objectSupportsColorMap(selectedObject)
+                          ? (file) => void handleColorMapUpload(file)
+                          : undefined
+                      }
+                      onColorMapClear={
+                        objectSupportsColorMap(selectedObject) ? clearObjectColorMap : undefined
+                      }
+                      colorMapPreviewUrl={
+                        objectSupportsColorMap(selectedObject)
+                          ? resolveColorMapUrl(selectedObject)
+                          : null
+                      }
+                      colorMapUploading={uploadingColorMap}
                       onPositionChange={setObjectPositionAxis}
                       onRotationChange={setObjectRotationAxis}
                       onScaleChange={setObjectScaleAxis}
@@ -1585,11 +1680,12 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               ) : sceneTab === "light" ? (
                 <PanelSection title="布光预设">
                   <DirectorLightingCards
-                    value={scene.lighting.preset}
-                    onChange={(id: LightingPresetId) => setLightingPreset(id)}
+                    lighting={scene.lighting}
+                    onPresetChange={(id: LightingPresetId) => setLightingPreset(id)}
+                    onAngleChange={patchLightingAngles}
                   />
                   <p className="text-[10px] leading-relaxed text-white/30">
-                    光斑位置即灯位投影；也可以对 AI 导演说「换成逆光剪影」。
+                    光斑示意灯位；下方可调水平角与俯仰。也可对 AI 导演说「换成黄金时刻」。
                   </p>
                 </PanelSection>
               ) : (
@@ -1690,6 +1786,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             }}
             onBonePoseChange={handleBonePoseChange}
             resolveCharacterModelUrl={resolveCharacterModelUrl}
+            resolveColorMapUrl={resolveColorMapUrl}
           />
         ) : null}
       </div>

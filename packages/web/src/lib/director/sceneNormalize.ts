@@ -4,6 +4,7 @@ import { createDefaultDirectorScene, DEFAULT_DIRECTOR_SCENE_SETTINGS } from "@/t
 import { createDefaultCameraTrack } from "@/lib/director/cameraTrack";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
 import { rotationFromPositionLookAt } from "@/lib/director/shotPreview";
+import { normalizeLightingState } from "@/lib/director/lightingPresets";
 
 function reconcileCameraObject(obj: DirectorObject): DirectorObject {
   if (obj.kind !== "camera") return obj;
@@ -112,9 +113,7 @@ export function normalizeDirectorScene(raw: unknown): DirectorSceneState {
     shotCameras: Array.isArray(data.shotCameras) ? data.shotCameras : [],
     viewMode: data.viewMode === "shot" ? "shot" : "director",
     activeShotCameraId: data.activeShotCameraId ?? null,
-    lighting: {
-      preset: data.lighting?.preset ?? "classic_three_point",
-    },
+    lighting: normalizeLightingState(data.lighting),
     cameraTrack: data.cameraTrack ?? null,
     sceneSettings: {
       ...DEFAULT_DIRECTOR_SCENE_SETTINGS,
