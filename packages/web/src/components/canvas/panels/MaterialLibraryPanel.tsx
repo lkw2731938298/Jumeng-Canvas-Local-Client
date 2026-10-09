@@ -2,7 +2,15 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Image as ImageIcon, Sparkles, Type, UserRound, X } from "lucide-react";
+import {
+  Film,
+  Image as ImageIcon,
+  LayoutTemplate,
+  Sparkles,
+  Type,
+  UserRound,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
 import {
@@ -16,6 +24,7 @@ import {
   type MaterialLibraryCategory,
   type MaterialLibraryItem,
 } from "@/lib/api/materialLibrary";
+import { importProjectPackIntoCurrent } from "@/lib/canvas/projectPack";
 import { ensureHttpsOssUrl } from "@/lib/signedUrl";
 import {
   PROMPT_LIBRARY_FILTER_ALL,
@@ -33,10 +42,11 @@ const TABS: {
   { key: "effect", label: "特效库", icon: <Film className="h-3.5 w-3.5" /> },
   { key: "character", label: "角色库", icon: <UserRound className="h-3.5 w-3.5" /> },
   { key: "prompt", label: "提示词库", icon: <Type className="h-3.5 w-3.5" /> },
+  { key: "template", label: "模板库", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
 ];
 
 /**
- * 画布左侧「素材库」面板：风格 / 特效 / 角色 / 提示词只读选用（上传仅管理后台）。
+ * 画布左侧「素材库」面板：风格 / 特效 / 角色 / 提示词 / 模板只读选用（上传仅管理后台）。
  */
 export function MaterialLibraryPanel({
   isOpen,
@@ -47,6 +57,7 @@ export function MaterialLibraryPanel({
 }) {
   const [tab, setTab] = useState<MaterialLibraryCategory>("style");
   const [promptFilter, setPromptFilter] = useState<PromptLibraryFilterId>(PROMPT_LIBRARY_FILTER_ALL);
+  const [importingId, setImportingId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: materialLibraryKey(tab),
@@ -66,8 +77,57 @@ export function MaterialLibraryPanel({
   );
   const loading = isOpen && (isLoading || isFetching) && items.length === 0;
 
+  /** 模板库：下载 zip 后合并导入当前项目，锚点为视口中心 */
+  const handleImportTemplate = useCallback(
+    async (item: MaterialLibraryItem) => {
+      const url = ensureHttpsOssUrl(item.packageUrl || "") || item.packageUrl;
+      if (!url) {
+        toast.error("该模板缺少压缩包地址");
+        return;
+      }
+      if (!useCanvasStore.getState().projectId) {
+        toast.error("请先打开项目");
+        return;
+      }
+      setImportingId(item.id);
+      const toastId = toast.loading(`正在导入模板「${item.title}」…`);
+      try {
+        // 经本机代拉，避开浏览器直连 OSS 的 CORS
+        const proxy = `/api/local/fetch-media?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxy);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(
+            (errBody as { error?: string }).error || `下载模板失败（${res.status}）`
+          );
+        }
+        const buf = await res.arrayBuffer();
+        const file = new File([buf], `${item.title || "template"}.zip`, {
+          type: "application/zip",
+        });
+        const result = await importProjectPackIntoCurrent(file, {
+          anchorFlow: viewportCenterFlowPosition(
+            useCanvasStore.getState().viewport,
+            useCanvasStore.getState().flowPaneSize
+          ),
+        });
+        toast.success(`已导入「${item.title}」（${result.nodeCount} 个节点）`, { id: toastId });
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "导入模板失败", { id: toastId });
+      } finally {
+        setImportingId(null);
+      }
+    },
+    [onClose]
+  );
+
   const handleSelect = useCallback(
     (item: MaterialLibraryItem) => {
+      if (item.category === "template" || tab === "template") {
+        void handleImportTemplate(item);
+        return;
+      }
       const store = useCanvasStore.getState();
       // 提示词库落可编辑文本节点；其它按媒体类型落图/视频节点
       const nodeType = libraryNodeTypeForItem(item);
@@ -82,7 +142,7 @@ export function MaterialLibraryPanel({
       toast.success(`已添加「${item.title}」`);
       onClose();
     },
-    [onClose]
+    [onClose, tab, handleImportTemplate]
   );
 
   if (!isOpen) return null;
@@ -92,7 +152,9 @@ export function MaterialLibraryPanel({
       ? "视频特效落视频节点（可连 Seedance 2.0）；GIF/WebP 动图落图节点作参考"
       : tab === "prompt"
         ? "选择后落可编辑文本节点（可连图片/视频节点作参考）"
-        : "选择后落图片节点（无上下弹窗，可连图片/视频节点作参考）";
+        : tab === "template"
+          ? "点击模板：将工程包合并导入当前画布，内容落在视口中心"
+          : "选择后落图片节点（无上下弹窗，可连图片/视频节点作参考）";
 
   return (
     <>
@@ -159,8 +221,13 @@ export function MaterialLibraryPanel({
                     key={item.id}
                     type="button"
                     onClick={() => handleSelect(item)}
-                    className="group flex flex-col overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] text-left transition-colors hover:border-purple-400/40"
-                    title={`添加「${item.title}」到画布`}
+                    disabled={importingId === item.id}
+                    className="group flex flex-col overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] text-left transition-colors hover:border-purple-400/40 disabled:opacity-50"
+                    title={
+                      tab === "template"
+                        ? `导入模板「${item.title}」到当前画布`
+                        : `添加「${item.title}」到画布`
+                    }
                   >
                     {/* 封面统一 1:1；提示词库横竖图 object-contain 适应 */}
                     <div className="relative aspect-square overflow-hidden bg-black/30">

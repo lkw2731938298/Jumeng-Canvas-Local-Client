@@ -30,7 +30,13 @@ export function getLibraryCategory(
   params: Record<string, unknown> | undefined | null
 ): MaterialLibraryCategory | null {
   const raw = String(params?.[LIBRARY_PARAM_CATEGORY] ?? "");
-  if (raw === "style" || raw === "effect" || raw === "character" || raw === "prompt") {
+  if (
+    raw === "style" ||
+    raw === "effect" ||
+    raw === "character" ||
+    raw === "prompt" ||
+    raw === "template"
+  ) {
     return raw;
   }
   return null;

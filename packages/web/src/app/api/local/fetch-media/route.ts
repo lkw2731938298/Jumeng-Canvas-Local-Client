@@ -8,8 +8,8 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** 单个参考素材上限，与聚梦官方文件上传的视频上限一致 */
-const MAX_BYTES = 100 * 1024 * 1024;
+/** 单个代拉上限：覆盖参考视频与模板工程包（≤200MB） */
+const MAX_BYTES = 200 * 1024 * 1024;
 
 /** 内网 / 回环地址：禁止代拉，避免把本机服务当跳板（SSRF） */
 function isPrivateOrLocalHostname(host: string): boolean {
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
     const upstream = await fetch(parsed.toString(), {
       method: "GET",
       redirect: "follow",
-      headers: { Accept: "image/*,video/*,*/*" },
+      headers: { Accept: "image/*,video/*,application/zip,application/octet-stream,*/*" },
     });
     if (!upstream.ok) {
       const peek = await upstream.text().catch(() => "");

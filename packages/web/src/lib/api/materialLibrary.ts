@@ -1,6 +1,11 @@
-/** 平台素材库：请求官网中继站公开 API（风格 / 特效 / 角色 / 提示词） */
+/** 平台素材库：请求官网中继站公开 API（风格 / 特效 / 角色 / 提示词 / 模板） */
 
-export type MaterialLibraryCategory = "style" | "effect" | "character" | "prompt";
+export type MaterialLibraryCategory =
+  | "style"
+  | "effect"
+  | "character"
+  | "prompt"
+  | "template";
 
 /** 提示词库二级分类（后台可配置） */
 export interface PromptLibraryCategory {
@@ -17,6 +22,8 @@ export interface MaterialLibraryItem {
   mediaType: "image" | "video";
   ossKey: string;
   mediaUrl: string;
+  /** 模板库：本地画布导出 zip 公开直链；其它类别为空 */
+  packageUrl?: string;
   /** 提示词库正文；其它类别为空 */
   promptText?: string;
   /** 提示词库二级分类；未分类为空 */
