@@ -6,6 +6,7 @@
 import { resolveNodeRef } from "@/lib/canvas/projectAgentCanvasOps";
 import { resolveAgentNodePosition } from "@/lib/canvas/agentPlaceNode";
 import { setDocumentLinkPreviewNodeId } from "@/lib/canvas/documentLinkPreview";
+import { uploadAsset } from "@/lib/api/assets";
 import type { LocalChatToolCall } from "@/lib/local/generate";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { LocalAgentOpResult } from "../executor";
@@ -371,6 +372,29 @@ export async function applyWebCreatePage(
   }
 
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+  const fileName = `${title.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 40) || "page"}.html`;
+
+  // 同步写入项目「资产 → 文档」，便于素材库下载与复用
+  let assetId = "";
+  let fileUrl = "";
+  let assetNote = "";
+  if (projectId) {
+    try {
+      const file = new File([html], fileName, { type: "text/html;charset=utf-8" });
+      const asset = await uploadAsset({
+        file,
+        projectId,
+        category: "document",
+        title: title || "AI 网页",
+      });
+      assetId = asset.id;
+      fileUrl = asset.fileUrl;
+      assetNote = "，已存入资产文档";
+    } catch (err) {
+      assetNote = `（资产入库失败：${err instanceof Error ? err.message : String(err)}）`;
+    }
+  }
+
   useCanvasStore.getState().updateNodeData(nodeId, {
     label: title || String(node?.data?.label || "网页"),
     params: {
@@ -378,9 +402,9 @@ export async function applyWebCreatePage(
       resourceKind: "html",
       htmlContent: html,
       linkUrl: "",
-      fileUrl: "",
-      fileName: `${title.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 40) || "page"}.html`,
-      assetId: "",
+      fileUrl,
+      fileName,
+      assetId,
     },
   });
   useCanvasStore.getState().scheduleAutoSave();
@@ -392,8 +416,8 @@ export async function applyWebCreatePage(
     op: call.name,
     ok: true,
     message: openPreview
-      ? `已写入 HTML 并打开预览（约 ${Math.round(html.length / 1024)} KB${embedNote}）`
-      : `已写入 HTML（约 ${Math.round(html.length / 1024)} KB${embedNote}）`,
+      ? `已写入 HTML 并打开预览（约 ${Math.round(html.length / 1024)} KB${embedNote}${assetNote}）`
+      : `已写入 HTML（约 ${Math.round(html.length / 1024)} KB${embedNote}${assetNote}）`,
     nodeId,
   };
 }

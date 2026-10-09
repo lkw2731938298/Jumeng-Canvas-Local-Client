@@ -1,6 +1,6 @@
 {
   "name": "jumeng-canvas-monorepo",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "聚梦无限画布 · 本地版",
   "appId": "com.lieka.jumengcanvas",
@@ -19,10 +19,7 @@
     "desktop": "node scripts/start-browser.mjs",
     "desktop:electron": "npm run start -w @jumeng-canvas/desktop",
     "dist:win": "node scripts/dist-win.mjs",
-    "prepare:desktop": "node scripts/prepare-desktop-resources.mjs",
-    "editor": "node scripts/opencut-dev.mjs",
-    "editor:install": "node scripts/opencut-sync-and-install.mjs",
-    "editor:sync": "node scripts/opencut-sync-back.mjs"
+    "prepare:desktop": "node scripts/prepare-desktop-resources.mjs"
   },
   "devDependencies": {
     "electron": "^33.2.1",

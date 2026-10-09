@@ -17,6 +17,8 @@ export const DOCUMENT_EXTENSIONS = [
   "pptx",
   "md",
   "txt",
+  "html",
+  "htm",
   "key",
   "pages",
   "numbers",
@@ -33,6 +35,8 @@ export const DOCUMENT_FILE_ACCEPT = [
   ".pptx",
   ".md",
   ".txt",
+  ".html",
+  ".htm",
   ".key",
   ".pages",
   ".numbers",
@@ -46,6 +50,8 @@ export const DOCUMENT_FILE_ACCEPT = [
   "text/plain",
   "text/markdown",
   "text/x-markdown",
+  "text/html",
+  "application/xhtml+xml",
   "application/vnd.apple.keynote",
   "application/x-iwork-keynote-sffkey",
   "application/vnd.apple.pages",
@@ -55,7 +61,7 @@ export const DOCUMENT_FILE_ACCEPT = [
 ].join(",");
 
 export const DOCUMENT_FORMAT_HINT =
-  "支持 doc/docx、xls/xlsx、ppt/pptx、pdf、md、txt、key、pages、numbers；单文件≤100MB、≤50页；网页请用「网址」";
+  "支持 doc/docx、xls/xlsx、ppt/pptx、pdf、md、txt、html、key、pages、numbers；单文件≤100MB、≤50页；网页请用「网址」";
 
 const DOCUMENT_EXT_SET = new Set<string>(DOCUMENT_EXTENSIONS);
 
@@ -68,6 +74,8 @@ const DOCUMENT_MIME_PREFIXES = [
   "text/plain",
   "text/markdown",
   "text/x-markdown",
+  "text/html",
+  "application/xhtml+xml",
   "application/vnd.apple.",
   "application/x-iwork-",
 ] as const;

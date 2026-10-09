@@ -2,8 +2,9 @@
 
 .la-fab {
   position: fixed;
-  right: 1rem;
-  bottom: 72px;
+  /* 与右下角缩放/更多工具条并排，避免「更多工具」向上展开时叠在按钮上 */
+  right: max(16.5rem, calc(1rem + 280px));
+  bottom: 1rem;
   z-index: 50;
   display: flex;
   height: 3rem;
@@ -73,7 +74,8 @@
 .la-shell {
   position: fixed;
   right: 1rem;
-  bottom: 128px;
+  /* 浮在底部工具条之上，与 FAB 错开，不挡「更多工具」面板 */
+  bottom: calc(1rem + 3.25rem + 0.75rem);
   z-index: 50;
   display: flex;
   height: min(620px, calc(100vh - 160px));
@@ -523,4 +525,15 @@
   border-radius: 0.75rem;
   background: var(--popover);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+/* 窄屏：工具条变挤时，助手改到工具条正上方并留出「更多」展开高度 */
+@media (max-width: 900px) {
+  .la-fab {
+    right: 1rem;
+    bottom: 12.5rem;
+  }
+  .la-shell {
+    bottom: calc(12.5rem + 3.25rem + 0.5rem);
+  }
 }

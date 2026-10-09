@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { NodeProps } from "@xyflow/react";
 import {
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -54,6 +55,26 @@ function isLikelyHttpUrl(raw: string): boolean {
 function openInNewTab(url: string) {
   if (typeof window === "undefined") return;
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/** 触发浏览器下载（文本 / Blob URL） */
+function triggerBrowserDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "download";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+}
+
+async function downloadFromUrl(url: string, fileName: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`);
+  const blob = await res.blob();
+  triggerBrowserDownload(blob, fileName);
 }
 
 /** 画布文档/链接节点：上传多格式文档（单文件），或填写网页网址并内嵌预览 */
@@ -264,6 +285,35 @@ export const DocumentInputNode = memo(function DocumentInputNode(props: NodeProp
     setDocumentLinkPreviewNodeId(nodeId);
   }, [resourceKind, htmlContent, linkUrl, linkDraft, previewOpen, nodeId, commitLink]);
 
+  /** 下载节点内文档：HTML 优先用内存内容；文件走 fileUrl */
+  const handleDownload = useCallback(async () => {
+    try {
+      if (resourceKind === "html") {
+        if (!htmlContent) {
+          toast.message("还没有可下载的 HTML");
+          return;
+        }
+        const name = fileName || "page.html";
+        triggerBrowserDownload(
+          new Blob([htmlContent], { type: "text/html;charset=utf-8" }),
+          name.endsWith(".html") || name.endsWith(".htm") ? name : `${name}.html`,
+        );
+        return;
+      }
+      if (resourceKind === "file") {
+        if (!fileUrl) {
+          toast.message("请先上传文档");
+          return;
+        }
+        await downloadFromUrl(fileUrl, fileName || "document");
+        return;
+      }
+      toast.message("网址模式请用「新标签」打开");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "下载失败");
+    }
+  }, [resourceKind, htmlContent, fileName, fileUrl]);
+
   const displayTitle = useMemo(() => {
     if (resourceKind === "link") return linkUrl || "未填写网址";
     if (resourceKind === "html") return fileName || (htmlContent ? "本地 HTML 预览" : "未生成网页");
@@ -328,19 +378,31 @@ export const DocumentInputNode = memo(function DocumentInputNode(props: NodeProp
               {displayTitle}
             </p>
             <p className="text-[10px] leading-snug text-white/35">{DOCUMENT_FORMAT_HINT}</p>
-            <button
-              type="button"
-              className="nodrag nopan mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
-              onClick={handleUpload}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Upload className="h-3.5 w-3.5" />
-              )}
-              {fileUrl ? "重新上传" : "上传文档"}
-            </button>
+            <div className="mt-auto flex shrink-0 gap-1">
+              <button
+                type="button"
+                className="nodrag nopan inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-[11px] text-white/80 hover:bg-white/10"
+                onClick={handleUpload}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                {fileUrl ? "重新上传" : "上传文档"}
+              </button>
+              <button
+                type="button"
+                className="nodrag nopan inline-flex items-center justify-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-[11px] text-white/80 hover:bg-white/10 disabled:opacity-40"
+                onClick={() => void handleDownload()}
+                disabled={!fileUrl}
+                title="下载文档"
+              >
+                <Download className="h-3.5 w-3.5" />
+                下载
+              </button>
+            </div>
             <input
               ref={inputRef}
               type="file"
@@ -369,6 +431,16 @@ export const DocumentInputNode = memo(function DocumentInputNode(props: NodeProp
               >
                 {previewOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 {previewOpen ? "关闭预览" : "预览"}
+              </button>
+              <button
+                type="button"
+                className="nodrag nopan inline-flex items-center justify-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-[11px] text-white/80 hover:bg-white/10 disabled:opacity-40"
+                onClick={() => void handleDownload()}
+                disabled={!htmlContent}
+                title="下载 HTML 文件"
+              >
+                <Download className="h-3.5 w-3.5" />
+                下载
               </button>
             </div>
             {previewOpen && htmlContent ? (

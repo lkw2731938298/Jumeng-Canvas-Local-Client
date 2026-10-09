@@ -490,10 +490,25 @@ async function startNextDevIfNeeded() {
   return wrapChild(child);
 }
 
+function resolveAppIconPath() {
+  // 打包态：extraResources 的 icon.ico；开发态：本地 build/icon.ico
+  const candidates = [
+    path.join(process.resourcesPath || "", "icon.ico"),
+    path.join(__dirname, "build", "icon.ico"),
+    path.join(__dirname, "icon.ico"),
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return undefined;
+}
+
 function showBootWindow() {
+  const icon = resolveAppIconPath();
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

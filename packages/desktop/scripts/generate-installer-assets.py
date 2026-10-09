@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""从官网品牌图生成 Windows 图标与 NSIS 安装界面素材。
+"""从画布顶栏品牌图 public/brand/logo.png 生成 Windows 图标与 NSIS 安装界面素材。
 
 输出到 packages/desktop/build/：
-- icon.ico / icon.png
+- icon.ico / icon.png（exe / 快捷方式 / 安装目录图标）
 - installerSidebar.bmp / uninstallerSidebar.bmp（164×314）
 - installerHeader.bmp（150×57）
 """
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
@@ -15,6 +16,8 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
 SRC = BUILD / "brand-source.png"
+# 与 JmBrandMark 同源：packages/web/public/brand/logo.png
+WEB_LOGO = ROOT.parent / "web" / "public" / "brand" / "logo.png"
 
 # 品牌色（与 logo 红橙黄渐变一致）
 BG = (12, 12, 14, 255)
@@ -77,18 +80,19 @@ def make_square_icon(brand: Image.Image, size: int) -> Image.Image:
 
 
 def write_ico(brand: Image.Image) -> None:
+    """写入多尺寸 ICO（Windows 资源管理器 / 快捷方式需要完整尺寸集）。"""
     sizes = [16, 24, 32, 48, 64, 128, 256]
-    imgs = [make_square_icon(brand, s) for s in sizes]
+    imgs = [make_square_icon(brand, s).convert("RGBA") for s in sizes]
     ico_path = BUILD / "icon.ico"
+    # 以最大图为主，其余作为 ICO 内嵌尺寸
     imgs[-1].save(
         ico_path,
         format="ICO",
         sizes=[(s, s) for s in sizes],
         append_images=imgs[:-1],
     )
-    # electron-builder 也会读 png
     imgs[-1].save(BUILD / "icon.png", format="PNG")
-    print(f"[ok] {ico_path}")
+    print(f"[ok] {ico_path} sizes={sizes}")
 
 
 def vertical_gradient(size: tuple[int, int], top, mid, bot) -> Image.Image:
@@ -197,8 +201,17 @@ def make_header(brand: Image.Image) -> Image.Image:
     return im
 
 
-def main() -> None:
+def sync_brand_source() -> None:
+    """用画布 /brand/logo.png 覆盖 build/brand-source.png。"""
     BUILD.mkdir(parents=True, exist_ok=True)
+    if not WEB_LOGO.is_file():
+        raise FileNotFoundError(f"缺少画布品牌图: {WEB_LOGO}")
+    shutil.copy2(WEB_LOGO, SRC)
+    print(f"[ok] brand-source ← {WEB_LOGO}")
+
+
+def main() -> None:
+    sync_brand_source()
     brand = load_brand()
     write_ico(brand)
     sidebar = make_sidebar(brand)

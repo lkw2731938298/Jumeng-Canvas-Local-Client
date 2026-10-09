@@ -12,6 +12,8 @@ import {
   RGBADepthPacking,
   Scene,
   ShaderMaterial,
+  SRGBColorSpace,
+  UnsignedByteType,
   Vector3,
   WebGLRenderTarget,
   type Material,
@@ -169,16 +171,25 @@ function restoreMaterials(cache: MaterialCache) {
 
 const captureTargetCache = new WeakMap<WebGLRenderer, Map<string, WebGLRenderTarget>>();
 
+/** 与屏幕预览一致：捕获 RT 使用 sRGB，避免 PNG 中光色偏暗 */
+function createDisplayRenderTarget(width: number, height: number): WebGLRenderTarget {
+  return new WebGLRenderTarget(width, height, {
+    type: UnsignedByteType,
+    colorSpace: SRGBColorSpace,
+  });
+}
+
 function getCaptureRenderTarget(gl: WebGLRenderer, width: number, height: number): WebGLRenderTarget {
   let pool = captureTargetCache.get(gl);
   if (!pool) {
     pool = new Map();
     captureTargetCache.set(gl, pool);
   }
-  const key = `${width}x${height}`;
+  // 键含 srgb，避免复用旧的线性 RT
+  const key = `${width}x${height}:srgb`;
   let rt = pool.get(key);
   if (!rt) {
-    rt = new WebGLRenderTarget(width, height);
+    rt = createDisplayRenderTarget(width, height);
     pool.set(key, rt);
   }
   return rt;
@@ -263,7 +274,7 @@ function renderMaterialPass(
   mapPixel?: (r: number, g: number, b: number, a: number) => [number, number, number, number]
 ): string {
   const cache: MaterialCache = new Map();
-  const rt = new WebGLRenderTarget(width, height);
+  const rt = createDisplayRenderTarget(width, height);
   swapMaterials(scene, factory, cache);
 
   const prevTarget = gl.getRenderTarget();
@@ -306,7 +317,7 @@ function renderSegmentationPass(
     meshIdx += 1;
   });
 
-  const rt = new WebGLRenderTarget(width, height);
+  const rt = createDisplayRenderTarget(width, height);
   const prevTarget = gl.getRenderTarget();
   gl.setRenderTarget(rt);
   gl.clear(true, true, true);
@@ -403,7 +414,8 @@ function renderOpenPosePass(
 }
 
 export function buildPerspectiveCamera(state: DirectorCameraState, aspect: number): PerspectiveCamera {
-  const cam = new PerspectiveCamera(state.fov, aspect, 0.1, 200);
+  // far 与直播视口对齐，避免全景/远景被裁切导致画面发黑发空
+  const cam = new PerspectiveCamera(state.fov, aspect, 0.1, 1500);
   cam.position.set(...state.position);
   cam.lookAt(...state.target);
   cam.layers.set(0);

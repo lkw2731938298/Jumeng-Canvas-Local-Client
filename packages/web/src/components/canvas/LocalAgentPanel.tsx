@@ -553,11 +553,11 @@ export function LocalAgentPanel({ projectId }: { projectId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="la-fab"
-        title="AI 助手"
-        aria-label="AI 助手"
+        title="画布助手"
+        aria-label="画布助手"
       >
         <span className="la-fab-icon">{open ? <X className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}</span>
-        <span className="la-fab-label">{open ? "收起" : "助手"}</span>
+        <span className="la-fab-label">{open ? "收起" : "画布助手"}</span>
         {busy && !open ? <span className="la-fab-pulse" /> : null}
       </button>
 

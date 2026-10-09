@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { X, Upload, Trash2, Image, Video, Music, FileText } from "lucide-react";
+import { X, Upload, Trash2, Image, Video, Music, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { AssetThumbnail, assetDragPreviewElement } from "@/components/canvas/panels/AssetThumbnail";
@@ -131,6 +131,35 @@ export function AssetPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     }
   };
 
+  /** 从资产面板下载文件（文档 HTML 等） */
+  const handleDownloadAsset = async (a: Asset) => {
+    try {
+      if (!a.fileUrl) {
+        toast.message("该素材无可下载地址");
+        return;
+      }
+      const res = await fetch(a.fileUrl);
+      if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ext =
+        a.fileType?.includes("html") || /\.html?$/i.test(a.title)
+          ? ".html"
+          : "";
+      const name = /\.[a-z0-9]+$/i.test(a.title) ? a.title : `${a.title || "asset"}${ext}`;
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = name;
+      el.rel = "noopener";
+      document.body.appendChild(el);
+      el.click();
+      el.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "下载失败");
+    }
+  };
+
   const acceptTypes = FILE_ACCEPT[category] || "";
 
   if (!isOpen) return null;
@@ -225,12 +254,26 @@ export function AssetPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                     <div className="aspect-square flex items-center justify-center bg-black/20 pointer-events-none overflow-hidden">
                       <AssetThumbnail asset={a} />
                     </div>
-                    <div className="flex items-center justify-between px-1.5 py-1">
+                    <div className="flex items-center justify-between gap-0.5 px-1.5 py-1">
                       <span className="text-[10px] text-white/60 truncate flex-1">{a.title}</span>
                       <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDownloadAsset(a);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="text-white/15 hover:text-white/70 opacity-0 group-hover:opacity-100 transition-all"
+                        title="下载"
+                      >
+                        <Download className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDelete(a.id)}
                         onMouseDown={(e) => e.stopPropagation()}
                         className="text-white/15 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="删除"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>

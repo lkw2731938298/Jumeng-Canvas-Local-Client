@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/desktop",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "private": true,
   "main": "main.js",
   "appId": "com.lieka.jumengcanvas",
@@ -38,6 +38,10 @@
       {
         "from": "resources/node",
         "to": "node"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
       }
     ],
     "asar": true,
@@ -56,6 +60,7 @@
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false
     },
+    "afterPack": "./scripts/after-pack-icon.cjs",
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -83,6 +88,7 @@
   },
   "devDependencies": {
     "electron": "^33.2.1",
-    "electron-builder": "25.1.8"
+    "electron-builder": "25.1.8",
+    "rcedit": "^4.0.1"
   }
 }
