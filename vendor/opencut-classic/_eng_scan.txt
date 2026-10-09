@@ -1,0 +1,507 @@
+0	str	components/editor/editor-header.tsx	Failed to prepare project exit:
+0	jsx	components/editor/export-button.tsx	MP4（H.264，兼容性更好）
+0	jsx	components/editor/export-button.tsx	WebM（VP9，体积更小）
+0	jsx	components/editor/mobile-gate.tsx	Desktop only (for now)
+0	jsx	components/editor/mobile-gate.tsx	Go back
+0	jsx	components/editor/mobile-gate.tsx	Take a look anyway
+0	str	components/editor/onboarding.tsx	If you
+0	str	components/editor/onboarding.tsx	OpenCut Onboarding
+0	str	components/editor/onboarding.tsx	Welcome to OpenCut Beta! 🎉
+0	jsx	components/editor/panels/assets/index.tsx	Adjustment view coming soon...
+0	jsx	components/editor/panels/assets/index.tsx	Transitions view coming soon...
+0	str	components/editor/panels/assets/views/assets.tsx	Error processing files:
+0	jsx	components/editor/panels/assets/views/settings/background.tsx	BACKGROUND_BLUR_INTENSITY_PRESETS.map((blur) => (
+0	str	components/editor/panels/assets/views/settings/background.tsx	Pattern craft
+0	str	components/editor/panels/assets/views/settings/background.tsx	Pick a custom background color
+0	str	components/editor/panels/assets/views/settings/background.tsx	Syntax UI
+0	jsx	components/editor/panels/assets/views/settings/index.tsx	Aspect ratio
+0	str	components/editor/panels/assets/views/settings/index.tsx	Canvas height
+0	str	components/editor/panels/assets/views/settings/index.tsx	Canvas width
+0	jsx	components/editor/panels/assets/views/settings/index.tsx	Frame rate
+0	jsx	components/editor/panels/assets/views/settings/index.tsx	Project info
+0	str	components/editor/panels/assets/views/settings/index.tsx	Select a frame rate
+0	jsx	components/editor/panels/properties/empty-view.tsx	Click an element on the timeline to edit its properties
+0	jsx	components/editor/panels/properties/empty-view.tsx	It's empty here
+0	jsx	components/editor/scenes-view.tsx	Delete Scenes
+0	str	components/editor/scenes-view.tsx	Failed to delete scene
+0	str	components/editor/scenes-view.tsx	Failed to delete scene:
+0	str	components/editor/scenes-view.tsx	Failed to switch scene:
+0	jsx	components/editor/scenes-view.tsx	No scenes available
+0	str	components/editor/scenes-view.tsx	Select scenes to delete
+0	str	components/editor/scenes-view.tsx	Switch between scenes in your project
+1	str	commands/timeline/element/insert-element.ts	Effect element must have effectType
+1	str	commands/timeline/element/insert-element.ts	Element requires mediaId
+1	str	commands/timeline/element/insert-element.ts	Graphic element must have a valid definitionId
+1	str	commands/timeline/element/insert-element.ts	Library audio element must have sourceUrl
+1	str	commands/timeline/element/insert-element.ts	Sticker element must have stickerId
+1	str	commands/timeline/element/insert-element.ts	Text element must have content
+1	str	commands/timeline/element/insert-element.ts	Track not found:
+1	str	commands/timeline/element/move-elements.ts	Source track or element not found
+1	str	commands/timeline/element/move-elements.ts	Target track not found
+1	str	timeline/bookmarks/components/bookmarks.tsx	Add a note...
+1	str	timeline/bookmarks/components/bookmarks.tsx	Reset to default color
+1	str	timeline/bookmarks/components/bookmarks.tsx	Timeline ruler
+1	str	timeline/bookmarks/preview-overlay-source.tsx	Show bookmark notes
+1	str	timeline/components/audio-volume-line.tsx	Drag to adjust clip volume
+1	str	timeline/components/expanded-layout.ts	BG Color
+1	str	timeline/components/expanded-layout.ts	BG Offset X
+1	str	timeline/components/expanded-layout.ts	BG Offset Y
+1	str	timeline/components/expanded-layout.ts	BG Pad X
+1	str	timeline/components/expanded-layout.ts	BG Pad Y
+1	str	timeline/components/expanded-layout.ts	Corner Radius
+1	str	timeline/components/expanded-layout.ts	Position X
+1	str	timeline/components/expanded-layout.ts	Position Y
+1	str	timeline/components/expanded-layout.ts	Scale X
+1	str	timeline/components/expanded-layout.ts	Scale Y
+1	jsx	timeline/components/graph-editor/bezier-graph.tsx	Bezier curve editor
+1	str	timeline/components/graph-editor/easing-presets.ts	Ease in
+1	str	timeline/components/graph-editor/easing-presets.ts	Ease out
+1	str	timeline/components/graph-editor/easing-presets.ts	In out
+1	jsx	timeline/components/graph-editor/popover.tsx	Curve preset preview
+1	jsx	timeline/components/graph-editor/popover.tsx	Math.abs(presetValue - value[index])
+1	str	timeline/components/graph-editor/session.ts	Cannot edit a segment where both keyframes are at the same time.
+1	str	timeline/components/graph-editor/session.ts	Edit graph
+1	str	timeline/components/graph-editor/session.ts	Hold segments have a fixed value - easing has no effect here.
+1	str	timeline/components/graph-editor/session.ts	Select a keyframe that has an outgoing segment.
+1	str	timeline/components/graph-editor/session.ts	Select a keyframe to edit its curve.
+1	str	timeline/components/graph-editor/session.ts	Select at most two adjacent keyframes per property.
+1	str	timeline/components/graph-editor/session.ts	Selected keyframes must be adjacent on each property.
+1	str	timeline/components/graph-editor/session.ts	Selected keyframes must be on the same element.
+1	str	timeline/components/graph-editor/session.ts	Selected properties do not share a graph-editable channel.
+1	str	timeline/components/graph-editor/session.ts	The selected keyframe could not be resolved.
+1	str	timeline/components/graph-editor/session.ts	The selected keyframe has no editable graph channel.
+1	str	timeline/components/graph-editor/session.ts	The selected keyframe has no editable graph.
+1	str	timeline/components/graph-editor/session.ts	The selected keyframe is not editable as a graph segment.
+1	str	timeline/components/graph-editor/use-controller.ts	Open graph editor
+1	jsx	timeline/components/index.tsx	Paste elements
+1	str	timeline/components/timeline-element.tsx	AudioElementContent must be rendered inside PixelsPerSecondContext.Provider
+1	str	timeline/components/timeline-element.tsx	Extract audio
+1	str	timeline/components/timeline-element.tsx	Select keyframe
+1	str	timeline/components/timeline-playhead.tsx	Drag playhead
+1	str	timeline/components/timeline-playhead.tsx	Timeline playhead
+1	str	timeline/components/timeline-ruler.tsx	Timeline ruler
+1	str	timeline/controllers/drag-drop-controller.ts	Failed to process drop:
+1	str	timeline/controllers/drag-drop-controller.ts	Failed to process file drop:
+1	str	timeline/placement/main-track.ts	Main Track
+1	str	timeline/ruler-utils.ts	MM:SS
+3	jsx	preview/components/context-menu.tsx	Copy snapshot
+3	str	preview/components/context-menu.tsx	Failed to copy snapshot
+3	str	preview/components/context-menu.tsx	Failed to save snapshot
+3	jsx	preview/components/context-menu.tsx	Fit to screen
+3	jsx	preview/components/context-menu.tsx	Full screen
+3	str	preview/components/context-menu.tsx	Please try again
+3	jsx	preview/components/context-menu.tsx	Save snapshot
+3	str	preview/components/preview-interaction-overlay.tsx	Preview canvas
+3	str	preview/components/text-edit-overlay.tsx	Edit text
+3	str	preview/components/toolbar.tsx	HH:MM:SS:FF
+3	str	services/renderer/effect-preview.ts	Failed to render effect preview
+4	str	commands/media/add-media-asset.ts	Failed to delete media item on undo:
+4	str	commands/media/add-media-asset.ts	Failed to save media item:
+4	str	commands/media/add-media-asset.ts	Not enough browser storage
+4	str	commands/media/remove-media-asset.ts	Failed to delete media item:
+4	str	commands/media/remove-media-asset.ts	Failed to restore media item on undo:
+4	str	commands/media/remove-media-asset.ts	Media asset not found:
+4	str	core/managers/media-manager.ts	Failed to clear media assets from storage:
+4	str	core/managers/media-manager.ts	Failed to load media assets:
+4	str	core/managers/media-manager.ts	Failed to save media asset:
+4	str	core/managers/media-manager.ts	Not enough browser storage
+4	str	media/audio.ts	Failed to decode asset audio:
+4	str	media/audio.ts	Failed to decode audio asset:
+4	str	media/audio.ts	Failed to decode audio:
+4	str	media/audio.ts	Failed to fetch library audio:
+4	str	media/mediabunny.ts	No video track found in the file
+4	str	media/processing.ts	Could not load image
+4	str	media/processing.ts	Could not load media
+4	str	media/processing.ts	Could not process video
+4	str	media/processing.ts	Could not render image
+4	str	media/processing.ts	Error processing file:
+4	str	media/thumbnail.ts	Could not get canvas context
+4	str	media/use-paste-media.ts	Failed to paste media:
+5	str	text/measure-element.ts	Default text
+5	str	text/measure-element.ts	Failed to create text measurement context
+6	str	app/api/sounds/search/route.ts	Attribution Commercial
+6	str	app/api/sounds/search/route.ts	Attribution Noncommercial
+6	str	app/api/sounds/search/route.ts	Creative Commons 0
+6	str	app/api/sounds/search/route.ts	Error searching sounds:
+6	str	app/api/sounds/search/route.ts	Failed to search sounds
+6	str	app/api/sounds/search/route.ts	Freesound API error:
+6	str	app/api/sounds/search/route.ts	Internal response formatting error
+6	str	app/api/sounds/search/route.ts	Internal server error
+6	str	app/api/sounds/search/route.ts	Invalid API response structure:
+6	str	app/api/sounds/search/route.ts	Invalid Freesound API response:
+6	str	app/api/sounds/search/route.ts	Invalid parameters
+6	str	app/api/sounds/search/route.ts	Invalid response from Freesound API
+6	str	app/api/sounds/search/route.ts	Query too long
+6	str	app/api/sounds/search/route.ts	Songs are not available yet
+6	str	app/api/sounds/search/route.ts	Too many requests
+6	jsx	sounds/components/assets-view.tsx	Clear all
+6	jsx	sounds/components/assets-view.tsx	Clear all saved sounds?
+6	jsx	sounds/components/assets-view.tsx	Clear all sounds
+6	jsx	sounds/components/assets-view.tsx	Click the heart icon on any sound to save it here
+6	str	sounds/components/assets-view.tsx	Failed to fetch top sounds:
+6	str	sounds/components/assets-view.tsx	Failed to load sounds
+6	str	sounds/components/assets-view.tsx	Failed to play sound preview:
+6	jsx	sounds/components/assets-view.tsx	Loading more sounds...
+6	jsx	sounds/components/assets-view.tsx	Loading saved sounds...
+6	jsx	sounds/components/assets-view.tsx	Loading sounds...
+6	jsx	sounds/components/assets-view.tsx	No saved sounds
+6	str	sounds/components/assets-view.tsx	No sounds available
+6	str	sounds/components/assets-view.tsx	No sounds found
+6	str	sounds/components/assets-view.tsx	Only showing sounds licensed for commercial use
+6	str	sounds/components/assets-view.tsx	Search sound effects
+6	jsx	sounds/components/assets-view.tsx	Searching...
+6	jsx	sounds/components/assets-view.tsx	Show only commercially licensed
+6	str	sounds/components/assets-view.tsx	Showing all sounds regardless of license
+6	jsx	sounds/components/assets-view.tsx	Sound effects
+6	str	sounds/sounds-store.ts	Failed to add sound to timeline
+6	str	sounds/sounds-store.ts	Failed to add sound to timeline:
+6	str	sounds/sounds-store.ts	Failed to clear saved sounds
+6	str	sounds/sounds-store.ts	Failed to clear saved sounds:
+6	str	sounds/sounds-store.ts	Failed to load saved sounds
+6	str	sounds/sounds-store.ts	Failed to load saved sounds:
+6	str	sounds/sounds-store.ts	Failed to remove sound
+6	str	sounds/sounds-store.ts	Failed to remove sound:
+6	str	sounds/sounds-store.ts	Failed to save sound
+6	str	sounds/sounds-store.ts	Failed to save sound:
+6	str	sounds/sounds-store.ts	Sound file not available
+6	str	sounds/use-sound-search.ts	Load more failed
+6	str	sounds/use-sound-search.ts	Search failed
+7	str	stickers/components/assets-view.tsx	Failed to add sticker to timeline
+7	str	stickers/components/assets-view.tsx	Failed to add sticker:
+7	str	stickers/components/assets-view.tsx	M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z
+7	str	stickers/components/assets-view.tsx	No stickers available yet.
+7	jsx	stickers/components/assets-view.tsx	No stickers found
+7	str	stickers/components/assets-view.tsx	Search...
+7	jsx	stickers/components/assets-view.tsx	See all
+7	str	stickers/components/assets-view.tsx	Sticker categories
+7	str	stickers/index.ts	Recently used
+7	str	stickers/providers/countries-data.ts	Aland Islands
+7	str	stickers/providers/countries-data.ts	American Samoa
+7	str	stickers/providers/countries-data.ts	Antigua and Barbuda
+7	str	stickers/providers/countries-data.ts	Atlantic Ocean
+7	str	stickers/providers/countries-data.ts	Bosnia and Herzegovina
+7	str	stickers/providers/countries-data.ts	Bouvet Island
+7	str	stickers/providers/countries-data.ts	British Indian Ocean Territory
+7	str	stickers/providers/countries-data.ts	British Virgin Islands
+7	str	stickers/providers/countries-data.ts	Burkina Faso
+7	str	stickers/providers/countries-data.ts	Cape Verde
+7	str	stickers/providers/countries-data.ts	Caribbean Netherlands
+7	str	stickers/providers/countries-data.ts	Cayman Islands
+7	str	stickers/providers/countries-data.ts	Central African Republic
+7	str	stickers/providers/countries-data.ts	Central America
+7	str	stickers/providers/countries-data.ts	Central Asia
+7	str	stickers/providers/countries-data.ts	Christmas Island
+7	str	stickers/providers/countries-data.ts	Cocos (Keeling) Islands
+7	str	stickers/providers/countries-data.ts	Cook Islands
+7	str	stickers/providers/countries-data.ts	Costa Rica
+7	str	stickers/providers/countries-data.ts	Cote d
+7	str	stickers/providers/countries-data.ts	Democratic Republic of the Congo
+7	str	stickers/providers/countries-data.ts	Dominican Republic
+7	str	stickers/providers/countries-data.ts	East Asia
+7	str	stickers/providers/countries-data.ts	Eastern Europe
+7	str	stickers/providers/countries-data.ts	El Salvador
+7	str	stickers/providers/countries-data.ts	Equatorial Guinea
+7	str	stickers/providers/countries-data.ts	European Union
+7	str	stickers/providers/countries-data.ts	Falkland Islands
+7	str	stickers/providers/countries-data.ts	Faroe Islands
+7	str	stickers/providers/countries-data.ts	French Guiana
+7	str	stickers/providers/countries-data.ts	French Polynesia
+7	str	stickers/providers/countries-data.ts	French Southern Territories
+7	str	stickers/providers/countries-data.ts	GB-ENG
+7	str	stickers/providers/countries-data.ts	GB-NIR
+7	str	stickers/providers/countries-data.ts	GB-SCT
+7	str	stickers/providers/countries-data.ts	GB-WLS
+7	str	stickers/providers/countries-data.ts	Guinea-Bissau
+7	str	stickers/providers/countries-data.ts	Heard Island and McDonald Islands
+7	str	stickers/providers/countries-data.ts	Hong Kong
+7	str	stickers/providers/countries-data.ts	Isle of Man
+7	str	stickers/providers/countries-data.ts	Marshall Islands
+7	str	stickers/providers/countries-data.ts	Middle East
+7	str	stickers/providers/countries-data.ts	New Caledonia
+7	str	stickers/providers/countries-data.ts	New Zealand
+7	str	stickers/providers/countries-data.ts	Norfolk Island
+7	str	stickers/providers/countries-data.ts	North Africa
+7	str	stickers/providers/countries-data.ts	North America
+7	str	stickers/providers/countries-data.ts	North Atlantic
+7	str	stickers/providers/countries-data.ts	North Korea
+7	str	stickers/providers/countries-data.ts	North Macedonia
+7	str	stickers/providers/countries-data.ts	Northern Europe
+7	str	stickers/providers/countries-data.ts	Northern Ireland
+7	str	stickers/providers/countries-data.ts	Northern Mariana Islands
+7	str	stickers/providers/countries-data.ts	Papua New Guinea
+7	str	stickers/providers/countries-data.ts	Pitcairn Islands
+7	str	stickers/providers/countries-data.ts	Puerto Rico
+7	str	stickers/providers/countries-data.ts	Republic of the Congo
+7	str	stickers/providers/countries-data.ts	Saint Barthelemy
+7	str	stickers/providers/countries-data.ts	Saint Helena
+7	str	stickers/providers/countries-data.ts	Saint Kitts and Nevis
+7	str	stickers/providers/countries-data.ts	Saint Lucia
+7	str	stickers/providers/countries-data.ts	Saint Martin
+7	str	stickers/providers/countries-data.ts	Saint Pierre and Miquelon
+7	str	stickers/providers/countries-data.ts	Saint Vincent and the Grenadines
+7	str	stickers/providers/countries-data.ts	San Marino
+7	str	stickers/providers/countries-data.ts	Sao Tome and Principe
+7	str	stickers/providers/countries-data.ts	Saudi Arabia
+7	str	stickers/providers/countries-data.ts	Sierra Leone
+7	str	stickers/providers/countries-data.ts	Sint Maarten
+7	str	stickers/providers/countries-data.ts	Solomon Islands
+7	str	stickers/providers/countries-data.ts	South Africa
+7	str	stickers/providers/countries-data.ts	South America
+7	str	stickers/providers/countries-data.ts	South Asia
+7	str	stickers/providers/countries-data.ts	South Georgia and the South Sandwich Islands
+7	str	stickers/providers/countries-data.ts	South Korea
+7	str	stickers/providers/countries-data.ts	South Sudan
+7	str	stickers/providers/countries-data.ts	Southeast Asia
+7	str	stickers/providers/countries-data.ts	Southern Europe
+7	str	stickers/providers/countries-data.ts	Sri Lanka
+7	str	stickers/providers/countries-data.ts	Sub-Saharan Africa
+7	str	stickers/providers/countries-data.ts	Svalbard and Jan Mayen
+7	str	stickers/providers/countries-data.ts	Timor-Leste
+7	str	stickers/providers/countries-data.ts	Trinidad and Tobago
+7	str	stickers/providers/countries-data.ts	Turks and Caicos Islands
+7	str	stickers/providers/countries-data.ts	United Arab Emirates
+7	str	stickers/providers/countries-data.ts	United Kingdom
+7	str	stickers/providers/countries-data.ts	United States
+7	str	stickers/providers/countries-data.ts	Vatican City
+7	str	stickers/providers/countries-data.ts	Wallis and Futuna
+7	str	stickers/providers/countries-data.ts	Western Europe
+7	str	stickers/providers/countries-data.ts	Western Sahara
+7	str	stickers/providers/flags.ts	Failed to load countries dataset:
+7	str	stickers/sticker-id.ts	Sticker ID must be a non-empty string
+7	str	stickers/stickers-store.ts	Browse failed:
+7	str	stickers/stickers-store.ts	Search failed:
+8	jsx	effects/components/effects-tab.tsx	Add effects to this layer from the Assets panel.
+8	jsx	effects/components/effects-tab.tsx	No effects
+8	jsx	effects/components/effects-tab.tsx	Open effects
+9	str	subtitles/ass.ts	Dialogue:
+9	str	subtitles/ass.ts	Format:
+9	str	subtitles/ass.ts	Style:
+9	str	subtitles/components/assets-view.tsx	An unexpected error occurred
+9	jsx	subtitles/components/assets-view.tsx	Auto detect
+9	str	subtitles/components/assets-view.tsx	Extracting audio...
+9	str	subtitles/components/assets-view.tsx	Generate transcript
+9	str	subtitles/components/assets-view.tsx	Generating captions...
+9	str	subtitles/components/assets-view.tsx	Importing subtitles...
+9	str	subtitles/components/assets-view.tsx	No captions were generated
+9	str	subtitles/components/assets-view.tsx	No valid subtitle cues were found in the subtitle file
+9	str	subtitles/components/assets-view.tsx	Preparing audio...
+9	str	subtitles/components/assets-view.tsx	Reading subtitle file...
+9	str	subtitles/components/assets-view.tsx	Select a language
+9	str	subtitles/components/assets-view.tsx	Subtitle import failed:
+9	str	subtitles/components/assets-view.tsx	Transcribing...
+9	str	subtitles/components/assets-view.tsx	Transcription failed:
+9	str	subtitles/parse.ts	Unsupported subtitle format
+10	jsx	app/editor/[project_id]/page.tsx	For the best experience, open OpenCut in Chrome.
+10	str	core/managers/project-manager.ts	Failed to delete projects:
+10	str	core/managers/project-manager.ts	Failed to duplicate projects
+10	str	core/managers/project-manager.ts	Failed to duplicate projects:
+10	str	core/managers/project-manager.ts	Failed to generate project thumbnail on exit:
+10	str	core/managers/project-manager.ts	Failed to generate project thumbnail:
+10	str	core/managers/project-manager.ts	Failed to load project:
+10	str	core/managers/project-manager.ts	Failed to load projects:
+10	str	core/managers/project-manager.ts	Failed to rename project
+10	str	core/managers/project-manager.ts	Failed to rename project:
+10	str	core/managers/project-manager.ts	Failed to run migrations:
+10	str	core/managers/project-manager.ts	Failed to save new project
+10	str	core/managers/project-manager.ts	Failed to save project:
+10	str	core/managers/project-manager.ts	No active project
+10	str	core/managers/project-manager.ts	Please try again
+10	str	core/managers/project-manager.ts	Project not found
+10	str	core/managers/project-manager.ts	Projects not found
+10	str	core/managers/project-manager.ts	Some projects could not be found
+10	jsx	project/components/delete-project-dialog.tsx	Delete project
+10	jsx	project/components/delete-project-dialog.tsx	Type "DELETE" to confirm
+10	str	project/components/migration-dialog.tsx	Updating project
+10	str	project/components/migration-dialog.tsx	Updating projects
+10	str	project/components/project-info-dialog.tsx	HH:MM:SS
+10	str	project/components/project-info-dialog.tsx	MM:SS
+10	str	project/components/project-info-dialog.tsx	Project ID
+10	str	project/components/rename-project-dialog.tsx	Enter a new name
+10	jsx	project/components/rename-project-dialog.tsx	New name
+10	jsx	project/components/rename-project-dialog.tsx	Rename project
+11	str	actions/components/shortcuts-dialog.tsx	Click to edit shortcut
+11	jsx	actions/components/shortcuts-dialog.tsx	Keyboard shortcuts
+11	str	actions/components/shortcuts-dialog.tsx	Press any key combination...
+11	jsx	actions/components/shortcuts-dialog.tsx	Reset to default
+11	str	actions/definitions.ts	Cancel current interaction
+11	str	actions/definitions.ts	Copy selected elements
+11	str	actions/definitions.ts	Delete current selection
+11	str	actions/definitions.ts	Deselect all elements
+11	str	actions/definitions.ts	Duplicate selected element
+11	str	actions/definitions.ts	Extract or recover source audio
+11	str	actions/definitions.ts	Frame step backward
+11	str	actions/definitions.ts	Frame step forward
+11	str	actions/definitions.ts	Go to timeline end
+11	str	actions/definitions.ts	Go to timeline start
+11	str	actions/definitions.ts	Jump backward 5 seconds
+11	str	actions/definitions.ts	Jump forward 5 seconds
+11	str	actions/definitions.ts	Paste elements at playhead
+11	str	actions/definitions.ts	Remove media asset
+11	str	actions/definitions.ts	Remove media assets
+11	str	actions/definitions.ts	Seek backward 1 second
+11	str	actions/definitions.ts	Seek forward 1 second
+11	str	actions/definitions.ts	Select all elements
+11	str	actions/definitions.ts	Split and remove left
+11	str	actions/definitions.ts	Split and remove right
+11	str	actions/definitions.ts	Split elements at playhead
+11	str	actions/definitions.ts	Stop playback
+11	str	actions/definitions.ts	Toggle bookmark at playhead
+11	str	actions/definitions.ts	Toggle ripple editing
+11	str	actions/definitions.ts	Toggle snapping
+11	str	actions/keybindings/persistence.ts	Imported keybindings must be a JSON object
+12	str	services/renderer/scene-exporter.ts	Failed to export video
+13	str	core/managers/audio-manager.ts	Failed to decode clip audio:
+13	str	core/managers/audio-manager.ts	Failed to initialize audio sink:
+13	str	core/managers/renderer-manager.ts	Clipboard image copy is not supported in this browser
+13	str	core/managers/renderer-manager.ts	Copy snapshot failed:
+13	str	core/managers/renderer-manager.ts	Export failed to produce buffer
+13	str	core/managers/renderer-manager.ts	Export failed:
+13	str	core/managers/renderer-manager.ts	Failed to create image
+13	str	core/managers/renderer-manager.ts	No active project
+13	str	core/managers/renderer-manager.ts	No project or scene to capture
+13	str	core/managers/renderer-manager.ts	Project is empty
+13	str	core/managers/renderer-manager.ts	Snapshot capture failed:
+13	str	core/managers/renderer-manager.ts	Unknown error
+13	str	core/managers/renderer-manager.ts	Unknown export error
+13	str	core/managers/scenes-manager.ts	Failed to load project scenes:
+13	str	core/managers/scenes-manager.ts	No active project
+13	str	core/managers/scenes-manager.ts	No active scene.
+13	str	core/managers/scenes-manager.ts	Scene not found
+14	jsx	params/index.ts	TComponents | null;
+	compose: (components: Partial
+14	jsx	params/index.ts	TValue | null;
+}
+
+export interface CompositeChannelLayout
+14	jsx	params/index.ts	TValue | null;
+}
+
+export type ChannelLayout
+14	str	params/registry.ts	Background Color
+14	str	params/registry.ts	Background Enabled
+14	str	params/registry.ts	Background Offset X
+14	str	params/registry.ts	Background Offset Y
+14	str	params/registry.ts	Background Padding X
+14	str	params/registry.ts	Background Padding Y
+14	str	params/registry.ts	Background Radius
+14	str	params/registry.ts	Blend Mode
+14	str	params/registry.ts	Color Burn
+14	str	params/registry.ts	Color Dodge
+14	str	params/registry.ts	Default text
+14	str	params/registry.ts	Font Family
+14	str	params/registry.ts	Font Size
+14	str	params/registry.ts	Font Style
+14	str	params/registry.ts	Font Weight
+14	str	params/registry.ts	Hard Light
+14	str	params/registry.ts	Letter Spacing
+14	str	params/registry.ts	Line Height
+14	str	params/registry.ts	Line Through
+14	str	params/registry.ts	Plus Lighter
+14	str	params/registry.ts	Position X
+14	str	params/registry.ts	Position Y
+14	str	params/registry.ts	Scale X
+14	str	params/registry.ts	Scale Y
+14	str	params/registry.ts	Soft Light
+14	str	params/registry.ts	Text Align
+14	str	params/registry.ts	Text Decoration
+15	str	masks/builtin/box-like.ts	Stroke Align
+15	str	masks/builtin/definitions/cinematic-bars.ts	Cinematic Bars
+15	jsx	masks/components/masks-tab.tsx	Add a mask to hide or reveal parts of this layer.
+15	str	masks/components/masks-tab.tsx	Add mask
+15	str	masks/components/masks-tab.tsx	Letter spacing
+15	str	masks/components/masks-tab.tsx	Line height
+15	jsx	masks/components/masks-tab.tsx	No masks
+15	str	masks/freeform/definition.ts	Pen tool
+15	str	masks/registry.ts	Stroke color
+15	str	masks/registry.ts	Stroke width
+16	jsx	speed/components/speed-tab.tsx	Change pitch
+17	jsx	guides/definitions/custom.tsx	Add guide line
+17	str	guides/definitions/tiktok-layout.tsx	M1008.87 988.577H980.264V993.747H1008.87V988.577Z
+17	str	guides/definitions/tiktok-layout.tsx	M991.979 976.864V1005.46H997.151V976.864H991.979Z
+17	jsx	guides/definitions/tiktok-layout.tsx	TikTok Layout
+99	str	app/api/feedback/route.ts	Invalid input
+99	str	app/api/feedback/route.ts	Message is required
+99	str	app/api/feedback/route.ts	Message too long
+99	str	app/api/feedback/route.ts	Too many requests
+99	str	app/layout.tsx	UP-Wcoy5arxFeK7oyjMMZ
+99	str	app/metadata.ts	OpenCut Wordmark
+99	str	app/rss.xml/route.ts	Cache-Control
+99	str	app/rss.xml/route.ts	Content-Type
+99	str	app/rss.xml/route.ts	Error generating RSS feed
+99	str	app/rss.xml/route.ts	Internal Server Error
+99	str	app/sponsors/page.tsx	Sponsors - OpenCut
+99	jsx	changelog/components/changelog-notification.tsx	See full changelog
+99	str	changelog/components/copy-markdown-button.tsx	Copied!
+99	str	changelog/components/copy-markdown-button.tsx	Copy as markdown
+99	str	changelog/components/copy-markdown-button.tsx	Copy markdown
+99	str	changelog/utils.ts	Breaking Changes
+99	str	changelog/utils.ts	Technical details
+99	str	commands/base-command.ts	Undo not implemented for this command
+99	str	commands/scene/delete-scene.ts	Cannot delete scene:
+99	str	commands/scene/delete-scene.ts	Scene not found:
+99	str	commands/scene/rename-scene.ts	Scene not found:
+99	str	components/editable-timecode.tsx	Click to edit time
+99	str	components/editable-timecode.tsx	HH:MM:SS:FF
+99	str	components/footer.tsx	Terms of use
+99	jsx	components/footer.tsx	The privacy-first video editor that feels simple to use.
+99	jsx	components/gitHub-contribute-section.tsx	Report issues
+99	jsx	components/gitHub-contribute-section.tsx	Start contributing
+99	jsx	components/header.tsx	Brand assets
+99	str	components/header.tsx	Close menu
+99	jsx	components/header.tsx	Copy SVG
+99	jsx	components/header.tsx	Download SVG
+99	str	components/header.tsx	OpenCut Logo
+99	jsx	components/icons/brand.tsx	Data Buddy
+99	str	components/icons/brand.tsx	M0 0h256v256H0z
+99	str	components/icons/brand.tsx	M0 0h8v8H0z
+99	str	components/icons/brand.tsx	M37.5274 0L75.0548 65H0L37.5274 0Z
+99	str	components/icons/ui.tsx	M0 0H24V24H0ZM8 8H24V24H8Z
+99	str	components/icons/ui.tsx	M10 0H8V2H10V0Z
+99	str	components/icons/ui.tsx	M10 4H8V6H10V4Z
+99	str	components/icons/ui.tsx	M10 8H8V10H10V8Z
+99	str	components/icons/ui.tsx	M12.1454 21.7021L12.1454 2.25692
+99	str	components/icons/ui.tsx	M17.5103 2.82471L17.5103 21.1753
+99	str	components/icons/ui.tsx	M19 9C19.6068 9.58984 22 11.1597 22 12C22 12.8403 19.6068 14.4102 19 15
+99	str	components/icons/ui.tsx	M2 0H0V2H2V0Z
+99	str	components/icons/ui.tsx	M2 4H0V6H2V4Z
+99	str	components/icons/ui.tsx	M2 8H0V10H2V8Z
+99	str	components/icons/ui.tsx	M2.42285 11.9795H21.868
+99	str	components/icons/ui.tsx	M4 2H2V4H4V2Z
+99	str	components/icons/ui.tsx	M4 6H2V8H4V6Z
+99	str	components/icons/ui.tsx	M5 9C4.39316 9.58984 2 11.1597 2 12C2 12.8403 4.39316 14.4102 5 15
+99	str	components/icons/ui.tsx	M6 0H4V2H6V0Z
+99	str	components/icons/ui.tsx	M6 4H4V6H6V4Z
+99	str	components/icons/ui.tsx	M6 8H4V10H6V8Z
+99	str	components/icons/ui.tsx	M6.48975 2.82471L6.48975 21.1753
+99	str	components/icons/ui.tsx	M8 2H6V4H8V2Z
+99	str	components/icons/ui.tsx	M8 6H6V8H8V6Z
+99	jsx	components/icons/ui.tsx	Sliders Vertical
+99	jsx	components/icons/ui.tsx	Social media
+99	jsx	components/icons/ui.tsx	Square Plus
+99	jsx	components/icons/ui.tsx	Text height
+99	jsx	components/icons/ui.tsx	Text width
+99	str	components/landing/hero.tsx	OpenCut video editor landing page background
+99	jsx	components/landing/hero.tsx	The open source
+99	jsx	components/landing/hero.tsx	Try early beta
+99	jsx	components/landing/hero.tsx	Video editor
+99	str	components/providers/editor-provider.tsx	Failed to create project
+99	str	components/providers/editor-provider.tsx	Failed to load project
+99	str	components/providers/editor-provider.tsx	Jumeng Project
+99	str	components/section.tsx	Collapse section
+99	str	components/section.tsx	Expand section
+99	str	components/storage-provider.tsx	Failed to initialize storage:
+99	str	components/storage-provider.tsx	Storage not fully supported. Some features may not work.
+99	str	components/storage-provider.tsx	Unknown error
+99	str	components/ui/color-picker.tsx	Select a mode
+99	str	components/ui/font-picker.tsx	All fonts
+99	jsx	components/ui/font-picker.tsx	Failed to load font previews.
+99	jsx	components/ui/font-picker.tsx	Loading fonts...
+99	str	components/ui/font-picker.tsx	My fonts
+99	jsx	components/ui/font-picker.tsx	No fonts found.
+99	str	components/ui/font-picker.tsx	Select a font
+99	str	components/ui/input.tsx	Clear input
+99	str	components/ui/input.tsx	Hide password
+99	str	components/ui/input.tsx	Show password
+99	str	components/ui/number-field.tsx	Drag to adjust value
+99	str	components/ui/number-field.tsx	Reset to default
+99	str	components/ui/tooltip.tsx	M6 0L0 5L6 10V0Z
