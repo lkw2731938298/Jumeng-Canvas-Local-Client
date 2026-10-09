@@ -13,14 +13,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const desktopDir = path.join(root, "packages", "desktop");
 
-function run(cmd, args, env = {}) {
+function run(cmd, args, env = {}, cwd = root) {
   console.log(`\n> ${cmd} ${args.join(" ")}\n`);
   // Windows：仅 npm.cmd 需要 shell；node.exe 若开 shell 会把「Program Files」路径拆坏
   const useShell =
     process.platform === "win32" &&
     (/\.cmd$/i.test(cmd) || /\.bat$/i.test(cmd));
   const r = spawnSync(cmd, args, {
-    cwd: root,
+    cwd,
     env: { ...process.env, ...env },
     stdio: "inherit",
     shell: useShell,
@@ -73,10 +73,21 @@ function main() {
     console.error("缺少 electron-builder，请先在仓库根目录执行: npm install");
     process.exit(1);
   }
-  process.chdir(desktopDir);
-  run(process.execPath, [ebCli, "--win", "--x64"], {
-    CSC_IDENTITY_AUTO_DISCOVERY: "false",
-  });
+  // 必须在 packages/desktop 下打包，否则会读到根 package.json（无 main.js）
+  run(
+    process.execPath,
+    [ebCli, "--win", "--x64"],
+    { CSC_IDENTITY_AUTO_DISCOVERY: "false" },
+    desktopDir,
+  );
+  // 固定名副本，供官网直链 / 应用内更新
+  const distDir = path.join(desktopDir, "dist");
+  const versioned = path.join(distDir, `JumengCanvas-Setup-${JSON.parse(fs.readFileSync(path.join(desktopDir, "package.json"), "utf8")).version}.exe`);
+  const fixed = path.join(distDir, "JumengCanvas-Setup.exe");
+  if (fs.existsSync(versioned)) {
+    fs.copyFileSync(versioned, fixed);
+    console.log(`[dist-win] 已复制固定名 → ${fixed}`);
+  }
   console.log("\n[dist-win] 完成。安装包在 packages/desktop/dist/（含 JumengCanvas-Setup-*.exe）");
 }
 

@@ -205,7 +205,7 @@ export interface LocalDesktopApi {
   }>;
 }
 
-/** Electron 安装包更新（Gitee Releases Setup.exe） */
+/** Electron 安装包更新（官网 latest.json + Setup.exe 直链） */
 export type DesktopUpdateCheckResult = {
   localVersion: string;
   remoteVersion: string;

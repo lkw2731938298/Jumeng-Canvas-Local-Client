@@ -38,14 +38,16 @@
 
 ### 方式 A：Windows 安装包（推荐给最终用户）
 
-**下载**：[Gitee Releases](https://gitee.com/liukewen0112/Jumeng-Canvas-Local-Client/releases)（附件 `JumengCanvas-Setup-x.y.z.exe`；发版时也会上传固定名 `JumengCanvas-Setup.exe`）
+**下载**：https://www.jumeng.vip/canvas.html（「立即下载」）或直链  
+https://www.jumeng.vip/downloads/JumengCanvas-Setup.exe
 
 1. 运行安装程序（可改安装目录；同一软件再次安装即**覆盖升级**，**无需先卸载**）
 2. 桌面快捷方式「聚梦无限画布」启动
 3. 项目与密钥保存在用户目录，升级后仍在
-4. 应用内顶栏「检查更新」→ 从 Gitee 拉新安装包静默覆盖并重启
+4. 应用内顶栏「检查更新」→ 读官网 `downloads/latest.json`，下载 Setup 静默覆盖并重启
 
-> 未做代码签名时，Windows SmartScreen 可能提示「未知发布者」，选「仍要运行」即可。
+> 未做代码签名时，Windows SmartScreen 可能提示「未知发布者」，选「仍要运行」即可。  
+> Gitee Release 附件有 100MB 限制，安装包请挂官网 `/downloads/`，勿依赖 Gitee 附件。
 
 **维护者打安装包**（开发机）：
 
@@ -53,7 +55,8 @@
 npm install
 npm run dist:win
 # 产物：packages/desktop/dist/JumengCanvas-Setup-<version>.exe
-# 上传到 Gitee Release；建议再传一份固定名 JumengCanvas-Setup.exe 供直链
+# 上传到官网 website/downloads/JumengCanvas-Setup.exe
+# 并更新 website/downloads/latest.json 的 version 字段
 ```
 
 ### 方式 B：免安装 bat 完整包

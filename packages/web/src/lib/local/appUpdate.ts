@@ -3,7 +3,7 @@
  * 以 Gitee main 分支根 package.json 的 version 为准，
  * 有更新时下载源码 zip → 临时目录解压校验 → 覆盖程序文件（不动 data / runtime / node_modules 等）。
  * 依赖有变化时（Windows）拉起独立隐藏脚本：停服 → npm install → 重启。
- * Electron 安装版走 packages/desktop/updater.js（Gitee Releases Setup.exe）。
+ * Electron 安装版走 packages/desktop/updater.js（官网 latest.json + Setup.exe）。
  */
 import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";

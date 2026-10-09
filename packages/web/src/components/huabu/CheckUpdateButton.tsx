@@ -146,7 +146,7 @@ export function CheckUpdateButton() {
     setApplying(true);
     const id = toast.loading(
       desktopMode
-        ? "正在从 Gitee 下载安装包，完成后将自动覆盖安装并重启…"
+        ? "正在从官网下载安装包，完成后将自动覆盖安装并重启…"
         : "正在从 Gitee 下载新版本，可能需要 1～3 分钟…"
     );
     try {
@@ -231,7 +231,7 @@ export function CheckUpdateButton() {
             <DialogTitle>发现新版本 v{info?.remoteVersion}</DialogTitle>
             <DialogDescription>
               {desktopMode
-                ? `当前版本 v${info?.localVersion}。将从 Gitee 下载安装包并覆盖安装（无需先卸载），项目与密钥保存在本机用户目录，不会丢失。`
+                ? `当前版本 v${info?.localVersion}。将从官网下载安装包并覆盖安装（无需先卸载），项目与密钥保存在本机用户目录，不会丢失。`
                 : `当前版本 v${info?.localVersion}。更新会从 Gitee 下载最新源码并覆盖程序文件，不会影响 data 目录中的项目、素材与模型配置；如依赖有变化，将自动重装并重启画布。`}
             </DialogDescription>
           </DialogHeader>
