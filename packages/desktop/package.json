@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "main": "main.js",
   "appId": "com.lieka.jumengcanvas",
@@ -10,6 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "icons": "python scripts/generate-installer-assets.py",
     "pack:win": "electron-builder --win --x64"
   },
   "build": {
@@ -40,7 +41,9 @@
       }
     ],
     "asar": true,
+    "icon": "build/icon.ico",
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -55,6 +58,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
       "createDesktopShortcut": true,
@@ -65,7 +69,16 @@
       "installerLanguages": [
         "zh_CN"
       ],
-      "language": "2052"
+      "language": "2052",
+      "displayLanguageSelector": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "runAfterFinish": true,
+      "menuCategory": false
     }
   },
   "devDependencies": {

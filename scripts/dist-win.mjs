@@ -55,8 +55,19 @@ function ensureDesktopNodeModulesStub() {
   }
 }
 
+function generateInstallerAssets() {
+  const script = path.join(desktopDir, "scripts", "generate-installer-assets.py");
+  if (!fs.existsSync(script)) {
+    console.warn("[dist-win] 未找到 generate-installer-assets.py，跳过图标生成");
+    return;
+  }
+  const py = process.platform === "win32" ? "python" : "python3";
+  run(py, [script], {}, desktopDir);
+}
+
 function main() {
   syncDesktopVersion();
+  generateInstallerAssets();
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   run(npm, ["run", "build", "-w", "@jumeng-canvas/web"], {
     JUMENG_DESKTOP_BUILD: "1",
