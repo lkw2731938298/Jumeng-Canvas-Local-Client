@@ -5,6 +5,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("jumengDesktop", {
   getDataRoot: () => ipcRenderer.invoke("desktop:getDataRoot"),
+  isPackaged: () => ipcRenderer.invoke("desktop:isPackaged"),
+  getAppVersion: () => ipcRenderer.invoke("desktop:getAppVersion"),
+  checkDesktopUpdate: () => ipcRenderer.invoke("desktop:checkDesktopUpdate"),
+  applyDesktopUpdate: () => ipcRenderer.invoke("desktop:applyDesktopUpdate"),
   readConfig: () => ipcRenderer.invoke("desktop:readConfig"),
   writeConfig: (cfg) => ipcRenderer.invoke("desktop:writeConfig", cfg),
   listProviders: () => ipcRenderer.invoke("desktop:listProviders"),

@@ -1,12 +1,12 @@
 /**
- * 本机检查更新：GET 比对 GitHub 版本号；POST 下载覆盖（依赖变化时后台重启）。
+ * 本机检查更新：GET 比对 Gitee 版本号；POST 下载覆盖（依赖变化时后台重启）。
+ * Electron 安装版请走 desktop IPC，勿用本接口覆盖安装目录。
  */
 import { NextResponse } from "next/server";
 import { applyUpdate, checkForUpdate } from "@/lib/local/appUpdate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-/** 下载 GitHub zip 在国内可能较慢 */
 export const maxDuration = 600;
 
 /** 自定义头触发 CORS 预检，防止外部网页跨站 POST 触发更新 */

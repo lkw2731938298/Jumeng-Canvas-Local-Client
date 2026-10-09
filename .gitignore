@@ -1,11 +1,18 @@
-﻿node_modules/
+node_modules/
+vendor/
 .next/
+vendor/opencut-classic/node_modules/
+vendor/opencut-classic/**/.next/
+vendor/opencut-classic/apps/web/.env.local
 .next-diag/
 *.tsbuildinfo
 data/
 runtime/node/
 runtime/_extract/
 runtime/*.zip
+packages/desktop/resources/
+packages/desktop/dist/
+packages/desktop/node_modules/
 *.log
 _desktop_*.txt
 _browser_*.txt
@@ -20,4 +27,3 @@ config/lan.env
 *.pem
 *.key
 !*.example.env
-vendor/

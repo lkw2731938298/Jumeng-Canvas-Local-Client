@@ -36,6 +36,11 @@ import {
   inferAssetCategory,
   isOsFileDrag,
 } from "@/lib/canvas/fileDrop";
+import {
+  importProjectPackIntoCurrent,
+  isProjectPackZip,
+  looksLikeProjectPackFile,
+} from "@/lib/canvas/projectPack";
 import { NODE_IMAGE_SUBCATEGORY, notifyAssetsUpdated, uploadAsset } from "@/lib/api/assets";
 import { validateCanvasImageFile } from "@/lib/canvas/imageSizePolicy";
 import { usePendingGenerationJobPolling } from "@/lib/canvas/usePendingGenerationJobPolling";
@@ -349,11 +354,36 @@ export function FlowEditor() {
       return;
     }
 
+    // 画布工程包 zip：合并导入（新 ID，锚到落点）
+    const packCandidate = files.find((f) => looksLikeProjectPackFile(f));
+    if (packCandidate && files.length === 1) {
+      const isPack = await isProjectPackZip(packCandidate);
+      if (isPack) {
+        const toastId = toast.loading("正在导入画布包…");
+        try {
+          const result = await importProjectPackIntoCurrent(packCandidate, {
+            anchorFlow: dropCenter,
+          });
+          toast.success(
+            `已导入 ${result.nodeCount} 个节点、${result.assetCount} 个素材`,
+            { id: toastId },
+          );
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "导入失败", { id: toastId });
+        }
+        return;
+      }
+    }
+
     const toastId = toast.loading(files.length > 1 ? `正在上传 ${files.length} 个文件…` : "正在上传文件…");
     let successCount = 0;
 
     try {
       for (const file of files) {
+        if (looksLikeProjectPackFile(file)) {
+          toast.error(`请单独拖入画布导出包：${file.name}`);
+          continue;
+        }
         const category = inferAssetCategory(file);
         if (!category) {
           toast.error(`不支持的文件类型：${file.name}`);

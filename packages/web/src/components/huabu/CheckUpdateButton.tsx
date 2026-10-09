@@ -13,6 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { withBasePath } from "@/lib/basePath";
+import { getDesktopApi } from "@/lib/local/types";
+import type { DesktopUpdateCheckResult } from "@/lib/local/types";
 
 interface UpdateCheckResult {
   localVersion: string;
@@ -21,32 +23,49 @@ interface UpdateCheckResult {
   canApply: boolean;
   blockedReason?: string;
   repoUrl: string;
+  /** electron-nsis | gitee-zip */
+  channel?: string;
 }
 
 interface UpdateApplyResult {
   updated: boolean;
   fromVersion: string;
   toVersion: string;
-  filesCopied: number;
-  depsChanged: boolean;
+  filesCopied?: number;
+  depsChanged?: boolean;
   restarting: boolean;
-  manualRestart: boolean;
+  manualRestart?: boolean;
 }
 
 const UPDATE_API = withBasePath("/api/local/update");
-/** 本次会话已静默检查过的结果，避免每次切页都请求 GitHub */
 const SESSION_KEY = "jm_update_check_v1";
-/** 重启等待上限 */
 const RESTART_TIMEOUT_MS = 10 * 60_000;
 
+function isDesktopUpdaterAvailable(): boolean {
+  const api = getDesktopApi();
+  return Boolean(api?.checkDesktopUpdate && api?.applyDesktopUpdate);
+}
+
 async function requestCheck(): Promise<UpdateCheckResult> {
+  if (isDesktopUpdaterAvailable()) {
+    const r = (await getDesktopApi()!.checkDesktopUpdate!()) as DesktopUpdateCheckResult;
+    return {
+      localVersion: r.localVersion,
+      remoteVersion: r.remoteVersion,
+      hasUpdate: r.hasUpdate,
+      canApply: r.canApply,
+      blockedReason: r.blockedReason,
+      repoUrl: r.repoUrl,
+      channel: r.channel || "electron-nsis",
+    };
+  }
   const res = await fetch(UPDATE_API, { cache: "no-store" });
   const json = (await res.json()) as { ok: boolean; result?: UpdateCheckResult; error?: string };
   if (!json.ok || !json.result) throw new Error(json.error || "检查更新失败");
-  return json.result;
+  return { ...json.result, channel: "gitee-zip" };
 }
 
-/** 等服务「先停下、再恢复」后刷新页面（重启脚本会先结束当前进程） */
+/** 等服务「先停下、再恢复」后刷新页面（bat 源码更新重启） */
 async function waitForRestartThenReload(toastId: string | number) {
   const started = Date.now();
   let wentDown = false;
@@ -63,18 +82,18 @@ async function waitForRestartThenReload(toastId: string | number) {
       wentDown = true;
     }
   }
-  toast.error("重启超时，请双击「启动本机画布.bat」手动启动", { id: toastId, duration: 15000 });
+  toast.error("重启超时，请重新打开聚梦无限画布", { id: toastId, duration: 15000 });
 }
 
-/** 顶栏「检查更新」：比对 GitHub 版本号，有新版本时确认后自动下载覆盖 */
+/** 顶栏「检查更新」：Electron 走 Setup 覆盖安装；bat/源码走 Gitee zip 覆盖 */
 export function CheckUpdateButton() {
   const [checking, setChecking] = useState(false);
   const [applying, setApplying] = useState(false);
   const [info, setInfo] = useState<UpdateCheckResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const silentChecked = useRef(false);
+  const desktopMode = isDesktopUpdaterAvailable();
 
-  // 首次进入静默检查一次（会话内缓存），有新版本时按钮显示小红点
   useEffect(() => {
     if (silentChecked.current) return;
     silentChecked.current = true;
@@ -91,7 +110,7 @@ export function CheckUpdateButton() {
         if (alive) setInfo(r);
       })
       .catch(() => {
-        /* 静默检查失败不打扰用户 */
+        /* 静默检查失败不打扰 */
       });
     return () => {
       alive = false;
@@ -125,8 +144,25 @@ export function CheckUpdateButton() {
   const onApply = async () => {
     setConfirmOpen(false);
     setApplying(true);
-    const id = toast.loading("正在从 GitHub 下载新版本，可能需要 1～3 分钟…");
+    const id = toast.loading(
+      desktopMode
+        ? "正在从 Gitee 下载安装包，完成后将自动覆盖安装并重启…"
+        : "正在从 Gitee 下载新版本，可能需要 1～3 分钟…"
+    );
     try {
+      if (desktopMode) {
+        const r = await getDesktopApi()!.applyDesktopUpdate!();
+        sessionStorage.removeItem(SESSION_KEY);
+        if (!r.updated) {
+          toast.success(`已是最新版本 v${r.fromVersion || r.localVersion}`, { id });
+          setApplying(false);
+          return;
+        }
+        toast.loading(`正在安装 v${r.toVersion || r.remoteVersion}，应用即将退出…`, { id });
+        // 主进程会 quit；无需再 setApplying
+        return;
+      }
+
       const res = await fetch(UPDATE_API, {
         method: "POST",
         headers: { "x-jumeng-update": "1" },
@@ -194,8 +230,9 @@ export function CheckUpdateButton() {
           <DialogHeader>
             <DialogTitle>发现新版本 v{info?.remoteVersion}</DialogTitle>
             <DialogDescription>
-              当前版本 v{info?.localVersion}。更新会从 GitHub 下载最新源码并覆盖程序文件，
-              不会影响 data 目录中的项目、素材与模型配置；如依赖有变化，将自动重装并重启画布。
+              {desktopMode
+                ? `当前版本 v${info?.localVersion}。将从 Gitee 下载安装包并覆盖安装（无需先卸载），项目与密钥保存在本机用户目录，不会丢失。`
+                : `当前版本 v${info?.localVersion}。更新会从 Gitee 下载最新源码并覆盖程序文件，不会影响 data 目录中的项目、素材与模型配置；如依赖有变化，将自动重装并重启画布。`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -1,18 +1,75 @@
 {
   "name": "@jumeng-canvas/desktop",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "main": "main.js",
   "appId": "com.lieka.jumengcanvas",
+  "productName": "聚梦无限画布",
+  "description": "聚梦无限画布 · 本地桌面版",
+  "author": "Jumeng",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "pack:win": "electron-builder --win --x64"
   },
   "build": {
     "appId": "com.lieka.jumengcanvas",
-    "productName": "聚梦无限画布"
+    "productName": "聚梦无限画布",
+    "copyright": "Copyright © Jumeng",
+    "electronVersion": "33.2.1",
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/web",
+        "to": "web"
+      },
+      {
+        "from": "resources/node",
+        "to": "node"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "JumengCanvas-Setup-${version}.${ext}",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "聚梦无限画布",
+      "deleteAppDataOnUninstall": false,
+      "unicode": true,
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "language": "2052"
+    }
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "25.1.8"
   }
 }

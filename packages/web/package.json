@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/web",
-  "version": "0.1.4",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3456",
@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dagre": "^0.8.5",
+    "fflate": "^0.8.3",
     "gsap": "^3.15.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",

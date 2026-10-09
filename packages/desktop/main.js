@@ -1,11 +1,15 @@
 /**
- * Electron 主进程：双击启动 → 打开 WebUI；配置/项目读写应用数据目录。
+ * Electron 主进程：
+ * - 开发：拉起 next dev
+ * - 已安装：用资源目录内便携 Node 跑 Next standalone
+ * 配置/项目默认落在 userData（打包态通过环境变量交给 Next）。
  */
 const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
 const http = require("http");
+const { checkDesktopUpdate, applyDesktopUpdate } = require("./updater");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -29,6 +33,13 @@ function dataRoot() {
   fs.mkdirSync(root, { recursive: true });
   fs.mkdirSync(path.join(root, "projects"), { recursive: true });
   return root;
+}
+
+/** Next 侧引导文件父目录（可写） */
+function dataParentForNext() {
+  const parent = path.join(app.getPath("userData"), "data");
+  fs.mkdirSync(parent, { recursive: true });
+  return parent;
 }
 
 function filePath(...parts) {
@@ -60,6 +71,19 @@ function defaultConfig() {
 
 function registerIpc() {
   ipcMain.handle("desktop:getDataRoot", async () => dataRoot());
+  ipcMain.handle("desktop:isPackaged", async () => app.isPackaged);
+  ipcMain.handle("desktop:getAppVersion", async () => app.getVersion());
+
+  ipcMain.handle("desktop:checkDesktopUpdate", async () => checkDesktopUpdate());
+  ipcMain.handle("desktop:applyDesktopUpdate", async () => {
+    const result = await applyDesktopUpdate();
+    if (result.updated && result.restarting) {
+      setTimeout(() => {
+        app.quit();
+      }, 400);
+    }
+    return result;
+  });
 
   ipcMain.handle("desktop:readConfig", async () =>
     readJson(filePath("config.json"), defaultConfig())
@@ -163,7 +187,6 @@ function registerIpc() {
     return `data:application/octet-stream;base64,${buf.toString("base64")}`;
   });
 
-  // 本机素材索引：与 Harness /api/local listAssets 对齐，避免误连 FastAPI
   ipcMain.handle("desktop:listAssets", async (_e, projectId) => {
     const dir = path.join(dataRoot(), "projects", projectId, "assets");
     const indexFp = path.join(dir, "index.json");
@@ -285,12 +308,10 @@ function probeUrl(url, timeoutMs = 1500) {
 }
 
 async function waitForUrl(url, tries = 180, opts = {}) {
-  // 首次 Next 编译可能较慢，最多约 90 秒；若 Next 进程已退出则立刻失败
   for (let i = 0; i < tries; i++) {
     if (opts.isDead && opts.isDead()) {
       throw new Error(
         `WebUI 进程已退出，未能监听 ${url}\n` +
-          `常见原因：同目录旧 Next 占用了 .next/dev/lock。\n` +
           `日志：${path.join(app.getPath("userData"), "desktop-start.log")}`
       );
     }
@@ -302,7 +323,7 @@ async function waitForUrl(url, tries = 180, opts = {}) {
   }
   throw new Error(
     `WebUI 未在预期时间内启动：${url}\n` +
-      `请关闭占用端口 ${DESKTOP_PORT} 的进程后重试，或设置环境变量 JUMENG_DESKTOP_PORT。\n` +
+      `请关闭占用端口 ${DESKTOP_PORT} 的进程后重试。\n` +
       `日志：${path.join(app.getPath("userData"), "desktop-start.log")}`
   );
 }
@@ -317,10 +338,6 @@ function processAlive(pid) {
   }
 }
 
-/**
- * 释放同目录旧 Next 的 .next/dev/lock，避免「Another next dev server is already running」导致闪退。
- * 仅处理本 packages/web 目录下的锁；若锁指向本桌面端口且已可访问则保留。
- */
 function releaseStaleNextLock(webDir) {
   const lockPath = path.join(webDir, ".next", "dev", "lock");
   if (!fs.existsSync(lockPath)) return;
@@ -342,7 +359,7 @@ function releaseStaleNextLock(webDir) {
     return;
   }
   if (processAlive(pid)) {
-    appendLog(`[desktop] 结束旧 Next pid=${pid} port=${port}（释放 lock）`);
+    appendLog(`[desktop] 结束旧 Next pid=${pid} port=${port}`);
     try {
       const { execSync } = require("child_process");
       if (process.platform === "win32") {
@@ -355,57 +372,30 @@ function releaseStaleNextLock(webDir) {
     }
   }
   try {
-    if (fs.existsSync(lockPath)) {
-      fs.unlinkSync(lockPath);
-      appendLog(`[desktop] 已删除 stale lock: ${lockPath}`);
-    }
-  } catch (e) {
-    appendLog(`[desktop] 删除 lock 失败: ${e && e.message ? e.message : e}`);
+    if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
+  } catch {
+    /* ignore */
   }
 }
 
-async function startNextDevIfNeeded() {
-  if (process.env.JUMENG_DESKTOP_URL) return null;
-  const url = webUrl();
-  if (await probeUrl(url)) {
-    appendLog(`[desktop] 复用已在运行的 WebUI：${url}`);
-    return null;
-  }
-  const root = path.resolve(__dirname, "../..");
-  const webDir = path.join(root, "packages", "web");
-  releaseStaleNextLock(webDir);
-  // 给 taskkill 一点时间释放端口/锁文件
-  await new Promise((r) => setTimeout(r, 800));
-  releaseStaleNextLock(webDir);
+function nextEnvBase() {
+  const dataParent = dataParentForNext();
+  const jumengRoot = path.join(dataParent, "JumengCanvas");
+  return {
+    ...process.env,
+    NEXT_PUBLIC_LOCAL_DESKTOP: "1",
+    NEXT_PUBLIC_ADMIN_AUTH_DISABLED: "true",
+    NEXT_PUBLIC_STORAGE_URL_MODE: "proxy",
+    PORT: String(DESKTOP_PORT),
+    HOSTNAME: DESKTOP_HOST,
+    JUMENG_DATA_PARENT: dataParent,
+    JUMENG_LOCAL_DATA_DIR: jumengRoot,
+  };
+}
 
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-  appendLog(`[desktop] 启动 Next：${DESKTOP_HOST}:${DESKTOP_PORT}`);
+function wrapChild(child) {
   let exited = false;
   let exitCode = null;
-  const child = spawn(
-    npmCmd,
-    [
-      "exec",
-      "--",
-      "next",
-      "dev",
-      "--hostname",
-      DESKTOP_HOST,
-      "--port",
-      String(DESKTOP_PORT),
-    ],
-    {
-      cwd: webDir,
-      env: {
-        ...process.env,
-        NEXT_PUBLIC_LOCAL_DESKTOP: "1",
-        NEXT_PUBLIC_ADMIN_AUTH_DISABLED: "true",
-        PORT: String(DESKTOP_PORT),
-      },
-      stdio: "pipe",
-      shell: true,
-    }
-  );
   child.stdout?.on("data", (buf) => {
     const s = String(buf);
     process.stdout.write(s);
@@ -425,6 +415,81 @@ async function startNextDevIfNeeded() {
   return child;
 }
 
+/** 已安装：resources/web + resources/node */
+async function startPackagedNext() {
+  if (process.env.JUMENG_DESKTOP_URL) return null;
+  const url = webUrl();
+  if (await probeUrl(url)) {
+    appendLog(`[desktop] 复用已在运行的 WebUI：${url}`);
+    return null;
+  }
+
+  const resRoot = process.resourcesPath;
+  const webRoot = path.join(resRoot, "web");
+  const metaPath = path.join(webRoot, "jumeng-desktop-meta.json");
+  const meta = readJson(metaPath, null);
+  const serverRel = (meta && meta.serverRel) || "packages/web/server.js";
+  const serverJs = path.join(webRoot, ...serverRel.split("/"));
+  if (!fs.existsSync(serverJs)) {
+    throw new Error(`安装包缺少 Web 服务：${serverJs}`);
+  }
+
+  const nodeExe = process.platform === "win32"
+    ? path.join(resRoot, "node", "node.exe")
+    : path.join(resRoot, "node", "bin", "node");
+  if (!fs.existsSync(nodeExe)) {
+    throw new Error(`安装包缺少便携 Node：${nodeExe}`);
+  }
+
+  const cwd = path.dirname(serverJs);
+  appendLog(`[desktop] 启动 standalone：${nodeExe} ${serverJs}`);
+  const child = spawn(nodeExe, [serverJs], {
+    cwd,
+    env: nextEnvBase(),
+    stdio: "pipe",
+    windowsHide: true,
+  });
+  return wrapChild(child);
+}
+
+/** 开发：源码树 next dev */
+async function startNextDevIfNeeded() {
+  if (process.env.JUMENG_DESKTOP_URL) return null;
+  const url = webUrl();
+  if (await probeUrl(url)) {
+    appendLog(`[desktop] 复用已在运行的 WebUI：${url}`);
+    return null;
+  }
+  const root = path.resolve(__dirname, "../..");
+  const webDir = path.join(root, "packages", "web");
+  releaseStaleNextLock(webDir);
+  await new Promise((r) => setTimeout(r, 800));
+  releaseStaleNextLock(webDir);
+
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  appendLog(`[desktop] 启动 Next dev：${DESKTOP_HOST}:${DESKTOP_PORT}`);
+  const child = spawn(
+    npmCmd,
+    [
+      "exec",
+      "--",
+      "next",
+      "dev",
+      "--hostname",
+      DESKTOP_HOST,
+      "--port",
+      String(DESKTOP_PORT),
+    ],
+    {
+      cwd: webDir,
+      env: nextEnvBase(),
+      stdio: "pipe",
+      shell: true,
+    }
+  );
+  return wrapChild(child);
+}
+
 function showBootWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -436,21 +501,26 @@ function showBootWindow() {
       sandbox: false,
     },
     show: true,
-    title: "开源画布 · 本地版",
+    title: "聚梦无限画布",
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
-  // 先显示启动页，避免用户以为闪退
+  const hint = app.isPackaged
+    ? "正在启动本机界面…"
+    : `正在启动本机界面（${DESKTOP_HOST}:${DESKTOP_PORT}）…`;
+  const sub = app.isPackaged
+    ? "请稍候"
+    : "开发模式首次编译可能需要 1～2 分钟，请勿关闭";
   void mainWindow.loadURL(
     "data:text/html;charset=utf-8," +
       encodeURIComponent(
         `<!doctype html><html><body style="margin:0;font-family:system-ui;background:#0f1115;color:#e8eaed;display:flex;align-items:center;justify-content:center;height:100vh">
         <div style="text-align:center;line-height:1.6">
-          <div style="font-size:22px;font-weight:600">开源画布 · 本地版</div>
-          <div style="opacity:.75;margin-top:12px">正在启动本机界面（${DESKTOP_HOST}:${DESKTOP_PORT}）…</div>
-          <div style="opacity:.5;margin-top:8px;font-size:13px">首次编译可能需要 1～2 分钟，请勿关闭</div>
+          <div style="font-size:22px;font-weight:600">聚梦无限画布</div>
+          <div style="opacity:.75;margin-top:12px">${hint}</div>
+          <div style="opacity:.5;margin-top:8px;font-size:13px">${sub}</div>
         </div></body></html>`
       )
   );
@@ -460,10 +530,9 @@ async function createWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) showBootWindow();
 
   const url = webUrl();
-  await waitForUrl(url, 180, {
+  await waitForUrl(url, app.isPackaged ? 120 : 180, {
     isDead: () => Boolean(nextProc && typeof nextProc.isDead === "function" && nextProc.isDead()),
   });
-  // 优先打开上次项目；否则进入项目列表
   const cfg = readJson(filePath("config.json"), defaultConfig());
   const lastId = cfg && cfg.lastProjectId ? String(cfg.lastProjectId) : "";
   const entry =
@@ -474,31 +543,46 @@ async function createWindow() {
   await mainWindow.loadURL(entry);
 }
 
+function killNext() {
+  if (nextProc && !nextProc.killed) {
+    try {
+      if (process.platform === "win32" && nextProc.pid) {
+        const { execSync } = require("child_process");
+        execSync(`taskkill /PID ${nextProc.pid} /T /F`, { stdio: "ignore" });
+      } else {
+        nextProc.kill();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  nextProc = null;
+}
+
 app.whenReady().then(async () => {
   try {
-    appendLog("[desktop] whenReady");
+    appendLog(`[desktop] whenReady packaged=${app.isPackaged} v=${app.getVersion()}`);
     dataRoot();
     registerIpc();
     showBootWindow();
-    nextProc = await startNextDevIfNeeded();
+    nextProc = app.isPackaged ? await startPackagedNext() : await startNextDevIfNeeded();
     await createWindow();
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
     appendLog(`[desktop] 启动失败: ${msg}`);
-    dialog.showErrorBox("开源画布启动失败", msg);
+    dialog.showErrorBox("聚梦无限画布启动失败", msg);
+    killNext();
     app.quit();
   }
 });
 
 app.on("window-all-closed", () => {
-  if (nextProc && !nextProc.killed) {
-    try {
-      nextProc.kill();
-    } catch {
-      /* ignore */
-    }
-  }
+  killNext();
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  killNext();
 });
 
 app.on("activate", () => {

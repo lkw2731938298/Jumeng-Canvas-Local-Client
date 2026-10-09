@@ -205,13 +205,42 @@ export interface LocalDesktopApi {
   }>;
 }
 
+/** Electron 安装包更新（Gitee Releases Setup.exe） */
+export type DesktopUpdateCheckResult = {
+  localVersion: string;
+  remoteVersion: string;
+  hasUpdate: boolean;
+  canApply: boolean;
+  blockedReason?: string;
+  repoUrl: string;
+  setupName?: string | null;
+  setupUrl?: string | null;
+  channel?: string;
+};
+
+export type DesktopUpdateApplyResult = {
+  updated: boolean;
+  fromVersion?: string;
+  toVersion?: string;
+  restarting?: boolean;
+  localVersion?: string;
+  remoteVersion?: string;
+};
+
+export type JumengDesktopBridge = LocalDesktopApi & {
+  isPackaged?: () => Promise<boolean>;
+  getAppVersion?: () => Promise<string>;
+  checkDesktopUpdate?: () => Promise<DesktopUpdateCheckResult>;
+  applyDesktopUpdate?: () => Promise<DesktopUpdateApplyResult>;
+};
+
 declare global {
   interface Window {
-    jumengDesktop?: LocalDesktopApi;
+    jumengDesktop?: JumengDesktopBridge;
   }
 }
 
-export function getDesktopApi(): LocalDesktopApi | null {
+export function getDesktopApi(): JumengDesktopBridge | null {
   if (typeof window === "undefined") return null;
   return window.jumengDesktop ?? null;
 }

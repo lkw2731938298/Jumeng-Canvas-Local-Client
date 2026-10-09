@@ -38,6 +38,11 @@ function nowIso() {
 
 /** monorepo 的 data 目录（引导文件固定写在这里，不随用户数据根搬家） */
 export function resolveDataParentDir(): string {
+  // Electron 安装版：指向 %AppData% 下可写目录，避免写到 Program Files
+  const envParent = process.env.JUMENG_DATA_PARENT?.trim();
+  if (envParent) {
+    return path.resolve(envParent);
+  }
   const cwd = process.cwd();
   if (/packages[\\/]web$/i.test(cwd)) {
     return path.resolve(cwd, "../../data");

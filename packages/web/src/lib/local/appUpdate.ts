@@ -1,7 +1,9 @@
 /**
- * 开源本地版「检查更新」：以 GitHub main 分支根 package.json 的 version 为准，
+ * 开源本地版「检查更新」（bat / 源码便携包）：
+ * 以 Gitee main 分支根 package.json 的 version 为准，
  * 有更新时下载源码 zip → 临时目录解压校验 → 覆盖程序文件（不动 data / runtime / node_modules 等）。
  * 依赖有变化时（Windows）拉起独立隐藏脚本：停服 → npm install → 重启。
+ * Electron 安装版走 packages/desktop/updater.js（Gitee Releases Setup.exe）。
  */
 import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -13,14 +15,16 @@ import { resolveDataParentDir } from "./dataLocation";
 
 const execFileAsync = promisify(execFile);
 
-export const UPDATE_REPO = "lkw2731938298/Jumeng-Canvas-Local-Client";
+/** Gitee 开源仓库（与落地页、exe 发版一致） */
+export const UPDATE_GITEE_OWNER = "liukewen0112";
+export const UPDATE_GITEE_REPO = "Jumeng-Canvas-Local-Client";
 export const UPDATE_BRANCH = "main";
-export const UPDATE_REPO_URL = `https://github.com/${UPDATE_REPO}`;
-const REMOTE_PACKAGE_URL = `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/package.json`;
-const REMOTE_ZIP_URL = `https://codeload.github.com/${UPDATE_REPO}/zip/refs/heads/${UPDATE_BRANCH}`;
+export const UPDATE_REPO = `${UPDATE_GITEE_OWNER}/${UPDATE_GITEE_REPO}`;
+export const UPDATE_REPO_URL = `https://gitee.com/${UPDATE_REPO}`;
+const REMOTE_PACKAGE_URL = `https://gitee.com/${UPDATE_REPO}/raw/${UPDATE_BRANCH}/package.json`;
+const REMOTE_ZIP_URL = `https://gitee.com/${UPDATE_REPO}/repository/archive/${UPDATE_BRANCH}.zip`;
 
 const CHECK_TIMEOUT_MS = 20_000;
-/** 国内直连 GitHub 较慢，zip 约 10MB 可能需要 1 分钟以上 */
 const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
 
 /** 覆盖时跳过的顶层目录：用户数据、便携 Node、依赖与版本库 */
@@ -96,11 +100,11 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
-    if (!res.ok) throw new Error(`GitHub 返回 HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`Gitee 返回 HTTP ${res.status}`);
     return res;
   } catch (err) {
-    if (ctrl.signal.aborted) throw new Error("连接 GitHub 超时，请检查网络后重试");
-    throw new Error(`无法连接 GitHub：${err instanceof Error ? err.message : String(err)}`);
+    if (ctrl.signal.aborted) throw new Error("连接 Gitee 超时，请检查网络后重试");
+    throw new Error(`无法连接 Gitee：${err instanceof Error ? err.message : String(err)}`);
   } finally {
     clearTimeout(timer);
   }
@@ -151,7 +155,7 @@ async function extractZip(zipPath: string, dest: string) {
   }
 }
 
-/** 解压目录下定位源码根（GitHub zip 外层为 仓库名-分支/） */
+/** 解压目录下定位源码根（Gitee zip 外层多为 仓库名-分支/） */
 function locateSourceRoot(extractDir: string): string {
   if (fs.existsSync(path.join(extractDir, "package.json"))) return extractDir;
   const dirs = fs

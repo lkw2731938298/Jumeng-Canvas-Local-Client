@@ -9,11 +9,13 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { useAuthStore } from "@/stores/authStore";
 import {
   ChevronDown,
+  Download,
   FolderOpen,
   Home,
   Loader2,
   Play,
   Plus,
+  Upload,
 } from "lucide-react";
 import { UserAccountMenu } from "@/components/user/UserAccountMenu";
 import { formatPresenceLabel, useProjectPresence } from "@/lib/canvas/useProjectPresence";
@@ -36,6 +38,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Project } from "@/types";
+import {
+  downloadBlob,
+  exportCurrentProjectPack,
+  importProjectPackIntoCurrent,
+  pickProjectPackFile,
+} from "@/lib/canvas/projectPack";
 
 /** 按更新时间取最近若干项目（排除当前） */
 function pickRecentProjects(projects: Project[], currentId: string | null, limit = 8): Project[] {
@@ -103,7 +111,43 @@ export function CanvasHeader() {
 
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [packBusy, setPackBusy] = useState<"export" | "import" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportPack = async () => {
+    if (packBusy) return;
+    setPackBusy("export");
+    const toastId = toast.loading("正在导出画布…");
+    try {
+      await saveWorkflow();
+      const { blob, fileName } = await exportCurrentProjectPack();
+      downloadBlob(blob, fileName);
+      toast.success("已导出画布包", { id: toastId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导出失败", { id: toastId });
+    } finally {
+      setPackBusy(null);
+    }
+  };
+
+  const handleImportPack = async () => {
+    if (packBusy) return;
+    const file = await pickProjectPackFile();
+    if (!file) return;
+    setPackBusy("import");
+    const toastId = toast.loading("正在导入画布包…");
+    try {
+      const result = await importProjectPackIntoCurrent(file);
+      toast.success(
+        `已导入 ${result.nodeCount} 个节点、${result.assetCount} 个素材`,
+        { id: toastId },
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导入失败", { id: toastId });
+    } finally {
+      setPackBusy(null);
+    }
+  };
 
   const selectionIds = useMemo(() => {
     if (selectedFlowIds.length > 0) return selectedFlowIds;
@@ -245,6 +289,31 @@ export function CanvasHeader() {
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
 
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="gap-2"
+                disabled={Boolean(packBusy) || !projectId || isLoading}
+                onClick={() => void handleExportPack()}
+              >
+                {packBusy === "export" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                导出
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2"
+                disabled={Boolean(packBusy) || !projectId || isLoading}
+                onClick={() => void handleImportPack()}
+              >
+                {packBusy === "import" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                导入
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="gap-2" onClick={() => leaveCanvas("/")}>
                 <Home className="h-4 w-4" />
