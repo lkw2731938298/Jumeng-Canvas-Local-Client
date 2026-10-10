@@ -60,6 +60,13 @@ export interface DirectorStageCanvasProps {
     onAddPoint: (point: [number, number, number]) => void;
     onFinish: () => void;
   } | null;
+  /** 已有路径控制点编辑 */
+  motionPathEditing?: {
+    path: import("@jumeng-canvas/shared").DirectorMotionPath | null;
+    enabled: boolean;
+    onUpdatePoint: (pathId: string, index: number, point: [number, number, number]) => void;
+  } | null;
+  onDragChange?: (dragging: boolean) => void;
 }
 
 function DirectorViewLayers() {
@@ -241,13 +248,19 @@ function MainDirectorView({
   mannequinEditMode = "transform",
   onBonePoseChange,
   motionPathDrawing = null,
+  motionPathEditing = null,
+  onDragChange,
 }: Omit<DirectorStageCanvasProps, "stageBodyRef" | "mainViewRef" | "liveCameraRef" | "lensPreview">) {
   const interactionLocksRef = useRef(0);
 
-  const setInteracting = useCallback((active: boolean) => {
-    interactionLocksRef.current += active ? 1 : -1;
-    if (interactionLocksRef.current < 0) interactionLocksRef.current = 0;
-  }, []);
+  const setInteracting = useCallback(
+    (active: boolean) => {
+      interactionLocksRef.current += active ? 1 : -1;
+      if (interactionLocksRef.current < 0) interactionLocksRef.current = 0;
+      onDragChange?.(active);
+    },
+    [onDragChange]
+  );
 
   const selectedObject = scene.objects.find((o) => o.id === selectedObjectId) ?? null;
   const isCameraFirstPerson =
@@ -290,6 +303,7 @@ function MainDirectorView({
         mannequinEditMode={mannequinEditMode}
         onBonePoseChange={onBonePoseChange}
         motionPathDrawing={motionPathDrawing}
+        motionPathEditing={motionPathEditing}
       />
 
       {isDirectorView ? (

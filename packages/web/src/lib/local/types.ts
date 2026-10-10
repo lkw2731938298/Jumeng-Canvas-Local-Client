@@ -157,6 +157,7 @@ export interface LocalDesktopApi {
         | "status"
         | "error"
         | "resultUrlPreview"
+        | "resultAssetId"
         | "upstreamModel"
         | "modelLabel"
         | "referenceCount"

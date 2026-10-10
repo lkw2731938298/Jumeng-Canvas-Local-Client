@@ -25,6 +25,7 @@ export async function withLocalGenerationJob<T>(
   }) => Promise<{
     result: T;
     resultUrlPreview?: string;
+    resultAssetId?: string;
     upstreamModel?: string;
     providerTaskId?: string;
     submittedReferenceCount?: number;
@@ -73,10 +74,11 @@ export async function withLocalGenerationJob<T>(
           status: "succeeded",
           error: "",
           resultUrlPreview: out.resultUrlPreview
-            ? String(out.resultUrlPreview).slice(0, 200)
+            ? String(out.resultUrlPreview).slice(0, 2000)
             : undefined,
           upstreamModel: out.upstreamModel || input.upstreamModel,
         };
+        if (out.resultAssetId) patch.resultAssetId = out.resultAssetId;
         if (out.providerTaskId) patch.providerTaskId = out.providerTaskId;
         if (typeof out.submittedReferenceCount === "number") {
           patch.submittedReferenceCount = out.submittedReferenceCount;
@@ -96,16 +98,20 @@ export async function withLocalGenerationJob<T>(
   } catch (err) {
     if (jobId) {
       try {
-        const patch: LocalGenerationJobPatch = {
-          status: "failed",
-          error: err instanceof Error ? err.message : String(err),
-        };
-        if (err instanceof LocalUpstreamJobError && err.providerTaskId) {
-          patch.providerTaskId = err.providerTaskId;
+        // 任务页「同步上游」可能已先标成功；勿被画布侧超时/失败覆盖
+        const existing = (await api.listGenerationJobs()).find((j) => j.id === jobId);
+        if (existing?.status !== "succeeded") {
+          const patch: LocalGenerationJobPatch = {
+            status: "failed",
+            error: err instanceof Error ? err.message : String(err),
+          };
+          if (err instanceof LocalUpstreamJobError && err.providerTaskId) {
+            patch.providerTaskId = err.providerTaskId;
+          }
+          await api.updateGenerationJob(jobId, patch);
         }
-        await api.updateGenerationJob(jobId, patch);
       } catch {
-        /* ignore */
+        /* ignore patch failure */
       }
     }
     throw err;

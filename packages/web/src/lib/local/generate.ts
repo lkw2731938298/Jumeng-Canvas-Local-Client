@@ -2990,7 +2990,7 @@ async function pollLocalVideoTaskOnceLoop(params: {
 
 /**
  * 任务列表「同步上游」：按已保存的 providerTaskId 短轮询，更新本机任务状态。
- * 不重新 POST，避免重复扣费。
+ * 成功后回写画布节点（结束转圈），不重新 POST，避免重复扣费。
  */
 export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise<{
   status: "succeeded" | "failed" | "running";
@@ -3015,11 +3015,51 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
   const isVideo = job.category === "video";
   const syncBudgetMs = SYNC_POLL_BUDGET_MS;
 
+  const finishSucceeded = async (preview: string, assetId?: string, message?: string) => {
+    const patch: {
+      status: "succeeded";
+      error: string;
+      resultUrlPreview: string;
+      providerTaskId: string;
+      resultAssetId?: string;
+    } = {
+      status: "succeeded",
+      error: "",
+      resultUrlPreview: String(preview).slice(0, 2000),
+      providerTaskId: taskId,
+    };
+    if (assetId) patch.resultAssetId = assetId;
+    await api.updateGenerationJob(jobId, patch);
+    // 回写画布：任务页同步成功时节点往往仍在转圈
+    try {
+      const { applyLocalGenerationJobResultToCanvas } = await import(
+        "@/lib/local/applyLocalJobToCanvas"
+      );
+      const applied = await applyLocalGenerationJobResultToCanvas(
+        { ...job, ...patch, id: jobId },
+        { url: preview, assetId }
+      );
+      return {
+        status: "succeeded" as const,
+        message:
+          (message || "上游已完成") + (applied ? "，已回写画布节点" : ""),
+        resultUrlPreview: preview,
+      };
+    } catch {
+      return {
+        status: "succeeded" as const,
+        message: message || "上游已完成",
+        resultUrlPreview: preview,
+      };
+    }
+  };
+
   // 3D 任务：只按 task_id 查询 + 重新下载 GLB，不重新 POST
   if (job.category === "model3d") {
     try {
       const url = await pollModel3dTaskLoop({ apiBase, apiKey, taskId, timeoutMs: syncBudgetMs });
       let preview = url;
+      let assetId: string | undefined;
       if (job.projectId) {
         const saved = await persistLocalModel3dResult({
           projectId: job.projectId,
@@ -3028,12 +3068,15 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
           title: job.promptPreview || "AI 3D 模型",
         });
         preview = saved.fileUrl;
+        assetId = saved.assetId;
       }
+      // 3D 主要进素材库 / 导演台，无画布媒体节点回写
       await api.updateGenerationJob(jobId, {
         status: "succeeded",
         error: "",
-        resultUrlPreview: String(preview).slice(0, 200),
+        resultUrlPreview: String(preview).slice(0, 2000),
         providerTaskId: taskId,
+        ...(assetId ? { resultAssetId: assetId } : {}),
       });
       return {
         status: "succeeded",
@@ -3075,13 +3118,7 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
           /* 预览失败仍用上游 URL */
         }
       }
-      await api.updateGenerationJob(jobId, {
-        status: "succeeded",
-        error: "",
-        resultUrlPreview: String(preview).slice(0, 200),
-        providerTaskId: taskId,
-      });
-      return { status: "succeeded", message: "上游视频已完成", resultUrlPreview: preview };
+      return finishSucceeded(preview, undefined, "上游视频已完成");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (/超时/.test(msg)) {
@@ -3112,29 +3149,24 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
       });
       if (got.url || got.b64) {
         let preview = got.url || "";
+        let assetId: string | undefined;
         if (job.projectId && job.nodeId) {
           try {
-            preview = (
-              await persistLocalImageResult({
-                projectId: job.projectId,
-                nodeId: job.nodeId,
-                url: got.url,
-                b64: got.b64,
-              })
-            ).url;
+            const persisted = await persistLocalImageResult({
+              projectId: job.projectId,
+              nodeId: job.nodeId,
+              url: got.url,
+              b64: got.b64,
+            });
+            preview = persisted.url;
+            assetId = persisted.assetId;
           } catch {
             if (got.b64) preview = "(b64)";
           }
         } else if (got.b64 && !preview) {
           preview = "(b64)";
         }
-        await api.updateGenerationJob(jobId, {
-          status: "succeeded",
-          error: "",
-          resultUrlPreview: String(preview).slice(0, 200),
-          providerTaskId: taskId,
-        });
-        return { status: "succeeded", message: "上游图片已完成", resultUrlPreview: preview };
+        return finishSucceeded(preview, assetId, "上游图片已完成");
       }
       if (got.failed) {
         await api.updateGenerationJob(jobId, {

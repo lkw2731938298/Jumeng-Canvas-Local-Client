@@ -39,12 +39,15 @@ import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { normalizeDirectorScene } from "@/lib/director/sceneNormalize";
 import {
   applySampleToScene,
+  buildCameraMotionPath,
   createAnimKeyframe,
   createAnimTrack,
   createMotionPath,
   evaluateTimeline,
+  invalidateMotionPathCache,
   openOrCreateAnimation,
   upsertKeyframe,
+  type CameraMotionPresetId,
 } from "@/lib/director/animation";
 import {
   defaultLensCaptureOptions,
@@ -191,6 +194,21 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [panoramaUploadUrl, setPanoramaUploadUrl] = useState<string | null>(null);
   const timelinePlayFromRef = useRef(0);
   const timelineRafRef = useRef<number | null>(null);
+  /** 自动帧：transform 结束时读最新时间轴状态（避免闭包过期） */
+  const timelineAutoKfRef = useRef({
+    open: false,
+    playing: false,
+    playhead: 0,
+    drawingTrackId: null as string | null,
+    autoKeyframe: false,
+  });
+  timelineAutoKfRef.current = {
+    open: timelineOpen,
+    playing: timelinePlaying,
+    playhead: timelinePlayhead,
+    drawingTrackId,
+    autoKeyframe: !!scene?.animation?.ui?.autoKeyframe,
+  };
 
   const stageBodyRef = useRef<HTMLDivElement | null>(null);
   const mainViewRef = useRef<HTMLDivElement | null>(null);
@@ -478,17 +496,54 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const handleObjectTransform = useCallback(
     (id: string, transform: DirectorObject["transform"]) => {
-      patchScene((prev) => ({
-        ...prev,
-        objects: prev.objects.map((obj) => {
+      const auto = timelineAutoKfRef.current;
+      const shouldAutoKf =
+        auto.open && auto.autoKeyframe && !auto.drawingTrackId;
+      if (shouldAutoKf && auto.playing) {
+        setTimelinePlaying(false);
+      }
+      patchScene((prev) => {
+        const objects = prev.objects.map((obj) => {
           if (obj.id !== id) return obj;
           const next: DirectorObject = { ...obj, transform };
           if (obj.kind === "camera" && obj.lookAt) {
             next.lookAt = syncCameraLookAtFromTransform(transform, obj.lookAt);
           }
           return next;
-        }),
-      }));
+        });
+        let animation = prev.animation;
+        // P1 自动帧：时间轴打开且开关开启时，在播放头写入完整 transform
+        if (shouldAutoKf && animation?.ui?.autoKeyframe) {
+          const track = animation.tracks.find((t) => t.targetId === id);
+          const obj = objects.find((o) => o.id === id);
+          if (track && !track.locked && obj) {
+            const lookAt =
+              obj.kind === "camera"
+                ? ([...(obj.lookAt ?? [0, 1, 0])] as [number, number, number])
+                : undefined;
+            const kf = createAnimKeyframe(auto.playhead, {
+              position: [...transform.position] as [number, number, number],
+              rotation: [...transform.rotation] as [number, number, number],
+              scale: [...transform.scale] as [number, number, number],
+              lookAt,
+              fov: obj.kind === "camera" ? obj.fov ?? 45 : undefined,
+            });
+            animation = {
+              ...animation,
+              tracks: animation.tracks.map((t) =>
+                t.id === track.id
+                  ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) }
+                  : t
+              ),
+            };
+          }
+        }
+        return {
+          ...prev,
+          objects,
+          ...(animation ? { animation, version: "1.3" as const } : {}),
+        };
+      });
       liveCameraRef.current = null;
       liveCameraTransformRef.current = null;
     },
@@ -1345,22 +1400,54 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       toast.error("至少需要 2 个路径点");
       return;
     }
-    const path = createMotionPath(draftPathPoints, "轨迹");
-    patchAnimation((anim) => ({
-      ...anim,
-      motionPaths: [...anim.motionPaths, path],
-      tracks: anim.tracks.map((t) =>
-        t.id === drawingTrackId
-          ? {
-              ...t,
-              motionPathId: path.id,
-              motionPathStart: 0,
-              motionPathEnd: 1,
-              orientToPath: t.kind !== "prop",
-            }
-          : t
-      ),
-    }));
+    const trackId = drawingTrackId;
+    const points = draftPathPoints.map(
+      (p) => [...p] as [number, number, number]
+    );
+    patchAnimation((anim) => {
+      const track = anim.tracks.find((t) => t.id === trackId);
+      const existingId = track?.motionPathId;
+      const existing = existingId
+        ? anim.motionPaths.find((p) => p.id === existingId)
+        : null;
+      if (existing) {
+        // 延伸：更新同一 path，避免 orphan
+        invalidateMotionPathCache(existing.id);
+        return {
+          ...anim,
+          motionPaths: anim.motionPaths.map((p) =>
+            p.id === existing.id ? { ...p, points } : p
+          ),
+          tracks: anim.tracks.map((t) =>
+            t.id === trackId
+              ? {
+                  ...t,
+                  motionPathId: existing.id,
+                  motionPathStart: 0,
+                  motionPathEnd: 1,
+                  orientToPath: t.kind !== "prop",
+                }
+              : t
+          ),
+        };
+      }
+      const path = createMotionPath(points, "轨迹");
+      return {
+        ...anim,
+        motionPaths: [...anim.motionPaths, path],
+        tracks: anim.tracks.map((t) =>
+          t.id === trackId
+            ? {
+                ...t,
+                motionPathId: path.id,
+                motionPathStart: 0,
+                motionPathEnd: 1,
+                orientToPath: t.kind !== "prop",
+              }
+            : t
+        ),
+      };
+    });
     setDrawingTrackId(null);
     setDraftPathPoints([]);
     toast.success("已绑定运动路径");
@@ -1404,6 +1491,135 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             ? { ...t, keyframes: t.keyframes.filter((k) => k.id !== keyframeId) }
             : t
         ),
+      }));
+    },
+    [patchAnimation]
+  );
+
+  const moveTimelineKeyframe = useCallback(
+    (trackId: string, keyframeId: string, time: number) => {
+      patchAnimation((anim) => ({
+        ...anim,
+        tracks: anim.tracks.map((t) => {
+          if (t.id !== trackId) return t;
+          return {
+            ...t,
+            keyframes: [...t.keyframes]
+              .map((k) => (k.id === keyframeId ? { ...k, time } : k))
+              .sort((a, b) => a.time - b.time),
+          };
+        }),
+      }));
+    },
+    [patchAnimation]
+  );
+
+  const clearTrackMotionPath = useCallback(
+    (trackId: string) => {
+      patchAnimation((anim) => ({
+        ...anim,
+        tracks: anim.tracks.map((t) =>
+          t.id === trackId
+            ? {
+                ...t,
+                motionPathId: null,
+                motionPathStart: 0,
+                motionPathEnd: 1,
+              }
+            : t
+        ),
+      }));
+      toast.success("已清除路径绑定（关键帧保留）");
+    },
+    [patchAnimation]
+  );
+
+  const updateMotionPathPoint = useCallback(
+    (pathId: string, index: number, point: [number, number, number]) => {
+      invalidateMotionPathCache(pathId);
+      patchAnimation((anim) => ({
+        ...anim,
+        motionPaths: anim.motionPaths.map((p) => {
+          if (p.id !== pathId) return p;
+          const points = p.points.map((pt, i) => (i === index ? point : pt));
+          return { ...p, points };
+        }),
+      }));
+    },
+    [patchAnimation]
+  );
+
+  const applyCameraPreset = useCallback(
+    (trackId: string, preset: CameraMotionPresetId) => {
+      if (!scene) return;
+      const track = scene.animation?.tracks.find((t) => t.id === trackId);
+      if (!track || track.kind !== "camera") {
+        toast.error("仅相机轨可应用运镜预设");
+        return;
+      }
+      const camObj = scene.objects.find((o) => o.id === track.targetId);
+      const camState =
+        (camObj ? cameraObjectToState(camObj) : null) ??
+        resolveActiveCamera(scene);
+      if (!camState) {
+        toast.error("无法读取相机位姿");
+        return;
+      }
+      const duration = scene.animation?.duration ?? 10;
+      const path = buildCameraMotionPath(preset, camState, {
+        target: camState.target,
+      });
+      // 端点占位关键帧：保证路径时间范围有起止
+      const startKf = createAnimKeyframe(0, {
+        position: [...path.points[0]!] as [number, number, number],
+        rotation: [...(camObj?.transform.rotation ?? [0, 0, 0])] as [
+          number,
+          number,
+          number,
+        ],
+        scale: [1, 1, 1],
+        lookAt: [...camState.target] as [number, number, number],
+        fov: camState.fov,
+      });
+      const endPt = path.points[path.points.length - 1]!;
+      const endKf = createAnimKeyframe(duration, {
+        position: [...endPt] as [number, number, number],
+        rotation: [...(camObj?.transform.rotation ?? [0, 0, 0])] as [
+          number,
+          number,
+          number,
+        ],
+        scale: [1, 1, 1],
+        lookAt: [...camState.target] as [number, number, number],
+        fov: camState.fov,
+      });
+      patchAnimation((anim) => ({
+        ...anim,
+        motionPaths: [...anim.motionPaths.filter((p) => p.id !== track.motionPathId), path],
+        tracks: anim.tracks.map((t) =>
+          t.id === trackId
+            ? {
+                ...t,
+                motionPathId: path.id,
+                motionPathStart: 0,
+                motionPathEnd: 1,
+                orientToPath: true,
+                keyframes: upsertKeyframe(upsertKeyframe(t.keyframes, startKf), endKf),
+              }
+            : t
+        ),
+      }));
+      setSelectedTrackId(trackId);
+      toast.success(`已应用运镜：${preset}`);
+    },
+    [patchAnimation, scene]
+  );
+
+  const patchTimelineUi = useCallback(
+    (patch: Partial<NonNullable<NonNullable<DirectorSceneState["animation"]>["ui"]>>) => {
+      patchAnimation((anim) => ({
+        ...anim,
+        ui: { ...anim.ui, ...patch },
       }));
     },
     [patchAnimation]
@@ -1473,6 +1689,37 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           addTimelineKeyframe();
           return;
         }
+        const fps = scene?.animation?.fps ?? 30;
+        const frame = 1 / Math.max(1, fps);
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          const step = e.shiftKey ? 0.1 : frame;
+          setTimelinePlaying(false);
+          setTimelinePlayhead((t) => Math.max(0, Number((t - step).toFixed(4))));
+          return;
+        }
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          const step = e.shiftKey ? 0.1 : frame;
+          const dur = scene?.animation?.duration ?? 10;
+          setTimelinePlaying(false);
+          setTimelinePlayhead((t) => Math.min(dur, Number((t + step).toFixed(4))));
+          return;
+        }
+        if (e.key === "[") {
+          e.preventDefault();
+          patchTimelineUi({
+            zoomPxPerSec: Math.max(24, (scene?.animation?.ui?.zoomPxPerSec ?? 48) - 8),
+          });
+          return;
+        }
+        if (e.key === "]") {
+          e.preventDefault();
+          patchTimelineUi({
+            zoomPxPerSec: Math.min(120, (scene?.animation?.ui?.zoomPxPerSec ?? 48) + 8),
+          });
+          return;
+        }
       }
       if (e.key === "v" || e.key === "V") setTransformMode("translate");
       if (e.key === "r" || e.key === "R") setTransformMode("rotate");
@@ -1527,6 +1774,10 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     drawingTrackId,
     addTimelineKeyframe,
     finishMotionPathDrawing,
+    patchTimelineUi,
+    scene?.animation?.fps,
+    scene?.animation?.duration,
+    scene?.animation?.ui?.zoomPxPerSec,
   ]);
 
   const isCameraFirstPerson =
@@ -1969,12 +2220,15 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           </div>
         ) : null}
 
-        {/* 底部：机位胶片条 + 控制坞 */}
+        {/* 底部：机位胶片条 + 控制坞（时间轴打开时随 panelHeight 抬升） */}
         {!loading && scene ? (
           <div
-            className={`pointer-events-none absolute z-30 flex flex-col items-center gap-1 px-3 ${centerLeft} ${centerRight} ${
-              timelineOpen ? "bottom-[148px]" : "bottom-6"
-            }`}
+            className={`pointer-events-none absolute z-30 flex flex-col items-center gap-1 px-3 ${centerLeft} ${centerRight}`}
+            style={{
+              bottom: timelineOpen
+                ? Math.min(360, Math.max(100, scene.animation?.ui?.panelHeight ?? 140)) + 8
+                : 24,
+            }}
             onPointerDown={(e) => e.stopPropagation()}
           >
             {!uiFullscreen && cameraObjects.length > 0 ? (
@@ -2074,6 +2328,22 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                     }
                   : null
             }
+            motionPathEditing={(() => {
+              if (!timelineOpen || drawingTrackId || !scene?.animation) return null;
+              const track =
+                scene.animation.tracks.find((t) => t.id === selectedTrackId) ??
+                scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
+              if (!track?.motionPathId || track.locked) return null;
+              const path =
+                scene.animation.motionPaths.find((p) => p.id === track.motionPathId) ??
+                null;
+              if (!path) return null;
+              return {
+                path,
+                enabled: true,
+                onUpdatePoint: updateMotionPathPoint,
+              };
+            })()}
             lensPreview={
               selectedCameraObject
                 ? {
@@ -2122,18 +2392,42 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               onToggleLoop={() =>
                 patchAnimation((anim) => ({ ...anim, loop: !anim.loop }))
               }
+              onToggleAutoKeyframe={() =>
+                patchTimelineUi({
+                  autoKeyframe: !scene.animation?.ui?.autoKeyframe,
+                })
+              }
               onDurationChange={(d) =>
                 patchAnimation((anim) => ({ ...anim, duration: d }))
+              }
+              onPanelHeightChange={(h) =>
+                patchTimelineUi({
+                  panelHeight: Math.min(360, Math.max(100, h)),
+                })
+              }
+              onZoomChange={(z) =>
+                patchTimelineUi({
+                  zoomPxPerSec: Math.min(120, Math.max(24, z)),
+                })
               }
               onSelectTrack={setSelectedTrackId}
               onCreateTrack={handleCreateTrack}
               onStartDrawPath={(trackId) => {
                 setSelectedTrackId(trackId);
+                const existing = scene.animation?.tracks.find((t) => t.id === trackId);
+                // 延伸：从已有路径末端继续加点
+                const pathId = existing?.motionPathId;
+                const path = pathId
+                  ? scene.animation?.motionPaths.find((p) => p.id === pathId)
+                  : null;
+                setDraftPathPoints(path?.points?.length ? [...path.points] : []);
                 setDrawingTrackId(trackId);
-                setDraftPathPoints([]);
                 setTimelinePlaying(false);
               }}
+              onClearPath={clearTrackMotionPath}
+              onApplyCameraPreset={applyCameraPreset}
               onDeleteKeyframe={deleteTimelineKeyframe}
+              onMoveKeyframe={moveTimelineKeyframe}
               onClose={() => {
                 setTimelineOpen(false);
                 setTimelinePlaying(false);

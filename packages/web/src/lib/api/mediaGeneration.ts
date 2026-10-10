@@ -458,6 +458,7 @@ async function generateFromMediaNodeLocal(
           creditCost: 0,
         },
         resultUrlPreview: resultUrl,
+        resultAssetId: assetId,
         upstreamModel: model?.upstreamModel || upstreamModel,
         providerTaskId: raw.providerTaskId,
         submittedReferenceCount: raw.submittedReferenceCount,

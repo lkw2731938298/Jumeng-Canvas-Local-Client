@@ -15,6 +15,7 @@ import { saveNodeText } from "@/lib/api/nodeText";
 import { clipTextNodeGeneratedContent } from "@/lib/canvas/textNodeGenerationLimit";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { WorkflowNodeData } from "@/types/workflow";
+import { isLocalDesktop } from "@/lib/localDesktop";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -107,6 +108,42 @@ async function pollNodeJob(
 }
 
 /**
+ * 本机：任务列表已成功但节点仍转圈时，用本机任务结果回写画布。
+ */
+async function writebackSucceededLocalJobs(projectId: string): Promise<void> {
+  if (!isLocalDesktop) return;
+  const { nodes, activeGenerationNodeIds } = useCanvasStore.getState();
+  const spinning = nodes.filter(
+    (n) =>
+      n.data.status === "running" ||
+      !!activeGenerationNodeIds[n.id]
+  );
+  if (spinning.length === 0) return;
+
+  const { localStore } = await import("@/lib/local/store");
+  const { applyLocalGenerationJobResultToCanvas } = await import(
+    "@/lib/local/applyLocalJobToCanvas"
+  );
+  const jobs = await localStore().listGenerationJobs();
+  for (const node of spinning) {
+    const job = jobs.find(
+      (j) =>
+        j.projectId === projectId &&
+        j.nodeId === node.id &&
+        j.status === "succeeded" &&
+        (j.resultAssetId ||
+          (j.resultUrlPreview && j.resultUrlPreview !== "(b64)"))
+    );
+    if (!job) continue;
+    try {
+      await applyLocalGenerationJobResultToCanvas(job);
+    } catch {
+      /* keep spinning; next tick retry */
+    }
+  }
+}
+
+/**
  * Poll pending generation jobs for all canvas nodes — survives node deselect / overlay unmount.
  */
 export function usePendingGenerationJobPolling() {
@@ -120,6 +157,13 @@ export function usePendingGenerationJobPolling() {
 
     const tick = async () => {
       if (cancelled) return;
+
+      // 本地桌面：先兜底回写「任务列表已成功、节点仍转圈」
+      try {
+        await writebackSucceededLocalJobs(projectId);
+      } catch {
+        /* ignore */
+      }
 
       const { nodes, activeGenerationNodeIds } = useCanvasStore.getState();
       const targets: Array<{ nodeId: string; nodeType: string | undefined; jobId: string }> = [];

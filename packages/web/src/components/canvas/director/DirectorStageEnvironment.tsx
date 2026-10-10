@@ -10,7 +10,9 @@ import { DirectorSceneObject } from "./DirectorSceneObject";
 import { DirectorPanoramaSphere } from "./DirectorPanoramaSphere";
 import { DirectorTransformRegistryProvider } from "./directorTransformRegistry";
 import { DirectorSelectedTransformControls } from "./DirectorSelectedTransformControls";
+import type { DirectorMotionPath } from "@jumeng-canvas/shared";
 import { DirectorMotionPathDrawing } from "./timeline/DirectorMotionPathDrawing";
+import { DirectorMotionPathEditor } from "./timeline/DirectorMotionPathEditor";
 
 export function DirectorStageEnvironment({
   scene,
@@ -28,6 +30,7 @@ export function DirectorStageEnvironment({
   resolveColorMapUrl,
   onBonePoseChange,
   motionPathDrawing = null,
+  motionPathEditing = null,
 }: {
   scene: DirectorSceneState;
   panoramaUrl?: string | null;
@@ -51,6 +54,12 @@ export function DirectorStageEnvironment({
     draftPoints: [number, number, number][];
     onAddPoint: (point: [number, number, number]) => void;
     onFinish: () => void;
+  } | null;
+  /** 已有路径控制点编辑（绘制中禁用） */
+  motionPathEditing?: {
+    path: DirectorMotionPath | null;
+    enabled: boolean;
+    onUpdatePoint: (pathId: string, index: number, point: [number, number, number]) => void;
   } | null;
 }) {
   const settings = scene.sceneSettings;
@@ -171,10 +180,24 @@ export function DirectorStageEnvironment({
         active={Boolean(motionPathDrawing?.active)}
         draftPoints={motionPathDrawing?.draftPoints ?? []}
         groundHeight={groundY}
-        existingPaths={scene.animation?.motionPaths ?? []}
+        existingPaths={
+          motionPathDrawing?.active
+            ? []
+            : (scene.animation?.motionPaths ?? []).filter(
+                (p) => !motionPathEditing?.enabled || p.id !== motionPathEditing.path?.id
+              )
+        }
         onAddPoint={motionPathDrawing?.onAddPoint ?? (() => {})}
         onFinish={motionPathDrawing?.onFinish ?? (() => {})}
       />
+      {!motionPathDrawing?.active && motionPathEditing ? (
+        <DirectorMotionPathEditor
+          path={motionPathEditing.path}
+          groundHeight={groundY}
+          enabled={motionPathEditing.enabled}
+          onUpdatePoint={motionPathEditing.onUpdatePoint}
+        />
+      ) : null}
     </DirectorTransformRegistryProvider>
   );
 }

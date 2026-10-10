@@ -21,7 +21,13 @@ export function createDefaultAnimationTimeline(): DirectorAnimationTimeline {
     loop: false,
     tracks: [],
     motionPaths: [],
-    ui: { zoomPxPerSec: 48, panelHeight: 140, snapSec: 0.1, timeUnit: "s" },
+    ui: {
+      zoomPxPerSec: 48,
+      panelHeight: 140,
+      snapSec: 0.1,
+      timeUnit: "s",
+      autoKeyframe: false,
+    },
   };
 }
 

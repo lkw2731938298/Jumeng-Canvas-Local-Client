@@ -1272,6 +1272,21 @@ export function NodeEditorOverlay() {
         toast.error(result.message || "媒体生成失败");
       }
     } catch (err) {
+      // 任务页同步/补填可能已先回写成功；画布侧超时勿盖掉结果
+      const live = useCanvasStore.getState().nodes.find((n) => n.id === selectedNodeId);
+      const liveParams = (live?.data.params ?? {}) as Record<string, unknown>;
+      const alreadyFilled =
+        live?.data.status === "success" &&
+        Boolean(
+          String(liveParams.assetId ?? "").trim() ||
+            String(liveParams.imageUrl ?? "").trim() ||
+            String(liveParams.videoUrl ?? "").trim() ||
+            String(liveParams.audioUrl ?? "").trim()
+        );
+      if (alreadyFilled) {
+        endNodeGeneration(selectedNodeId);
+        return;
+      }
       setNodeStatus(selectedNodeId, "error");
       if (isPricingChangedError(err)) {
         toastPricingChanged(() => void refetchQuote());

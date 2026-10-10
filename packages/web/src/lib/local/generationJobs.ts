@@ -37,6 +37,8 @@ export type LocalGenerationJob = {
   submittedRefUrls?: string[];
   error?: string;
   resultUrlPreview?: string;
+  /** 落盘素材 id，供任务页/同步上游回写画布时还原 URL */
+  resultAssetId?: string;
 };
 
 export type LocalGenerationJobCreate = {
@@ -56,6 +58,7 @@ export type LocalGenerationJobPatch = Partial<
     | "status"
     | "error"
     | "resultUrlPreview"
+    | "resultAssetId"
     | "upstreamModel"
     | "modelLabel"
     | "referenceCount"

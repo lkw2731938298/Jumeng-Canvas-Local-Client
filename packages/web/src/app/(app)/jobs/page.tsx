@@ -237,6 +237,27 @@ export default function LocalGenerationJobsPage() {
     }
   };
 
+  /** 已成功任务：把结果再写回画布节点（结束转圈） */
+  const writebackCanvas = async (job: LocalGenerationJob) => {
+    if (job.status !== "succeeded") {
+      toast.message("请先同步上游至成功后再回写");
+      return;
+    }
+    setSyncingId(job.id);
+    try {
+      const { applyLocalGenerationJobResultToCanvas } = await import(
+        "@/lib/local/applyLocalJobToCanvas"
+      );
+      const ok = await applyLocalGenerationJobResultToCanvas(job);
+      if (ok) toast.success("已回写画布节点");
+      else toast.error("无法回写：缺少项目/节点，或结果地址无效");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "回写失败");
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
   /**
    * 补录上游 task_id：提交超时 / 中途关窗时 task_id 没能落库，
    * 任务其实还在上游跑。从供应商控制台复制 id 填进来即可继续查询，不会重新提交。
@@ -558,7 +579,7 @@ export default function LocalGenerationJobsPage() {
                       onClick={() => syncOrAttach(selected)}
                       title={
                         selected.providerTaskId
-                          ? "只查询上游结果，不重新提交、不重复扣费"
+                          ? "只查询上游结果，不重新提交、不重复扣费；成功后会回写画布"
                           : "该任务没有上游 task_id（同步接口本就没有，或提交超时未拿到）。点击可填入后查询"
                       }
                     >
@@ -571,6 +592,21 @@ export default function LocalGenerationJobsPage() {
                       )}
                       {syncingId === selected.id ? "同步中…" : selected.providerTaskId ? "同步上游" : "补填 task_id"}
                     </button>
+                    {selected.status === "succeeded" ? (
+                      <button
+                        type="button"
+                        className="jm-btn"
+                        disabled={syncingId === selected.id || !selected.nodeId}
+                        onClick={() => void writebackCanvas(selected)}
+                        title={
+                          selected.nodeId
+                            ? "把已完成结果写回画布节点并结束转圈"
+                            : "该任务未记录节点 id，无法回写"
+                        }
+                      >
+                        回写画布
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="jm-btn jc-open"

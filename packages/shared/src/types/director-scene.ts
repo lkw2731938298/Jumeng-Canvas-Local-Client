@@ -171,6 +171,8 @@ export interface DirectorAnimationTimeline {
     panelHeight?: number;
     snapSec?: number;
     timeUnit?: DirectorTimeUnit;
+    /** 自动帧：拖拽变换结束后在播放头写入关键帧 */
+    autoKeyframe?: boolean;
   };
 }
 
