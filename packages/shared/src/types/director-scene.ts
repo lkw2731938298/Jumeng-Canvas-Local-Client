@@ -64,7 +64,7 @@ export interface DirectorObject {
   name: string;
   transform: DirectorTransform;
   color: string;
-  /** 模型外观贴图（项目图片资产 id）；有值时材质使用 map，纯色作备用/清除后回退 */
+  /** 模型颜色贴图：项目图片资产 id；有值时优先使用贴图，而非纯色材质 */
   colorMapAssetId?: string;
   pose?: string;
   /** 关节骨骼姿势（预览版人模 rig） */
@@ -112,8 +112,70 @@ export interface DirectorCameraTrack {
   keyframes: DirectorCameraKeyframe[];
 }
 
+/** 自由导演相机轨绑定 id（无摄像机物体时） */
+export const DIRECTOR_CAMERA_TRACK_TARGET = "__director_camera__";
+
+export type DirectorAnimTrackKind = "character" | "prop" | "camera";
+export type DirectorInterpolation = "linear" | "smooth";
+export type DirectorAnimMotion = "idle" | "walk" | "run";
+export type DirectorTimeUnit = "s" | "ms";
+
+export interface DirectorAnimKeyframe {
+  id: string;
+  time: number;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+  lookAt?: [number, number, number];
+  fov?: number;
+  motion?: DirectorAnimMotion;
+}
+
+export interface DirectorMotionPath {
+  id: string;
+  name: string;
+  points: [number, number, number][];
+  closed?: boolean;
+  heightOffset?: number;
+  offset?: [number, number, number];
+  curve: "catmull";
+}
+
+export interface DirectorAnimTrack {
+  id: string;
+  kind: DirectorAnimTrackKind;
+  targetId: string;
+  name: string;
+  muted: boolean;
+  locked: boolean;
+  interpolation: DirectorInterpolation;
+  speedCurve?: { u: number; v: number }[];
+  motionPathId?: string | null;
+  motionPathStart?: number;
+  motionPathEnd?: number;
+  /** 默认 true：路径管 XZ，关键帧可覆盖 Y */
+  pathControlsXZ?: boolean;
+  orientToPath?: boolean;
+  keyframes: DirectorAnimKeyframe[];
+}
+
+export interface DirectorAnimationTimeline {
+  id: string;
+  duration: number;
+  fps: 30 | 60;
+  loop: boolean;
+  tracks: DirectorAnimTrack[];
+  motionPaths: DirectorMotionPath[];
+  ui?: {
+    zoomPxPerSec?: number;
+    panelHeight?: number;
+    snapSec?: number;
+    timeUnit?: DirectorTimeUnit;
+  };
+}
+
 export interface DirectorSceneState {
-  version: "1.2";
+  version: "1.2" | "1.3";
   objects: DirectorObject[];
   camera: DirectorCameraState;
   shotCameras: DirectorShotCamera[];
@@ -126,7 +188,10 @@ export interface DirectorSceneState {
     /** 灯组俯仰偏移（度） */
     pitchDeg?: number;
   };
+  /** @deprecated 迁移进 animation 后仅兼容只读 */
   cameraTrack: DirectorCameraTrack | null;
+  /** 动画时间轴（1.3+） */
+  animation: DirectorAnimationTimeline | null;
   sceneSettings: DirectorSceneSettings;
 }
 

@@ -1,6 +1,5 @@
 import type { CharacterPoseId } from "@/lib/director/characterPoses";
-import type { DirectorLightingState, LightingPresetId } from "@/lib/director/lightingPresets";
-import { DEFAULT_LIGHTING_STATE } from "@/lib/director/lightingPresets";
+import type { LightingPresetId } from "@/lib/director/lightingPresets";
 import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { rotationFromPositionLookAt } from "@/lib/director/shotPreview";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
@@ -31,7 +30,7 @@ export type DirectorObject = Omit<SharedDirectorObject, "pose" | "lighting"> & {
 
 export type DirectorSceneState = Omit<SharedDirectorSceneState, "objects" | "lighting"> & {
   objects: DirectorObject[];
-  lighting: DirectorLightingState;
+  lighting: { preset: LightingPresetId; yawDeg?: number; pitchDeg?: number };
 };
 
 export type {
@@ -57,7 +56,7 @@ export { DEFAULT_DIRECTOR_CAMERA };
 
 export function createDefaultDirectorScene(): DirectorSceneState {
   return {
-    version: "1.2",
+    version: "1.3",
     objects: [
       {
         id: `obj_${Date.now()}`,
@@ -80,8 +79,9 @@ export function createDefaultDirectorScene(): DirectorSceneState {
     shotCameras: [],
     viewMode: "director",
     activeShotCameraId: null,
-    lighting: { ...DEFAULT_LIGHTING_STATE },
+    lighting: { preset: "classic_three_point" },
     cameraTrack: null,
+    animation: null,
     sceneSettings: { ...DEFAULT_DIRECTOR_SCENE_SETTINGS },
   };
 }
@@ -178,7 +178,8 @@ export function resolveActiveCamera(
   scene: DirectorSceneState,
   trackTime?: number | null
 ): DirectorCameraState {
-  if (trackTime != null && scene.cameraTrack && scene.cameraTrack.keyframes.length > 0) {
+  // 旧 cameraTrack 兼容（无 animation 时）
+  if (trackTime != null && scene.cameraTrack && scene.cameraTrack.keyframes.length > 0 && !scene.animation) {
     return interpolateCameraTrack(scene.cameraTrack, trackTime);
   }
   if (scene.viewMode === "shot" && scene.activeShotCameraId) {

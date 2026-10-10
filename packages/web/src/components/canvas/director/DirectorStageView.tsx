@@ -38,6 +38,15 @@ import type { LightingPresetId } from "@/lib/director/lightingPresets";
 import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { normalizeDirectorScene } from "@/lib/director/sceneNormalize";
 import {
+  applySampleToScene,
+  createAnimKeyframe,
+  createAnimTrack,
+  createMotionPath,
+  evaluateTimeline,
+  openOrCreateAnimation,
+  upsertKeyframe,
+} from "@/lib/director/animation";
+import {
   defaultLensCaptureOptions,
   resolveLensCaptureCameraState,
 } from "@/lib/director/lensCapture";
@@ -81,6 +90,7 @@ import { DirectorBottomToolbar } from "./DirectorBottomToolbar";
 import { DirectorAspectOverlay } from "./DirectorAspectOverlay";
 import { DirectorFilmGateTrack } from "./DirectorFilmGateTrack";
 import { DirectorPosePanel } from "./DirectorPosePanel";
+import { DirectorTimelinePanel } from "./timeline/DirectorTimelinePanel";
 import { MediaAssetPicker } from "@/components/canvas/nodes/MediaAssetPicker";
 import { DirectorAgentPanel } from "./DirectorAgentPanel";
 import { DirectorModel3dDialog } from "./DirectorModel3dDialog";
@@ -160,6 +170,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [mannequinEditMode, setMannequinEditMode] = useState<"transform" | "pose">("transform");
   const [trackTime, setTrackTime] = useState<number | null>(null);
   const [trackPlaying, setTrackPlaying] = useState(false);
+  /** 动画时间轴面板 */
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelinePlayhead, setTimelinePlayhead] = useState(0);
+  const [timelinePlaying, setTimelinePlaying] = useState(false);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [drawingTrackId, setDrawingTrackId] = useState<string | null>(null);
+  const [draftPathPoints, setDraftPathPoints] = useState<[number, number, number][]>([]);
   const [cameraPropViewMode, setCameraPropViewMode] = useState<CameraPropViewMode>("thirdPerson");
   const [uploadingModel, setUploadingModel] = useState(false);
   const [uploadingColorMap, setUploadingColorMap] = useState(false);
@@ -172,6 +189,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const modelFileRef = useRef<HTMLInputElement | null>(null);
   const [panoramaUploadUrl, setPanoramaUploadUrl] = useState<string | null>(null);
+  const timelinePlayFromRef = useRef(0);
+  const timelineRafRef = useRef<number | null>(null);
 
   const stageBodyRef = useRef<HTMLDivElement | null>(null);
   const mainViewRef = useRef<HTMLDivElement | null>(null);
@@ -220,20 +239,43 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     if (!assetId) return panoramaUploadUrl;
     return lookupAsset(assets, assetId)?.fileUrl ?? panoramaUploadUrl;
   }, [assets, panoramaUploadUrl, scene?.sceneSettings?.panorama?.assetId]);
+  const timelineSample = useMemo(() => {
+    if (!scene?.animation || !timelineOpen) return null;
+    return evaluateTimeline(scene, timelinePlayhead, scene.animation);
+  }, [scene, timelineOpen, timelinePlayhead]);
+
+  /** 预览用场景：播放头驱动物体位姿，不写回 JSON */
+  const displayScene = useMemo(() => {
+    if (!scene) return null;
+    if (!timelineSample || !timelineOpen) return scene;
+    return applySampleToScene(scene, timelineSample);
+  }, [scene, timelineSample, timelineOpen]);
+
   const activeCamera = useMemo(() => {
     if (!scene) return null;
-    if (selectedCameraObject && cameraPropViewMode === "firstPerson") {
+    if (selectedCameraObject && cameraPropViewMode === "firstPerson" && !timelinePlaying) {
       const cam = cameraObjectToState(selectedCameraObject);
       if (cam) return cam;
     }
-    if (trackTime != null && scene.cameraTrack?.keyframes.length) {
+    if (timelineOpen && timelineSample?.directorCamera) {
+      return timelineSample.directorCamera;
+    }
+    if (trackTime != null && scene.cameraTrack?.keyframes.length && !scene.animation) {
       return interpolateCameraTrack(scene.cameraTrack, trackTime);
     }
     if (scene.viewMode === "shot" && scene.activeShotCameraId && !selectedCameraObject) {
       return resolveActiveCamera(scene);
     }
     return scene.camera;
-  }, [scene, trackTime, selectedCameraObject, cameraPropViewMode]);
+  }, [
+    scene,
+    trackTime,
+    selectedCameraObject,
+    cameraPropViewMode,
+    timelineOpen,
+    timelinePlaying,
+    timelineSample,
+  ]);
   const lensCaptureOptions = useMemo(
     () => (scene ? defaultLensCaptureOptions(scene, selectedCameraObject?.id ?? null) : undefined),
     [scene, selectedCameraObject?.id]
@@ -1223,6 +1265,150 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     };
   }, [trackPlaying, scene?.cameraTrack]);
 
+  // —— 动画时间轴：播放时钟 ——
+  useEffect(() => {
+    if (!timelinePlaying || !scene?.animation) return;
+    const duration = Math.max(0.1, scene.animation.duration);
+    const loop = scene.animation.loop;
+    let fromTime = timelinePlayFromRef.current;
+    let t0 = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      let t = fromTime + (now - t0) / 1000;
+      if (t >= duration) {
+        if (loop) {
+          fromTime = 0;
+          t0 = now;
+          setTimelinePlayhead(0);
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        setTimelinePlayhead(duration);
+        setTimelinePlaying(false);
+        return;
+      }
+      setTimelinePlayhead(t);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    timelineRafRef.current = raf;
+    return () => cancelAnimationFrame(raf);
+  }, [timelinePlaying, scene?.animation]);
+
+  const patchAnimation = useCallback(
+    (updater: (prev: NonNullable<DirectorSceneState["animation"]>) => NonNullable<DirectorSceneState["animation"]>) => {
+      patchScene((prev) => {
+        const base = openOrCreateAnimation(prev);
+        return { ...prev, version: "1.3", animation: updater(base) };
+      });
+    },
+    [patchScene]
+  );
+
+  /** 顶栏模式切换：场景摆放 ↔ 动画时间轴 */
+  const handleSetTimelineOpen = useCallback(
+    (next: boolean) => {
+      setTimelineOpen((open) => {
+        if (open === next) return open;
+        if (next) {
+          patchScene((prev) => ({
+            ...prev,
+            version: "1.3",
+            animation: openOrCreateAnimation(prev),
+          }));
+          setTimelinePlayhead(0);
+        } else {
+          setTimelinePlaying(false);
+          setDrawingTrackId(null);
+          setDraftPathPoints([]);
+        }
+        return next;
+      });
+    },
+    [patchScene]
+  );
+
+  const handleCreateTrack = useCallback(() => {
+    if (!selectedObjectId || !scene) return;
+    const obj = scene.objects.find((o) => o.id === selectedObjectId);
+    if (!obj) return;
+    patchAnimation((anim) => {
+      if (anim.tracks.some((t) => t.targetId === obj.id)) return anim;
+      const kind = obj.kind === "camera" ? "camera" : obj.kind === "character" ? "character" : "prop";
+      const track = createAnimTrack(kind, obj.id, obj.name);
+      return { ...anim, tracks: [...anim.tracks, track] };
+    });
+  }, [patchAnimation, scene, selectedObjectId]);
+
+  const finishMotionPathDrawing = useCallback(() => {
+    if (!drawingTrackId || draftPathPoints.length < 2) {
+      toast.error("至少需要 2 个路径点");
+      return;
+    }
+    const path = createMotionPath(draftPathPoints, "轨迹");
+    patchAnimation((anim) => ({
+      ...anim,
+      motionPaths: [...anim.motionPaths, path],
+      tracks: anim.tracks.map((t) =>
+        t.id === drawingTrackId
+          ? {
+              ...t,
+              motionPathId: path.id,
+              motionPathStart: 0,
+              motionPathEnd: 1,
+              orientToPath: t.kind !== "prop",
+            }
+          : t
+      ),
+    }));
+    setDrawingTrackId(null);
+    setDraftPathPoints([]);
+    toast.success("已绑定运动路径");
+  }, [draftPathPoints, drawingTrackId, patchAnimation]);
+
+  const addTimelineKeyframe = useCallback(() => {
+    if (!scene?.animation || !selectedObjectId) {
+      toast.error("请先选中已建轨的对象");
+      return;
+    }
+    const track = scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
+    if (!track) {
+      toast.error("当前对象没有轨道，请先新建轨道");
+      return;
+    }
+    if (track.locked) return;
+    const obj = scene.objects.find((o) => o.id === selectedObjectId);
+    if (!obj) return;
+    const kf = createAnimKeyframe(timelinePlayhead, {
+      position: [...obj.transform.position],
+      rotation: [...obj.transform.rotation],
+      scale: [...obj.transform.scale],
+      lookAt: obj.kind === "camera" ? [...(obj.lookAt ?? [0, 1, 0])] : undefined,
+      fov: obj.kind === "camera" ? obj.fov ?? 45 : undefined,
+    });
+    patchAnimation((anim) => ({
+      ...anim,
+      tracks: anim.tracks.map((t) =>
+        t.id === track.id ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) } : t
+      ),
+    }));
+    toast.success("已添加关键帧");
+  }, [patchAnimation, scene, selectedObjectId, timelinePlayhead]);
+
+  const deleteTimelineKeyframe = useCallback(
+    (trackId: string, keyframeId: string) => {
+      patchAnimation((anim) => ({
+        ...anim,
+        tracks: anim.tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, keyframes: t.keyframes.filter((k) => k.id !== keyframeId) }
+            : t
+        ),
+      }));
+    },
+    [patchAnimation]
+  );
+
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -1251,13 +1437,47 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         setShowGuides((v) => !v);
         return;
       } else if (e.key === "Escape") {
+        if (drawingTrackId) {
+          setDrawingTrackId(null);
+          setDraftPathPoints([]);
+          return;
+        }
         setSelectedObjectId(null);
         return;
+      }
+      if (drawingTrackId) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          finishMotionPathDrawing();
+          return;
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          setDraftPathPoints((pts) => pts.slice(0, -1));
+          return;
+        }
+      }
+      if (timelineOpen) {
+        if (e.key === " " || e.code === "Space") {
+          e.preventDefault();
+          if (timelinePlaying) {
+            setTimelinePlaying(false);
+          } else {
+            timelinePlayFromRef.current = timelinePlayhead;
+            setTimelinePlaying(true);
+          }
+          return;
+        }
+        if (e.key === "k" || e.key === "K") {
+          e.preventDefault();
+          addTimelineKeyframe();
+          return;
+        }
       }
       if (e.key === "v" || e.key === "V") setTransformMode("translate");
       if (e.key === "r" || e.key === "R") setTransformMode("rotate");
       if (e.key === "s" || e.key === "S") setTransformMode("scale");
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedObjectId) {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedObjectId && !drawingTrackId) {
         e.preventDefault();
         removeSelected();
       }
@@ -1297,19 +1517,31 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [patchScene, removeSelected, selectedObjectId]);
+  }, [
+    patchScene,
+    removeSelected,
+    selectedObjectId,
+    timelineOpen,
+    timelinePlaying,
+    timelinePlayhead,
+    drawingTrackId,
+    addTimelineKeyframe,
+    finishMotionPathDrawing,
+  ]);
 
   const isCameraFirstPerson =
     selectedCameraObject != null && cameraPropViewMode === "firstPerson";
   const isCameraThirdPerson =
     selectedCameraObject != null && cameraPropViewMode === "thirdPerson";
-  const viewBadge = trackTime != null
-    ? `轨迹预览 ${(scene?.cameraTrack?.duration ?? 0).toFixed(0)}s`
-    : isCameraFirstPerson
-      ? "摄像机视角"
-      : isCameraThirdPerson
-        ? "第三人称"
-        : null;
+  const viewBadge = timelineOpen
+    ? `动画时间轴 ${timelinePlayhead.toFixed(1)}s`
+    : trackTime != null
+      ? `轨迹预览 ${(scene?.cameraTrack?.duration ?? 0).toFixed(0)}s`
+      : isCameraFirstPerson
+        ? "摄像机视角"
+        : isCameraThirdPerson
+          ? "第三人称"
+          : null;
   const aspectRatio = scene?.sceneSettings?.aspectRatio ?? "16:9";
 
   // ── 控制台布局派生数据 ──
@@ -1403,6 +1635,47 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             <span className="flex items-center gap-1"><PersonStanding className="h-3 w-3 text-indigo-300" />{stageStats.characters}</span>
             <span className="flex items-center gap-1"><Box className="h-3 w-3 text-emerald-300" />{stageStats.props}</span>
             <span className="flex items-center gap-1"><Video className="h-3 w-3 text-amber-300" />{stageStats.cameras}</span>
+          </div>
+          {/* 场景摆放 / 动画时间轴：放在统计胶囊右侧 */}
+          <div
+            role="tablist"
+            aria-label="导演台工作模式"
+            className="flex items-center rounded-full border border-white/[0.06] bg-white/[0.03] p-0.5"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!timelineOpen}
+              disabled={loading || !scene}
+              title="场景摆放"
+              onClick={() => handleSetTimelineOpen(false)}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] transition-colors disabled:opacity-40 ${
+                !timelineOpen
+                  ? "bg-white/[0.12] text-white shadow-sm"
+                  : "text-white/45 hover:text-white/75"
+              }`}
+            >
+              <Move3d className="h-3 w-3" />
+              场景摆放
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={timelineOpen}
+              aria-label="动画时间轴"
+              data-practice-anchor="director.timeline"
+              disabled={loading || !scene}
+              title="动画时间轴"
+              onClick={() => handleSetTimelineOpen(true)}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] transition-colors disabled:opacity-40 ${
+                timelineOpen
+                  ? "bg-indigo-500/35 text-white shadow-sm"
+                  : "text-white/45 hover:text-white/75"
+              }`}
+            >
+              <Clapperboard className="h-3 w-3" />
+              动画时间轴
+            </button>
           </div>
         </div>
 
@@ -1699,7 +1972,9 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         {/* 底部：机位胶片条 + 控制坞 */}
         {!loading && scene ? (
           <div
-            className={`pointer-events-none absolute bottom-6 z-30 flex flex-col items-center gap-1 px-3 ${centerLeft} ${centerRight}`}
+            className={`pointer-events-none absolute z-30 flex flex-col items-center gap-1 px-3 ${centerLeft} ${centerRight} ${
+              timelineOpen ? "bottom-[148px]" : "bottom-6"
+            }`}
             onPointerDown={(e) => e.stopPropagation()}
           >
             {!uiFullscreen && cameraObjects.length > 0 ? (
@@ -1750,11 +2025,11 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           <DirectorAgentPanel key={`${projectId}:${nodeId}`} host={agentHost} onClose={() => setAgentOpen(false)} />
         ) : null}
 
-        {!loading && scene && activeCamera ? (
+        {!loading && displayScene && activeCamera ? (
           <DirectorStageEditor
-            scene={scene}
+            scene={displayScene as DirectorSceneState}
             activeCamera={activeCamera}
-            trackPreviewActive={trackTime != null}
+            trackPreviewActive={timelineOpen || trackTime != null}
             selectedObjectId={selectedObjectId}
             cameraPropViewMode={selectedCameraObject ? cameraPropViewMode : null}
             liveCameraRef={liveCameraRef}
@@ -1771,11 +2046,39 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             onCameraLiveTransform={handleCameraLiveTransform}
             onEditorCameraChange={handleEditorCameraChange}
             onShotCameraSelect={selectShotCamera}
+            motionPathDrawing={
+              drawingTrackId
+                ? {
+                    active: true,
+                    draftPoints: draftPathPoints,
+                    onAddPoint: (p) => {
+                      setDraftPathPoints((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (
+                          last &&
+                          Math.hypot(last[0] - p[0], last[2] - p[2]) < 0.05
+                        ) {
+                          return prev;
+                        }
+                        return [...prev, p];
+                      });
+                    },
+                    onFinish: finishMotionPathDrawing,
+                  }
+                : timelineOpen && scene?.animation?.motionPaths?.length
+                  ? {
+                      active: false,
+                      draftPoints: [],
+                      onAddPoint: () => {},
+                      onFinish: () => {},
+                    }
+                  : null
+            }
             lensPreview={
               selectedCameraObject
                 ? {
                     trackRef: lensPreviewTrackRef,
-                    scene,
+                    scene: displayScene as DirectorSceneState,
                     cameraId: selectedCameraObject.id,
                     liveTransformRef: liveCameraTransformRef,
                   }
@@ -1788,6 +2091,57 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             resolveCharacterModelUrl={resolveCharacterModelUrl}
             resolveColorMapUrl={resolveColorMapUrl}
           />
+        ) : null}
+
+        {timelineOpen && scene?.animation ? (
+          <div className={`absolute bottom-0 z-40 ${centerLeft} ${centerRight}`}>
+            <DirectorTimelinePanel
+              timeline={scene.animation}
+              objects={scene.objects}
+              playhead={timelinePlayhead}
+              playing={timelinePlaying}
+              selectedTrackId={selectedTrackId}
+              drawingTrackId={drawingTrackId}
+              selectedObjectId={selectedObjectId}
+              onPlayheadChange={(t) => {
+                setTimelinePlaying(false);
+                setTimelinePlayhead(t);
+              }}
+              onTogglePlay={() => {
+                if (timelinePlaying) {
+                  setTimelinePlaying(false);
+                } else {
+                  timelinePlayFromRef.current = timelinePlayhead;
+                  setTimelinePlaying(true);
+                }
+              }}
+              onStop={() => {
+                setTimelinePlaying(false);
+                setTimelinePlayhead(0);
+              }}
+              onToggleLoop={() =>
+                patchAnimation((anim) => ({ ...anim, loop: !anim.loop }))
+              }
+              onDurationChange={(d) =>
+                patchAnimation((anim) => ({ ...anim, duration: d }))
+              }
+              onSelectTrack={setSelectedTrackId}
+              onCreateTrack={handleCreateTrack}
+              onStartDrawPath={(trackId) => {
+                setSelectedTrackId(trackId);
+                setDrawingTrackId(trackId);
+                setDraftPathPoints([]);
+                setTimelinePlaying(false);
+              }}
+              onDeleteKeyframe={deleteTimelineKeyframe}
+              onClose={() => {
+                setTimelineOpen(false);
+                setTimelinePlaying(false);
+                setDrawingTrackId(null);
+                setDraftPathPoints([]);
+              }}
+            />
+          </div>
         ) : null}
       </div>
       {panoramaAssetPickerOpen ? (

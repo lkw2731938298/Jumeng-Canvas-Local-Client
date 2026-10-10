@@ -53,6 +53,13 @@ export interface DirectorStageCanvasProps {
   onShotCameraSelect: (id: string) => void;
   onCaptureReady: (api: DirectorCaptureApi) => void;
   onBonePoseChange?: (id: string, bone: string, rotation: [number, number, number]) => void;
+  /** 动画时间轴 · 地面绘制/预览运动路径 */
+  motionPathDrawing?: {
+    active: boolean;
+    draftPoints: [number, number, number][];
+    onAddPoint: (point: [number, number, number]) => void;
+    onFinish: () => void;
+  } | null;
 }
 
 function DirectorViewLayers() {
@@ -233,6 +240,7 @@ function MainDirectorView({
   panoramaUrl = null,
   mannequinEditMode = "transform",
   onBonePoseChange,
+  motionPathDrawing = null,
 }: Omit<DirectorStageCanvasProps, "stageBodyRef" | "mainViewRef" | "liveCameraRef" | "lensPreview">) {
   const interactionLocksRef = useRef(0);
 
@@ -245,7 +253,10 @@ function MainDirectorView({
   const isCameraFirstPerson =
     selectedObject?.kind === "camera" && cameraPropViewMode === "firstPerson";
   const isDirectorView =
-    scene.viewMode === "director" && !trackPreviewActive && !isCameraFirstPerson;
+    scene.viewMode === "director" &&
+    !trackPreviewActive &&
+    !isCameraFirstPerson &&
+    !motionPathDrawing?.active;
   const filmAspect = aspectRatioToNumber(scene.sceneSettings?.aspectRatio ?? "16:9");
   const orbitTargetKey = useMemo(
     () =>
@@ -278,6 +289,7 @@ function MainDirectorView({
         resolveColorMapUrl={resolveColorMapUrl}
         mannequinEditMode={mannequinEditMode}
         onBonePoseChange={onBonePoseChange}
+        motionPathDrawing={motionPathDrawing}
       />
 
       {isDirectorView ? (

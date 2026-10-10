@@ -2,9 +2,9 @@ import type { DirectorSceneState, DirectorObject } from "@/types/director-scene"
 import type { DirectorPanoramaSettings } from "@jumeng-canvas/shared";
 import { createDefaultDirectorScene, DEFAULT_DIRECTOR_SCENE_SETTINGS } from "@/types/director-scene";
 import { createDefaultCameraTrack } from "@/lib/director/cameraTrack";
+import { migrateCameraTrackToAnimation } from "@/lib/director/animation/migrateCameraTrack";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
 import { rotationFromPositionLookAt } from "@/lib/director/shotPreview";
-import { normalizeLightingState } from "@/lib/director/lightingPresets";
 
 function reconcileCameraObject(obj: DirectorObject): DirectorObject {
   if (obj.kind !== "camera") return obj;
@@ -90,7 +90,7 @@ export function normalizeDirectorScene(raw: unknown): DirectorSceneState {
   const objects = Array.isArray(data.objects) ? data.objects : defaults.objects;
 
   const base: DirectorSceneState = {
-    version: "1.2",
+    version: "1.3",
     objects: objects.map((obj) => {
       const withDefaults = {
         ...obj,
@@ -113,8 +113,11 @@ export function normalizeDirectorScene(raw: unknown): DirectorSceneState {
     shotCameras: Array.isArray(data.shotCameras) ? data.shotCameras : [],
     viewMode: data.viewMode === "shot" ? "shot" : "director",
     activeShotCameraId: data.activeShotCameraId ?? null,
-    lighting: normalizeLightingState(data.lighting),
+    lighting: {
+      preset: data.lighting?.preset ?? "classic_three_point",
+    },
     cameraTrack: data.cameraTrack ?? null,
+    animation: data.animation ?? null,
     sceneSettings: {
       ...DEFAULT_DIRECTOR_SCENE_SETTINGS,
       ...(data.sceneSettings ?? {}),
@@ -136,6 +139,12 @@ export function normalizeDirectorScene(raw: unknown): DirectorSceneState {
 
   if (base.cameraTrack && !Array.isArray(base.cameraTrack.keyframes)) {
     base.cameraTrack = createDefaultCameraTrack();
+  }
+
+  // 旧镜头轨迹 → animation；已有 animation 时补主机位轨
+  const migrated = migrateCameraTrackToAnimation(base);
+  if (migrated) {
+    base.animation = migrated;
   }
 
   return base;

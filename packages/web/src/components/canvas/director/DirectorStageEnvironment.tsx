@@ -10,6 +10,7 @@ import { DirectorSceneObject } from "./DirectorSceneObject";
 import { DirectorPanoramaSphere } from "./DirectorPanoramaSphere";
 import { DirectorTransformRegistryProvider } from "./directorTransformRegistry";
 import { DirectorSelectedTransformControls } from "./DirectorSelectedTransformControls";
+import { DirectorMotionPathDrawing } from "./timeline/DirectorMotionPathDrawing";
 
 export function DirectorStageEnvironment({
   scene,
@@ -26,6 +27,7 @@ export function DirectorStageEnvironment({
   resolveCharacterModelUrl,
   resolveColorMapUrl,
   onBonePoseChange,
+  motionPathDrawing = null,
 }: {
   scene: DirectorSceneState;
   panoramaUrl?: string | null;
@@ -43,6 +45,13 @@ export function DirectorStageEnvironment({
   /** 解析物体模型颜色贴图 URL */
   resolveColorMapUrl?: (object: DirectorObject) => string | null;
   onBonePoseChange?: (id: string, bone: string, rotation: [number, number, number]) => void;
+  /** 动画时间轴 · 绘制/预览运动路径 */
+  motionPathDrawing?: {
+    active: boolean;
+    draftPoints: [number, number, number][];
+    onAddPoint: (point: [number, number, number]) => void;
+    onFinish: () => void;
+  } | null;
 }) {
   const settings = scene.sceneSettings;
   const aspectRatio = settings.aspectRatio ?? "16:9";
@@ -72,11 +81,7 @@ export function DirectorStageEnvironment({
           hasPanorama ? panoramaRadius * 2.5 : 55,
         ]}
       />
-      <DirectorLighting
-        presetId={scene.lighting.preset}
-        yawDeg={scene.lighting.yawDeg ?? 0}
-        pitchDeg={scene.lighting.pitchDeg ?? 0}
-      />
+      <DirectorLighting presetId={scene.lighting.preset} />
 
       {hasPanorama ? (
         <DirectorPanoramaSphere imageUrl={panoramaUrl} settings={settings.panorama!} />
@@ -135,7 +140,7 @@ export function DirectorStageEnvironment({
               interactive={interactive}
               gridSnap={settings.gridSnap}
               showLabel={settings.showLabels}
-              modelUrl={obj.kind !== "camera" ? resolveCharacterModelUrl?.(obj) ?? null : null}
+              modelUrl={obj.kind === "character" ? resolveCharacterModelUrl?.(obj) ?? null : null}
               colorMapUrl={obj.kind !== "camera" ? resolveColorMapUrl?.(obj) ?? null : null}
               aspectRatio={aspectRatio}
               onSelect={onSelectObject ?? (() => {})}
@@ -148,6 +153,7 @@ export function DirectorStageEnvironment({
       {interactive &&
       selectedObject &&
       !mannequinPoseEditing &&
+      !motionPathDrawing?.active &&
       (selectedObject.kind !== "camera" || isCameraThirdPerson) ? (
         <DirectorSelectedTransformControls
           object={selectedObject}
@@ -160,6 +166,15 @@ export function DirectorStageEnvironment({
           onDragChange={onDragChange}
         />
       ) : null}
+
+      <DirectorMotionPathDrawing
+        active={Boolean(motionPathDrawing?.active)}
+        draftPoints={motionPathDrawing?.draftPoints ?? []}
+        groundHeight={groundY}
+        existingPaths={scene.animation?.motionPaths ?? []}
+        onAddPoint={motionPathDrawing?.onAddPoint ?? (() => {})}
+        onFinish={motionPathDrawing?.onFinish ?? (() => {})}
+      />
     </DirectorTransformRegistryProvider>
   );
 }
