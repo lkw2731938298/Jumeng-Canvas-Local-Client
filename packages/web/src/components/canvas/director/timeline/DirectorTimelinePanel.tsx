@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Pause, Play, Plus, Square, ChevronDown } from "lucide-react";
+import {
+  Pause,
+  Play,
+  Plus,
+  Square,
+  ChevronDown,
+  Undo2,
+  Redo2,
+  Download,
+} from "lucide-react";
 import type {
   DirectorAnimTrack,
   DirectorAnimationTimeline,
@@ -20,6 +29,8 @@ export interface DirectorTimelinePanelProps {
   selectedTrackId: string | null;
   drawingTrackId: string | null;
   selectedObjectId: string | null;
+  canUndo?: boolean;
+  canRedo?: boolean;
   onPlayheadChange: (t: number) => void;
   onTogglePlay: () => void;
   onStop: () => void;
@@ -35,6 +46,9 @@ export interface DirectorTimelinePanelProps {
   onApplyCameraPreset: (trackId: string, preset: CameraMotionPresetId) => void;
   onDeleteKeyframe: (trackId: string, keyframeId: string) => void;
   onMoveKeyframe: (trackId: string, keyframeId: string, time: number) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onExportVideo?: () => void;
   onClose: () => void;
 }
 
@@ -56,6 +70,8 @@ export function DirectorTimelinePanel({
   selectedTrackId,
   drawingTrackId,
   selectedObjectId,
+  canUndo = false,
+  canRedo = false,
   onPlayheadChange,
   onTogglePlay,
   onStop,
@@ -71,6 +87,9 @@ export function DirectorTimelinePanel({
   onApplyCameraPreset,
   onDeleteKeyframe,
   onMoveKeyframe,
+  onUndo,
+  onRedo,
+  onExportVideo,
   onClose,
 }: DirectorTimelinePanelProps) {
   const zoom = timeline.ui?.zoomPxPerSec ?? 48;
@@ -176,6 +195,36 @@ export function DirectorTimelinePanel({
           }`}
         >
           自动帧
+        </button>
+        <button
+          type="button"
+          title="撤销（Ctrl+Z）"
+          disabled={!canUndo || !onUndo}
+          onClick={onUndo}
+          className="flex size-7 items-center justify-center rounded-md bg-white/5 text-white/60 hover:bg-white/10 disabled:opacity-30"
+          aria-label="撤销"
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          title="重做（Ctrl+Shift+Z）"
+          disabled={!canRedo || !onRedo}
+          onClick={onRedo}
+          className="flex size-7 items-center justify-center rounded-md bg-white/5 text-white/60 hover:bg-white/10 disabled:opacity-30"
+          aria-label="重做"
+        >
+          <Redo2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          title="导出预演视频到画布素材"
+          disabled={!onExportVideo}
+          onClick={onExportVideo}
+          className="flex items-center gap-1 rounded-md bg-indigo-500/25 px-2 py-1 text-[10px] text-indigo-100 hover:bg-indigo-500/35 disabled:opacity-30"
+        >
+          <Download className="h-3 w-3" />
+          导出
         </button>
         <label className="flex items-center gap-1 text-[10px] text-white/45">
           <span>播放头</span>

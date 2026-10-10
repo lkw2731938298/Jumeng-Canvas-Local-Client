@@ -44,8 +44,11 @@ import {
   createAnimTrack,
   createMotionPath,
   evaluateTimeline,
+  exportTimelineVideo,
   invalidateMotionPathCache,
   openOrCreateAnimation,
+  resolveExportSize,
+  TimelineHistoryStack,
   upsertKeyframe,
   type CameraMotionPresetId,
 } from "@/lib/director/animation";
@@ -53,6 +56,7 @@ import {
   defaultLensCaptureOptions,
   resolveLensCaptureCameraState,
 } from "@/lib/director/lensCapture";
+import { aspectRatioToNumber } from "@/lib/director/aspectRatio";
 import { findBuiltinModel } from "@/lib/director/builtinModels";
 import { syncCameraLookAtFromTransform, rotationFromPositionLookAt } from "@/lib/director/shotPreview";
 import { writeDirectorCaptureToLinkedShot } from "@/lib/canvas/storyboardNarrativeBootstrap";
@@ -94,6 +98,7 @@ import { DirectorAspectOverlay } from "./DirectorAspectOverlay";
 import { DirectorFilmGateTrack } from "./DirectorFilmGateTrack";
 import { DirectorPosePanel } from "./DirectorPosePanel";
 import { DirectorTimelinePanel } from "./timeline/DirectorTimelinePanel";
+import { DirectorTimelineExportDialog } from "./timeline/DirectorTimelineExportDialog";
 import { MediaAssetPicker } from "@/components/canvas/nodes/MediaAssetPicker";
 import { DirectorAgentPanel } from "./DirectorAgentPanel";
 import { DirectorModel3dDialog } from "./DirectorModel3dDialog";
@@ -180,6 +185,11 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [drawingTrackId, setDrawingTrackId] = useState<string | null>(null);
   const [draftPathPoints, setDraftPathPoints] = useState<[number, number, number][]>([]);
+  /** 时间轴 Undo/Redo 可点状态（栈在 ref 内） */
+  const [timelineHistoryTick, setTimelineHistoryTick] = useState(0);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const [cameraPropViewMode, setCameraPropViewMode] = useState<CameraPropViewMode>("thirdPerson");
   const [uploadingModel, setUploadingModel] = useState(false);
   const [uploadingColorMap, setUploadingColorMap] = useState(false);
@@ -194,6 +204,10 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [panoramaUploadUrl, setPanoramaUploadUrl] = useState<string | null>(null);
   const timelinePlayFromRef = useRef(0);
   const timelineRafRef = useRef<number | null>(null);
+  const timelineHistoryRef = useRef(new TimelineHistoryStack());
+  const exportAbortRef = useRef<AbortController | null>(null);
+  const timelinePlayheadRef = useRef(timelinePlayhead);
+  timelinePlayheadRef.current = timelinePlayhead;
   /** 自动帧：transform 结束时读最新时间轴状态（避免闭包过期） */
   const timelineAutoKfRef = useRef({
     open: false,
@@ -517,6 +531,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           const track = animation.tracks.find((t) => t.targetId === id);
           const obj = objects.find((o) => o.id === id);
           if (track && !track.locked && obj) {
+            timelineHistoryRef.current.pushBefore(animation);
+            setTimelineHistoryTick((n) => n + 1);
             const lookAt =
               obj.kind === "camera"
                 ? ([...(obj.lookAt ?? [0, 1, 0])] as [number, number, number])
@@ -1351,14 +1367,43 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   }, [timelinePlaying, scene?.animation]);
 
   const patchAnimation = useCallback(
-    (updater: (prev: NonNullable<DirectorSceneState["animation"]>) => NonNullable<DirectorSceneState["animation"]>) => {
+    (
+      updater: (
+        prev: NonNullable<DirectorSceneState["animation"]>
+      ) => NonNullable<DirectorSceneState["animation"]>,
+      opts?: { history?: boolean }
+    ) => {
       patchScene((prev) => {
         const base = openOrCreateAnimation(prev);
+        if (opts?.history !== false) {
+          timelineHistoryRef.current.pushBefore(base);
+          setTimelineHistoryTick((n) => n + 1);
+        }
         return { ...prev, version: "1.3", animation: updater(base) };
       });
     },
     [patchScene]
   );
+
+  const undoTimeline = useCallback(() => {
+    const current = scene?.animation;
+    if (!current) return;
+    const prev = timelineHistoryRef.current.undo(current);
+    if (!prev) return;
+    patchScene((s) => ({ ...s, version: "1.3", animation: prev }));
+    setTimelineHistoryTick((n) => n + 1);
+    setTimelinePlaying(false);
+  }, [patchScene, scene?.animation]);
+
+  const redoTimeline = useCallback(() => {
+    const current = scene?.animation;
+    if (!current) return;
+    const next = timelineHistoryRef.current.redo(current);
+    if (!next) return;
+    patchScene((s) => ({ ...s, version: "1.3", animation: next }));
+    setTimelineHistoryTick((n) => n + 1);
+    setTimelinePlaying(false);
+  }, [patchScene, scene?.animation]);
 
   /** 顶栏模式切换：场景摆放 ↔ 动画时间轴 */
   const handleSetTimelineOpen = useCallback(
@@ -1498,18 +1543,22 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const moveTimelineKeyframe = useCallback(
     (trackId: string, keyframeId: string, time: number) => {
-      patchAnimation((anim) => ({
-        ...anim,
-        tracks: anim.tracks.map((t) => {
-          if (t.id !== trackId) return t;
-          return {
-            ...t,
-            keyframes: [...t.keyframes]
-              .map((k) => (k.id === keyframeId ? { ...k, time } : k))
-              .sort((a, b) => a.time - b.time),
-          };
+      // 拖拽中高频更新：不刷 Undo；松手前的整体态由其它操作覆盖
+      patchAnimation(
+        (anim) => ({
+          ...anim,
+          tracks: anim.tracks.map((t) => {
+            if (t.id !== trackId) return t;
+            return {
+              ...t,
+              keyframes: [...t.keyframes]
+                .map((k) => (k.id === keyframeId ? { ...k, time } : k))
+                .sort((a, b) => a.time - b.time),
+            };
+          }),
         }),
-      }));
+        { history: false }
+      );
     },
     [patchAnimation]
   );
@@ -1537,14 +1586,17 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const updateMotionPathPoint = useCallback(
     (pathId: string, index: number, point: [number, number, number]) => {
       invalidateMotionPathCache(pathId);
-      patchAnimation((anim) => ({
-        ...anim,
-        motionPaths: anim.motionPaths.map((p) => {
-          if (p.id !== pathId) return p;
-          const points = p.points.map((pt, i) => (i === index ? point : pt));
-          return { ...p, points };
+      patchAnimation(
+        (anim) => ({
+          ...anim,
+          motionPaths: anim.motionPaths.map((p) => {
+            if (p.id !== pathId) return p;
+            const points = p.points.map((pt, i) => (i === index ? point : pt));
+            return { ...p, points };
+          }),
         }),
-      }));
+        { history: false }
+      );
     },
     [patchAnimation]
   );
@@ -1617,12 +1669,98 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const patchTimelineUi = useCallback(
     (patch: Partial<NonNullable<NonNullable<DirectorSceneState["animation"]>["ui"]>>) => {
-      patchAnimation((anim) => ({
-        ...anim,
-        ui: { ...anim.ui, ...patch },
-      }));
+      // UI 微调不进 Undo，避免拖高度/缩放刷栈
+      patchAnimation(
+        (anim) => ({
+          ...anim,
+          ui: { ...anim.ui, ...patch },
+        }),
+        { history: false }
+      );
     },
     [patchAnimation]
+  );
+
+  const canExportTimeline = useMemo(() => {
+    const anim = scene?.animation;
+    if (!anim) return false;
+    return anim.tracks.some(
+      (t) =>
+        !t.muted &&
+        (Boolean(t.motionPathId) || t.keyframes.length >= 2)
+    );
+  }, [scene?.animation]);
+
+  const runTimelineExport = useCallback(
+    async (opts: { fps: 30 | 60; durationSec: number }) => {
+      if (!scene?.animation || !projectId || !captureApiRef.current || !lensCaptureOptions) {
+        toast.error("导出条件不足（场景或截图未就绪）");
+        return;
+      }
+      if (!canExportTimeline) {
+        toast.error("至少一条轨需要路径或 ≥2 个关键帧");
+        return;
+      }
+      setTimelinePlaying(false);
+      setExporting(true);
+      setExportProgress(0);
+      const abort = new AbortController();
+      exportAbortRef.current = abort;
+      const aspect = aspectRatioToNumber(scene.sceneSettings?.aspectRatio ?? "16:9");
+      const { width, height } = resolveExportSize(aspect, 1280);
+      try {
+        const { blob } = await exportTimelineVideo({
+          durationSec: opts.durationSec,
+          fps: opts.fps,
+          width,
+          height,
+          signal: abort.signal,
+          onProgress: (r) => setExportProgress(r),
+          seekAndWait: async (t) => {
+            setTimelinePlayhead(t);
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            });
+          },
+          captureFrameDataUrl: async (t) => {
+            const sample = evaluateTimeline(scene, t, scene.animation);
+            const cam =
+              sample.directorCamera ??
+              captureApiRef.current?.getCurrentCamera() ??
+              scene.camera;
+            return captureApiRef.current!.captureRgb(cam, {
+              ...lensCaptureOptions,
+              aspect,
+              maxWidth: width,
+            });
+          },
+        });
+        const file = new File(
+          [blob],
+          `director-timeline-${nodeId || "scene"}-${Date.now()}.webm`,
+          { type: blob.type || "video/webm" }
+        );
+        await uploadAsset({
+          file,
+          projectId,
+          category: "video",
+          title: "导演台动画预演",
+        });
+        toast.success("已导出预演视频到素材库（可拖到画布视频节点）");
+        setExportDialogOpen(false);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          toast.message("已取消导出");
+        } else {
+          toast.error(err instanceof Error ? err.message : "导出失败");
+        }
+      } finally {
+        setExporting(false);
+        exportAbortRef.current = null;
+        setExportProgress(0);
+      }
+    },
+    [canExportTimeline, lensCaptureOptions, nodeId, projectId, scene]
   );
 
   useEffect(() => {
@@ -1687,6 +1825,17 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         if (e.key === "k" || e.key === "K") {
           e.preventDefault();
           addTimelineKeyframe();
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+          e.preventDefault();
+          if (e.shiftKey) redoTimeline();
+          else undoTimeline();
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) {
+          e.preventDefault();
+          redoTimeline();
           return;
         }
         const fps = scene?.animation?.fps ?? 30;
@@ -1775,6 +1924,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     addTimelineKeyframe,
     finishMotionPathDrawing,
     patchTimelineUi,
+    undoTimeline,
+    redoTimeline,
     scene?.animation?.fps,
     scene?.animation?.duration,
     scene?.animation?.ui?.zoomPxPerSec,
@@ -2373,6 +2524,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               selectedTrackId={selectedTrackId}
               drawingTrackId={drawingTrackId}
               selectedObjectId={selectedObjectId}
+              canUndo={timelineHistoryTick >= 0 && timelineHistoryRef.current.canUndo}
+              canRedo={timelineHistoryTick >= 0 && timelineHistoryRef.current.canRedo}
               onPlayheadChange={(t) => {
                 setTimelinePlaying(false);
                 setTimelinePlayhead(t);
@@ -2390,7 +2543,9 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                 setTimelinePlayhead(0);
               }}
               onToggleLoop={() =>
-                patchAnimation((anim) => ({ ...anim, loop: !anim.loop }))
+                patchAnimation((anim) => ({ ...anim, loop: !anim.loop }), {
+                  history: false,
+                })
               }
               onToggleAutoKeyframe={() =>
                 patchTimelineUi({
@@ -2428,6 +2583,15 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               onApplyCameraPreset={applyCameraPreset}
               onDeleteKeyframe={deleteTimelineKeyframe}
               onMoveKeyframe={moveTimelineKeyframe}
+              onUndo={undoTimeline}
+              onRedo={redoTimeline}
+              onExportVideo={() => {
+                if (!canExportTimeline) {
+                  toast.error("至少一条轨需要路径或 ≥2 个关键帧");
+                  return;
+                }
+                setExportDialogOpen(true);
+              }}
               onClose={() => {
                 setTimelineOpen(false);
                 setTimelinePlaying(false);
@@ -2437,6 +2601,28 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             />
           </div>
         ) : null}
+
+        <DirectorTimelineExportDialog
+          open={exportDialogOpen}
+          durationSec={scene?.animation?.duration ?? 10}
+          defaultFps={(scene?.animation?.fps === 60 ? 60 : 30) as 30 | 60}
+          aspectLabel={scene?.sceneSettings?.aspectRatio ?? "16:9"}
+          sizeLabel={(() => {
+            const a = aspectRatioToNumber(scene?.sceneSettings?.aspectRatio ?? "16:9");
+            const s = resolveExportSize(a, 1280);
+            return `${s.width}×${s.height}`;
+          })()}
+          exporting={exporting}
+          progress={exportProgress}
+          onConfirm={(opts) => void runTimelineExport(opts)}
+          onCancel={() => {
+            if (exporting) {
+              exportAbortRef.current?.abort();
+              return;
+            }
+            setExportDialogOpen(false);
+          }}
+        />
       </div>
       {panoramaAssetPickerOpen ? (
         <MediaAssetPicker
