@@ -1,6 +1,7 @@
 /**
- * 时间轴导出预演视频：逐帧截图 → MediaRecorder（webm/vp9）→ Blob。
- * 仅面向 Chromium 桌面；失败时抛错由上层提示。
+ * 时间轴导出预演视频：先离线采帧（JPEG）→ 再按固定 fps 实时灌入 MediaRecorder。
+ * 避免 captureStream(0)+慢截图导致墙钟时间戳不均、成片卡顿。
+ * 仅面向 Chromium 桌面。
  */
 
 export type ExportTimelineVideoParams = {
@@ -17,9 +18,10 @@ export type ExportTimelineVideoParams = {
 };
 
 function pickMimeType(): string {
+  // VP8 对实时灌帧更稳；VP9 在短 GOP + 不规则推帧时更容易糊/顿
   const candidates = [
-    "video/webm;codecs=vp9",
     "video/webm;codecs=vp8",
+    "video/webm;codecs=vp9",
     "video/webm",
   ];
   for (const t of candidates) {
@@ -30,17 +32,49 @@ function pickMimeType(): string {
   return "video/webm";
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("导出帧解码失败"));
-    img.src = dataUrl;
-  });
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function dataUrlToImageBitmap(dataUrl: string): Promise<ImageBitmap> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return createImageBitmap(blob);
+}
+
+/** 缩放到导出尺寸并压成 JPEG，避免阶段 1 常驻巨量位图 */
+async function captureToJpegBlob(
+  dataUrl: string,
+  width: number,
+  height: number,
+  scratch: HTMLCanvasElement,
+  quality = 0.92
+): Promise<Blob> {
+  const bmp = await dataUrlToImageBitmap(dataUrl);
+  scratch.width = width;
+  scratch.height = height;
+  const ctx = scratch.getContext("2d", { alpha: false });
+  if (!ctx) {
+    bmp.close();
+    throw new Error("无法创建导出画布");
+  }
+  ctx.fillStyle = "#0a0a12";
+  ctx.fillRect(0, 0, width, height);
+  const scale = Math.min(width / bmp.width, height / bmp.height);
+  const dw = bmp.width * scale;
+  const dh = bmp.height * scale;
+  ctx.drawImage(bmp, (width - dw) / 2, (height - dh) / 2, dw, dh);
+  bmp.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    scratch.toBlob((b) => resolve(b), "image/jpeg", quality)
+  );
+  if (!blob) throw new Error("帧压缩失败");
+  return blob;
 }
 
 /**
- * 按 fps 逐帧截图并编码为 webm。
+ * 按 fps 导出 webm。
+ * 两阶段：① 按内容时间采满帧（可慢）② 按 1/fps 墙钟均匀推入录制器（保证播放流畅）。
  */
 export async function exportTimelineVideo(
   params: ExportTimelineVideoParams
@@ -50,26 +84,52 @@ export async function exportTimelineVideo(
   const width = Math.max(320, Math.round(params.width));
   const height = Math.max(180, Math.round(params.height));
   const frameCount = Math.max(1, Math.round(duration * fps));
+  const frameMs = 1000 / fps;
 
   if (typeof MediaRecorder === "undefined") {
     throw new Error("当前环境不支持 MediaRecorder，无法导出视频");
+  }
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("当前环境不支持 createImageBitmap，无法导出视频");
+  }
+
+  const scratch = document.createElement("canvas");
+  const frameBlobs: Blob[] = [];
+
+  // ── 阶段 1：离线采帧并压成 JPEG ──
+  try {
+    for (let i = 0; i < frameCount; i++) {
+      if (params.signal?.aborted) {
+        throw new DOMException("导出已取消", "AbortError");
+      }
+      const t = Math.min(duration, i / fps);
+      await params.seekAndWait(t);
+      const dataUrl = await params.captureFrameDataUrl(t);
+      frameBlobs.push(await captureToJpegBlob(dataUrl, width, height, scratch));
+      params.onProgress?.(((i + 1) / frameCount) * 0.75, i + 1, frameCount);
+    }
+  } catch (err) {
+    frameBlobs.length = 0;
+    throw err;
   }
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("无法创建导出画布");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) {
+    throw new Error("无法创建导出画布");
+  }
 
-  // captureStream(0)：由 requestFrame 手动推帧，避免定时与截图不同步
-  const stream = canvas.captureStream(0);
-  const track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+  // 固定 fps 的 captureStream：由墙钟驱动时间戳，配合下方匀速推帧
+  const stream = canvas.captureStream(fps);
   const mimeType = pickMimeType();
   const chunks: BlobPart[] = [];
+  const bitrate = width >= 1280 ? 6_000_000 : width >= 720 ? 4_000_000 : 2_500_000;
 
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    videoBitsPerSecond: width >= 1280 ? 4_000_000 : 2_500_000,
+    videoBitsPerSecond: bitrate,
   });
 
   recorder.ondataavailable = (e) => {
@@ -81,39 +141,36 @@ export async function exportTimelineVideo(
     recorder.onerror = () => reject(new Error("录制失败"));
   });
 
-  recorder.start(200);
+  // ── 阶段 2：匀速灌帧编码 ──
+  recorder.start(100);
+  const encodeStart = performance.now();
 
   try {
-    for (let i = 0; i < frameCount; i++) {
+    for (let i = 0; i < frameBlobs.length; i++) {
       if (params.signal?.aborted) {
         throw new DOMException("导出已取消", "AbortError");
       }
-      const t = Math.min(duration, i / fps);
-      await params.seekAndWait(t);
-      const dataUrl = await params.captureFrameDataUrl(t);
-      const img = await loadImage(dataUrl);
-      ctx.fillStyle = "#0a0a12";
-      ctx.fillRect(0, 0, width, height);
-      // 按画布比例居中 cover
-      const scale = Math.min(width / img.width, height / img.height);
-      const dw = img.width * scale;
-      const dh = img.height * scale;
-      const dx = (width - dw) / 2;
-      const dy = (height - dh) / 2;
-      ctx.drawImage(img, dx, dy, dw, dh);
-      if (track && typeof track.requestFrame === "function") {
-        track.requestFrame();
-      }
-      params.onProgress?.(i / frameCount, i + 1, frameCount);
-      // 给编码器一点时间吞帧
-      await new Promise((r) => setTimeout(r, Math.max(8, Math.floor(1000 / fps / 2))));
+      const bmp = await createImageBitmap(frameBlobs[i]!);
+      // 释放已用 JPEG，压低峰值内存
+      frameBlobs[i] = null as unknown as Blob;
+      ctx.drawImage(bmp, 0, 0, width, height);
+      bmp.close();
+
+      const targetAt = encodeStart + i * frameMs;
+      const wait = targetAt - performance.now();
+      if (wait > 1) await sleep(wait);
+
+      params.onProgress?.(0.75 + ((i + 1) / frameCount) * 0.25, i + 1, frameCount);
     }
+    // 末帧多留一拍，避免录制器截断最后一帧
+    await sleep(frameMs + 40);
     params.onProgress?.(1, frameCount, frameCount);
   } finally {
     if (recorder.state !== "inactive") {
       recorder.stop();
     }
     stream.getTracks().forEach((tr) => tr.stop());
+    frameBlobs.length = 0;
   }
 
   await stopped;

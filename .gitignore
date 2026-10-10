@@ -12,7 +12,9 @@ runtime/_extract/
 runtime/*.zip
 packages/desktop/resources/
 packages/desktop/dist/
+packages/desktop/.cache/
 packages/desktop/node_modules/
+runtime/
 *.log
 _desktop_*.txt
 _browser_*.txt

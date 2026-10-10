@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/desktop",
-  "version": "0.1.12",
+  "version": "0.1.15",
   "private": true,
   "main": "main.js",
   "appId": "com.lieka.jumengcanvas",
@@ -38,6 +38,13 @@
       {
         "from": "resources/node",
         "to": "node"
+      },
+      {
+        "from": "resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/icon.ico",

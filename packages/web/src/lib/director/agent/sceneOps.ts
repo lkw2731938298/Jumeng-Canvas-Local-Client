@@ -17,6 +17,7 @@ import {
   type DirectorObjectShape,
   type DirectorSceneState,
 } from "@/types/director-scene";
+import { pruneAnimationAfterObjectRemoval } from "@/lib/director/animation";
 
 export type DirectorOp = { op: string; [key: string]: unknown };
 
@@ -415,7 +416,14 @@ export function applyDirectorOps(
             fail(op, `找不到物体「${str(op.target)}」`);
             break;
           }
-          ctx.scene = { ...ctx.scene, objects: ctx.scene.objects.filter((o) => o.id !== obj.id) };
+          // 同步清掉该对象的轨与轨迹，避免幽灵路径线
+          ctx.scene = {
+            ...ctx.scene,
+            objects: ctx.scene.objects.filter((o) => o.id !== obj.id),
+            animation:
+              pruneAnimationAfterObjectRemoval(ctx.scene.animation, [obj.id]) ??
+              ctx.scene.animation,
+          };
           changed = true;
           ok(op, `已删除「${obj.name}」`);
           break;
@@ -423,9 +431,15 @@ export function applyDirectorOps(
         case "clear_objects": {
           const keepCameras = op.keepCameras !== false;
           const before = ctx.scene.objects.length;
+          const removedIds = ctx.scene.objects
+            .filter((o) => !(keepCameras && o.kind === "camera"))
+            .map((o) => o.id);
           ctx.scene = {
             ...ctx.scene,
             objects: ctx.scene.objects.filter((o) => keepCameras && o.kind === "camera"),
+            animation:
+              pruneAnimationAfterObjectRemoval(ctx.scene.animation, removedIds) ??
+              ctx.scene.animation,
           };
           changed = true;
           ok(op, `已清空场景物体 ${before - ctx.scene.objects.length} 个${keepCameras ? "（保留摄像机）" : ""}`);

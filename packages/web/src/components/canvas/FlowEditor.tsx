@@ -999,9 +999,16 @@ export function FlowEditor() {
   const onBeforeDelete: OnBeforeDelete<CanvasFlowNode> = useCallback(({ nodes: nodesToRemove, edges: edgesToRemove }) => {
     if (deleteResolverRef.current) return Promise.resolve(false);
 
+    /** 长 hash/ID 截断，避免撑破确认弹窗 */
+    const shortenLabel = (raw: string) => {
+      const s = raw.trim();
+      if (s.length <= 28) return s;
+      if (/^[a-f0-9_-]+$/i.test(s)) return `${s.slice(0, 10)}…${s.slice(-6)}`;
+      return `${s.slice(0, 14)}…${s.slice(-8)}`;
+    };
     const labels = nodesToRemove.map((n) => {
       const label = String((n.data as WorkflowNodeData | undefined)?.label ?? "").trim();
-      return label || n.id;
+      return shortenLabel(label || n.id);
     });
 
     let description: string;
@@ -1532,16 +1539,16 @@ export function FlowEditor() {
         }}
       >
         <DialogContent
-          className="border-white/10 bg-[#14141f] text-white ring-white/10"
+          className="min-w-0 max-w-sm overflow-hidden border-white/10 bg-[#14141f] text-white ring-white/10"
           showCloseButton={false}
         >
-          <DialogHeader>
+          <DialogHeader className="min-w-0">
             <DialogTitle>{deleteConfirmText.title}</DialogTitle>
-            <DialogDescription className="text-white/55">
+            <DialogDescription className="break-all text-white/55 [overflow-wrap:anywhere]">
               {deleteConfirmText.description}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="border-white/10 bg-transparent">
+          <DialogFooter className="min-w-0 flex-wrap border-white/10 bg-transparent">
             <Button
               type="button"
               variant="outline"

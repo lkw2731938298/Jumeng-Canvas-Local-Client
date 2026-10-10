@@ -55,13 +55,14 @@ export function createAnimTrack(
 
 export function createMotionPath(
   points: [number, number, number][],
-  name = "轨迹"
+  name = "轨迹",
+  opts?: { closed?: boolean }
 ): DirectorMotionPath {
   return {
     id: uid("path"),
     name,
     points,
-    closed: false,
+    closed: !!opts?.closed,
     heightOffset: 0,
     offset: [0, 0, 0],
     curve: "catmull",

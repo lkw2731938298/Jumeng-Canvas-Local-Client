@@ -20,6 +20,8 @@ export function DirectorTimelineExportDialog({
   sizeLabel,
   exporting,
   progress,
+  /** 指定机位轨导出时的轨名说明 */
+  cameraTrackLabel = null,
   onConfirm,
   onCancel,
 }: {
@@ -30,6 +32,7 @@ export function DirectorTimelineExportDialog({
   sizeLabel: string;
   exporting: boolean;
   progress: number;
+  cameraTrackLabel?: string | null;
   onConfirm: (opts: TimelineExportConfirm) => void;
   onCancel: () => void;
 }) {
@@ -50,7 +53,9 @@ export function DirectorTimelineExportDialog({
         className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#16161f] p-4 text-white shadow-2xl"
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium">导出视频到画布</h2>
+          <h2 className="text-sm font-medium">
+            {cameraTrackLabel ? "导出机位轨录像" : "导出视频到画布"}
+          </h2>
           <button
             type="button"
             disabled={exporting}
@@ -62,9 +67,17 @@ export function DirectorTimelineExportDialog({
           </button>
         </div>
         <p className="mb-3 text-[11px] leading-relaxed text-white/50">
-          将按当前时间轴逐帧预演并编码为 WebM，写入本项目素材库（不重新扣费）。
+          {cameraTrackLabel
+            ? `镜头强制使用「${cameraTrackLabel}」；角色/造具等仍按时间轴运动。编码为 WebM 写入素材库。`
+            : "将按当前时间轴逐帧预演（主视口/默认预演视角）并编码为 WebM，写入本项目素材库（不重新扣费）。"}
         </p>
         <dl className="mb-3 grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1.5 text-[11px]">
+          {cameraTrackLabel ? (
+            <>
+              <dt className="text-white/40">机位轨</dt>
+              <dd className="truncate text-amber-100/90">{cameraTrackLabel}</dd>
+            </>
+          ) : null}
           <dt className="text-white/40">时长</dt>
           <dd>{clampedDuration.toFixed(1)}s（硬顶 60s）</dd>
           <dt className="text-white/40">画幅</dt>

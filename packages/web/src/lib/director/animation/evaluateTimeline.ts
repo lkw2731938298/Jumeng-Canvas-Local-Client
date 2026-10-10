@@ -3,11 +3,16 @@ import {
   type DirectorAnimKeyframe,
   type DirectorAnimTrack,
   type DirectorAnimationTimeline,
+  type DirectorBonePose,
   type DirectorCameraState,
   type DirectorMotionPath,
   type DirectorSceneState,
 } from "@jumeng-canvas/shared";
-import { sampleMotionPath } from "./motionPathCurve";
+import { getMotionPathCurve, sampleMotionPath } from "./motionPathCurve";
+import {
+  locomotionPhaseFromDistance,
+  sampleLocomotionBonePose,
+} from "./locomotionPose";
 
 export type Vec3 = [number, number, number];
 
@@ -19,6 +24,8 @@ export interface DirectorTimelineObjectSample {
   fov?: number;
   motion?: "idle" | "walk" | "run";
   moving: boolean;
+  /** 预览用步态骨骼；仅角色轨在 walk/run 时写入 */
+  bonePose?: DirectorBonePose;
 }
 
 export interface DirectorTimelineSample {
@@ -98,6 +105,8 @@ function evaluateTrack(
   const fov = pickChannel(kfs, time, (k) => k.fov, lerp, base.fov ?? 45);
 
   let moving = false;
+  /** 本段轨迹已走路程（米），用于步态相位 */
+  let pathDistance = 0;
   const pathId = track.motionPathId;
   if (pathId) {
     const path = paths.get(pathId);
@@ -109,6 +118,9 @@ function evaluateTrack(
       const sample = sampleMotionPath(path, along);
       if (sample) {
         moving = u > 0.001 && u < 0.999;
+        const curve = getMotionPathCurve(path);
+        const pathLen = curve?.getLength() ?? 0;
+        pathDistance = pathLen * Math.abs(end - start) * u;
         const pathControlsXZ = track.pathControlsXZ !== false;
         if (pathControlsXZ) {
           // 路径管 XZ，Y 优先用关键帧（若有 position 关键帧则保留插值 Y）
@@ -129,7 +141,8 @@ function evaluateTrack(
               position[2] + sample.tangent[2],
             ];
           } else {
-            rotation = [rotation[0], sample.yawDeg, rotation[2]];
+            // yawDeg 是角度；场景 transform.rotation 为人模欧拉（弧度）
+            rotation = [rotation[0], (sample.yawDeg * Math.PI) / 180, rotation[2]];
           }
         }
       }
@@ -137,14 +150,27 @@ function evaluateTrack(
   }
 
   const motionKf = [...kfs].filter((k) => k.motion).sort((a, b) => b.time - a.time).find((k) => k.time <= time);
+  const motion = motionKf?.motion ?? (moving ? "walk" : "idle");
+
+  // 角色沿轨迹移动时注入步态骨骼 + 轻微起伏（仅预览 sample，不写回持久场景）
+  let bonePose: DirectorBonePose | undefined;
+  if (track.kind === "character" && moving && (motion === "walk" || motion === "run")) {
+    const phase = locomotionPhaseFromDistance(pathDistance, motion);
+    bonePose = sampleLocomotionBonePose(motion, phase, base.bonePose);
+    const bobAmp = motion === "run" ? 0.035 : 0.018;
+    const bob = Math.abs(Math.sin(phase * Math.PI * 2)) * bobAmp;
+    position = [position[0], position[1] + bob, position[2]];
+  }
+
   return {
     position,
     rotation,
     scale,
     lookAt: track.kind === "camera" ? lookAt : undefined,
     fov: track.kind === "camera" ? fov : undefined,
-    motion: motionKf?.motion ?? (moving ? "walk" : "idle"),
+    motion,
     moving,
+    bonePose,
   };
 }
 
@@ -178,6 +204,7 @@ function baseFromScene(
     lookAt: obj.lookAt ? [...obj.lookAt] : undefined,
     fov: obj.fov,
     moving: false,
+    bonePose: obj.bonePose ? { ...obj.bonePose } : undefined,
   };
 }
 
@@ -248,6 +275,8 @@ export function applySampleToScene(
         },
         lookAt: ov.lookAt ?? obj.lookAt,
         fov: ov.fov ?? obj.fov,
+        // 步态仅覆盖预览帧；无 locomotion 时保留场景原 bonePose
+        bonePose: ov.bonePose ?? obj.bonePose,
       };
     }),
   };

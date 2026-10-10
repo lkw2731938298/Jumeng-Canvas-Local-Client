@@ -110,6 +110,21 @@ function main() {
   copyDir(nodeHome, outNode);
   log(`copied portable node → ${outNode}`);
 
+  // 便携 ffmpeg（视频切断用，避免依赖系统安装 / 浏览器录制）
+  const ensureFfmpeg = spawnSync(
+    process.execPath,
+    [path.join(root, "scripts", "ensure-portable-ffmpeg.mjs")],
+    { cwd: root, stdio: "inherit" }
+  );
+  if (ensureFfmpeg.status !== 0) {
+    console.warn("[prepare-desktop] 便携 ffmpeg 准备失败：安装包仍可运行，切断将尝试首次联网下载");
+  } else {
+    const ffmpegDir = path.join(resourcesDir, "ffmpeg");
+    if (fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"))) {
+      log(`portable ffmpeg ready → ${ffmpegDir}`);
+    }
+  }
+
   // 写入启动元数据，供 Electron 主进程定位
   const meta = {
     serverRel: serverRel.replace(/\\/g, "/"),

@@ -1281,6 +1281,7 @@ export function NodeTopMenuOverlay() {
         inSec,
         outSec,
         title: `${sourceLabel} · 切段`,
+        sourceUrl: videoUrl,
       });
 
       const { width } = resolveNodeSize(node.width, node.height);

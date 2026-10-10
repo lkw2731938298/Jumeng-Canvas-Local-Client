@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   Aperture,
   Box,
@@ -50,7 +51,13 @@ import {
   resolveExportSize,
   TimelineHistoryStack,
   upsertKeyframe,
+  motionPathToolClosed,
+  motionPathDrawToolLabel,
+  footPointOnGround,
+  pruneAnimationAfterObjectRemoval,
+  reconcileAnimationWithObjects,
   type CameraMotionPresetId,
+  type MotionPathDrawTool,
 } from "@/lib/director/animation";
 import {
   defaultLensCaptureOptions,
@@ -63,7 +70,10 @@ import { writeDirectorCaptureToLinkedShot } from "@/lib/canvas/storyboardNarrati
 import { useProjectAssetManifest } from "@/lib/canvas/useProjectAssets";
 import { isMannequinBuiltinModel } from "@/components/canvas/director/DirectorMannequinModel";
 import { createDefaultBonePose } from "@/lib/director/poseRig";
-import type { DirectorBonePose } from "@jumeng-canvas/shared";
+import {
+  DIRECTOR_CAMERA_TRACK_TARGET,
+  type DirectorBonePose,
+} from "@jumeng-canvas/shared";
 import type { WorkflowNodeData } from "@/types/workflow";
 import {
   createDefaultDirectorScene,
@@ -93,6 +103,7 @@ import { framingToCameraFields } from "@/lib/director/cameraFraming";
 import { DirectorSceneInspector } from "./DirectorSceneInspector";
 import { DirectorModelInspector } from "./DirectorModelInspector";
 import { DirectorCameraInspector } from "./DirectorCameraInspector";
+import { DirectorPathPointInspector } from "./timeline/DirectorPathPointInspector";
 import { DirectorBottomToolbar } from "./DirectorBottomToolbar";
 import { DirectorAspectOverlay } from "./DirectorAspectOverlay";
 import { DirectorFilmGateTrack } from "./DirectorFilmGateTrack";
@@ -184,12 +195,23 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const [timelinePlaying, setTimelinePlaying] = useState(false);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [drawingTrackId, setDrawingTrackId] = useState<string | null>(null);
+  const [drawingTool, setDrawingTool] = useState<MotionPathDrawTool>("pen");
   const [draftPathPoints, setDraftPathPoints] = useState<[number, number, number][]>([]);
+  /** 视口选中的运动路径顶点下标（右侧栏 XYZ） */
+  const [selectedPathPointIndex, setSelectedPathPointIndex] = useState<number | null>(
+    null
+  );
   /** 时间轴 Undo/Redo 可点状态（栈在 ref 内） */
   const [timelineHistoryTick, setTimelineHistoryTick] = useState(0);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  /** 非空：导出时强制用该摄像机轨当镜头；null 为默认主视口预演 */
+  const [exportCameraTrackId, setExportCameraTrackId] = useState<string | null>(
+    null
+  );
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  /** 视口 Orbit / 变换拖拽中：暂停时间轴采样覆盖，避免「画面拖不动」 */
+  const [viewportInteracting, setViewportInteracting] = useState(false);
   const [cameraPropViewMode, setCameraPropViewMode] = useState<CameraPropViewMode>("thirdPerson");
   const [uploadingModel, setUploadingModel] = useState(false);
   const [uploadingColorMap, setUploadingColorMap] = useState(false);
@@ -276,22 +298,24 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     return evaluateTimeline(scene, timelinePlayhead, scene.animation);
   }, [scene, timelineOpen, timelinePlayhead]);
 
-  /** 预览用场景：播放头驱动物体位姿，不写回 JSON */
+  /** 预览用场景：播放头驱动物体位姿，不写回 JSON；主视口相机始终用 live，可自由 Orbit */
   const displayScene = useMemo(() => {
     if (!scene) return null;
     if (!timelineSample || !timelineOpen) return scene;
-    return applySampleToScene(scene, timelineSample);
-  }, [scene, timelineSample, timelineOpen]);
+    // 拖拽/甩镜时不要用采样盖住 live 位姿（否则 gizmo 一松就弹回）
+    if (viewportInteracting) return scene;
+    const applied = applySampleToScene(scene, timelineSample);
+    // 主舞台保持导演自由相机；轨上 directorCamera 只给导出/镜头监视器用
+    return { ...applied, camera: scene.camera };
+  }, [scene, timelineSample, timelineOpen, viewportInteracting]);
 
   const activeCamera = useMemo(() => {
     if (!scene) return null;
-    if (selectedCameraObject && cameraPropViewMode === "firstPerson" && !timelinePlaying) {
+    if (selectedCameraObject && cameraPropViewMode === "firstPerson") {
       const cam = cameraObjectToState(selectedCameraObject);
       if (cam) return cam;
     }
-    if (timelineOpen && timelineSample?.directorCamera) {
-      return timelineSample.directorCamera;
-    }
+    // 旧版 cameraTrack 预览仍跟轨；动画时间轴播放不抢主视口（保持全局 Orbit 可转）
     if (trackTime != null && scene.cameraTrack?.keyframes.length && !scene.animation) {
       return interpolateCameraTrack(scene.cameraTrack, trackTime);
     }
@@ -304,9 +328,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     trackTime,
     selectedCameraObject,
     cameraPropViewMode,
-    timelineOpen,
-    timelinePlaying,
-    timelineSample,
   ]);
   const lensCaptureOptions = useMemo(
     () => (scene ? defaultLensCaptureOptions(scene, selectedCameraObject?.id ?? null) : undefined),
@@ -348,9 +369,18 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       try {
         const record = await fetchDirectorScene(projectId, nodeId);
         if (cancelled) return;
-        const initial = record?.scene
+        const raw = record?.scene
           ? normalizeDirectorScene(record.scene)
           : createDefaultDirectorScene();
+        // 加载时清掉已删对象残留的轨/轨迹线
+        const reconciled = reconcileAnimationWithObjects(
+          raw.animation,
+          raw.objects.map((o) => o.id)
+        );
+        const initial =
+          reconciled && reconciled !== raw.animation
+            ? { ...raw, animation: reconciled }
+            : raw;
         setScene(initial);
         setSelectedObjectId(null);
         if (!record) {
@@ -412,6 +442,23 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     },
     [scheduleSave]
   );
+
+  // 场景内已无对象但时间轴仍挂轨/路径时，自动清掉幽灵轨迹（含历史脏数据）
+  useEffect(() => {
+    if (!scene?.animation || !sceneLoadedRef.current) return;
+    const next = reconcileAnimationWithObjects(
+      scene.animation,
+      scene.objects.map((o) => o.id)
+    );
+    if (!next || next === scene.animation) return;
+    patchScene((prev) => ({
+      ...prev,
+      animation: reconcileAnimationWithObjects(
+        prev.animation,
+        prev.objects.map((o) => o.id)
+      ) ?? prev.animation,
+    }));
+  }, [scene, patchScene]);
 
   // ---------- 导演台 AI（对话搭场景 / 3D 生成） ----------
   const [agentOpen, setAgentOpen] = useState(false);
@@ -1258,13 +1305,46 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (id?: string | null) => {
       const targetId = id ?? selectedObjectId;
       if (!targetId) return;
-      patchScene((prev) => ({
-        ...prev,
-        objects: prev.objects.filter((obj) => obj.id !== targetId),
-      }));
+      // 记下将被删的轨，便于清 UI 选中/绘制态
+      const removedTrackIds =
+        scene?.animation?.tracks
+          .filter((t) => t.targetId === targetId)
+          .map((t) => t.id) ?? [];
+      patchScene((prev) => {
+        const nextAnim = pruneAnimationAfterObjectRemoval(prev.animation, [
+          targetId,
+        ]);
+        return {
+          ...prev,
+          objects: prev.objects
+            .filter((obj) => obj.id !== targetId)
+            .map((obj) =>
+              obj.lookAtObjectId === targetId
+                ? {
+                    ...obj,
+                    lookAtObjectId: null,
+                    lookAtMode: "manual" as const,
+                  }
+                : obj
+            ),
+          animation: nextAnim ?? prev.animation,
+        };
+      });
       setSelectedObjectId((current) => (current === targetId ? null : current));
+      if (removedTrackIds.length) {
+        setSelectedTrackId((tid) =>
+          tid && removedTrackIds.includes(tid) ? null : tid
+        );
+        setDrawingTrackId((tid) => {
+          if (tid && removedTrackIds.includes(tid)) {
+            setDraftPathPoints([]);
+            return null;
+          }
+          return tid;
+        });
+      }
     },
-    [patchScene, selectedObjectId]
+    [patchScene, scene?.animation?.tracks, selectedObjectId]
   );
 
   const selectCameraObject = useCallback((id: string) => {
@@ -1440,34 +1520,53 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     });
   }, [patchAnimation, scene, selectedObjectId]);
 
-  const finishMotionPathDrawing = useCallback(() => {
-    if (!drawingTrackId || draftPathPoints.length < 2) {
-      toast.error("至少需要 2 个路径点");
-      return;
-    }
-    const trackId = drawingTrackId;
-    const points = draftPathPoints.map(
-      (p) => [...p] as [number, number, number]
-    );
-    patchAnimation((anim) => {
-      const track = anim.tracks.find((t) => t.id === trackId);
-      const existingId = track?.motionPathId;
-      const existing = existingId
-        ? anim.motionPaths.find((p) => p.id === existingId)
-        : null;
-      if (existing) {
-        // 延伸：更新同一 path，避免 orphan
-        invalidateMotionPathCache(existing.id);
+  const finishMotionPathDrawing = useCallback(
+    (overridePoints?: [number, number, number][]) => {
+      const raw = overridePoints ?? draftPathPoints;
+      if (!drawingTrackId || raw.length < 2) {
+        toast.error("至少需要 2 个路径点");
+        return;
+      }
+      const trackId = drawingTrackId;
+      const points = raw.map((p) => [...p] as [number, number, number]);
+      const closed = motionPathToolClosed(drawingTool);
+      const pathName = motionPathDrawToolLabel(drawingTool);
+      patchAnimation((anim) => {
+        const track = anim.tracks.find((t) => t.id === trackId);
+        const existingId = track?.motionPathId;
+        const existing = existingId
+          ? anim.motionPaths.find((p) => p.id === existingId)
+          : null;
+        if (existing) {
+          // 延伸：更新同一 path，避免 orphan
+          invalidateMotionPathCache(existing.id);
+          return {
+            ...anim,
+            motionPaths: anim.motionPaths.map((p) =>
+              p.id === existing.id ? { ...p, points, closed: p.closed || closed } : p
+            ),
+            tracks: anim.tracks.map((t) =>
+              t.id === trackId
+                ? {
+                    ...t,
+                    motionPathId: existing.id,
+                    motionPathStart: 0,
+                    motionPathEnd: 1,
+                    orientToPath: t.kind !== "prop",
+                  }
+                : t
+            ),
+          };
+        }
+        const path = createMotionPath(points, pathName, { closed });
         return {
           ...anim,
-          motionPaths: anim.motionPaths.map((p) =>
-            p.id === existing.id ? { ...p, points } : p
-          ),
+          motionPaths: [...anim.motionPaths, path],
           tracks: anim.tracks.map((t) =>
             t.id === trackId
               ? {
                   ...t,
-                  motionPathId: existing.id,
+                  motionPathId: path.id,
                   motionPathStart: 0,
                   motionPathEnd: 1,
                   orientToPath: t.kind !== "prop",
@@ -1475,28 +1574,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               : t
           ),
         };
-      }
-      const path = createMotionPath(points, "轨迹");
-      return {
-        ...anim,
-        motionPaths: [...anim.motionPaths, path],
-        tracks: anim.tracks.map((t) =>
-          t.id === trackId
-            ? {
-                ...t,
-                motionPathId: path.id,
-                motionPathStart: 0,
-                motionPathEnd: 1,
-                orientToPath: t.kind !== "prop",
-              }
-            : t
-        ),
-      };
-    });
-    setDrawingTrackId(null);
-    setDraftPathPoints([]);
-    toast.success("已绑定运动路径");
-  }, [draftPathPoints, drawingTrackId, patchAnimation]);
+      });
+      setDrawingTrackId(null);
+      setDraftPathPoints([]);
+      setDrawingTool("pen");
+      toast.success("已绑定运动路径");
+    },
+    [draftPathPoints, drawingTrackId, drawingTool, patchAnimation]
+  );
 
   const addTimelineKeyframe = useCallback(() => {
     if (!scene?.animation || !selectedObjectId) {
@@ -1565,20 +1650,34 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
 
   const clearTrackMotionPath = useCallback(
     (trackId: string) => {
-      patchAnimation((anim) => ({
-        ...anim,
-        tracks: anim.tracks.map((t) =>
-          t.id === trackId
-            ? {
-                ...t,
-                motionPathId: null,
-                motionPathStart: 0,
-                motionPathEnd: 1,
-              }
-            : t
-        ),
-      }));
-      toast.success("已清除路径绑定（关键帧保留）");
+      // 解绑轨道并删除路径数据，否则场景里仍会画出残留轨迹线
+      patchAnimation((anim) => {
+        const track = anim.tracks.find((t) => t.id === trackId);
+        const pathId = track?.motionPathId ?? null;
+        if (pathId) invalidateMotionPathCache(pathId);
+        const stillReferenced =
+          pathId != null &&
+          anim.tracks.some((t) => t.id !== trackId && t.motionPathId === pathId);
+        return {
+          ...anim,
+          tracks: anim.tracks.map((t) =>
+            t.id === trackId
+              ? {
+                  ...t,
+                  motionPathId: null,
+                  motionPathStart: 0,
+                  motionPathEnd: 1,
+                }
+              : t
+          ),
+          motionPaths:
+            pathId && !stillReferenced
+              ? anim.motionPaths.filter((p) => p.id !== pathId)
+              : anim.motionPaths,
+        };
+      });
+      setSelectedPathPointIndex(null);
+      toast.success("已清除路径（关键帧保留）");
     },
     [patchAnimation]
   );
@@ -1597,6 +1696,38 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         }),
         { history: false }
       );
+    },
+    [patchAnimation]
+  );
+
+  const insertMotionPathPoint = useCallback(
+    (pathId: string, afterIndex: number, point: [number, number, number]) => {
+      invalidateMotionPathCache(pathId);
+      patchAnimation((anim) => ({
+        ...anim,
+        motionPaths: anim.motionPaths.map((p) => {
+          if (p.id !== pathId) return p;
+          const points = [...p.points];
+          const at = Math.min(points.length, Math.max(0, afterIndex + 1));
+          points.splice(at, 0, point);
+          return { ...p, points };
+        }),
+      }));
+    },
+    [patchAnimation]
+  );
+
+  const deleteMotionPathPoint = useCallback(
+    (pathId: string, index: number) => {
+      invalidateMotionPathCache(pathId);
+      patchAnimation((anim) => ({
+        ...anim,
+        motionPaths: anim.motionPaths.map((p) => {
+          if (p.id !== pathId) return p;
+          if (p.points.length <= 2) return p; // 至少保留 2 点
+          return { ...p, points: p.points.filter((_, i) => i !== index) };
+        }),
+      }));
     },
     [patchAnimation]
   );
@@ -1701,6 +1832,16 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         toast.error("至少一条轨需要路径或 ≥2 个关键帧");
         return;
       }
+      const forceTrackId = exportCameraTrackId;
+      const forceTrack = forceTrackId
+        ? scene.animation.tracks.find(
+            (t) => t.id === forceTrackId && t.kind === "camera"
+          )
+        : null;
+      if (forceTrackId && !forceTrack) {
+        toast.error("选中的摄像机轨已不存在，请重新选择");
+        return;
+      }
       setTimelinePlaying(false);
       setExporting(true);
       setExportProgress(0);
@@ -1717,17 +1858,49 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           signal: abort.signal,
           onProgress: (r) => setExportProgress(r),
           seekAndWait: async (t) => {
-            setTimelinePlayhead(t);
+            // 同步提交播放头，再等两帧 R3F 渲染，避免采到旧姿态造成跳帧
+            flushSync(() => {
+              setTimelinePlayhead(t);
+            });
             await new Promise<void>((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve())
+              );
             });
           },
           captureFrameDataUrl: async (t) => {
             const sample = evaluateTimeline(scene, t, scene.animation);
-            const cam =
-              sample.directorCamera ??
-              captureApiRef.current?.getCurrentCamera() ??
-              scene.camera;
+            let cam: DirectorCameraState;
+            if (forceTrack) {
+              // 强制用选中摄像机轨采样镜头；物体仍由整表 evaluate 驱动
+              if (forceTrack.targetId === DIRECTOR_CAMERA_TRACK_TARGET) {
+                cam =
+                  sample.directorCamera ??
+                  captureApiRef.current?.getCurrentCamera() ??
+                  scene.camera;
+              } else {
+                const ov = sample.objects[forceTrack.targetId];
+                const baseObj = scene.objects.find(
+                  (o) => o.id === forceTrack.targetId
+                );
+                cam = {
+                  position: ov?.position ??
+                    baseObj?.transform.position ??
+                    scene.camera.position,
+                  target:
+                    ov?.lookAt ??
+                    baseObj?.lookAt ??
+                    scene.camera.target,
+                  fov: ov?.fov ?? baseObj?.fov ?? scene.camera.fov ?? 45,
+                };
+              }
+            } else {
+              // 普通「导出」：固定主视口 Orbit 镜头，不跟时间轴机位轨
+              cam =
+                captureApiRef.current?.getCurrentCamera() ??
+                liveCameraRef.current ??
+                scene.camera;
+            }
             return captureApiRef.current!.captureRgb(cam, {
               ...lensCaptureOptions,
               aspect,
@@ -1737,17 +1910,26 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         });
         const file = new File(
           [blob],
-          `director-timeline-${nodeId || "scene"}-${Date.now()}.webm`,
+          forceTrack
+            ? `director-cam-${forceTrack.id}-${Date.now()}.webm`
+            : `director-timeline-${nodeId || "scene"}-${Date.now()}.webm`,
           { type: blob.type || "video/webm" }
         );
         await uploadAsset({
           file,
           projectId,
           category: "video",
-          title: "导演台动画预演",
+          title: forceTrack
+            ? `导演台机位·${forceTrack.name}`
+            : "导演台动画预演",
         });
-        toast.success("已导出预演视频到素材库（可拖到画布视频节点）");
+        toast.success(
+          forceTrack
+            ? `已导出机位「${forceTrack.name}」录像到素材库`
+            : "已导出预演视频到素材库（可拖到画布视频节点）"
+        );
         setExportDialogOpen(false);
+        setExportCameraTrackId(null);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           toast.message("已取消导出");
@@ -1760,8 +1942,23 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
         setExportProgress(0);
       }
     },
-    [canExportTimeline, lensCaptureOptions, nodeId, projectId, scene]
+    [
+      canExportTimeline,
+      exportCameraTrackId,
+      lensCaptureOptions,
+      nodeId,
+      projectId,
+      scene,
+    ]
   );
+
+  const exportCameraTrackLabel = useMemo(() => {
+    if (!exportCameraTrackId || !scene?.animation) return null;
+    return (
+      scene.animation.tracks.find((t) => t.id === exportCameraTrackId)?.name ??
+      null
+    );
+  }, [exportCameraTrackId, scene?.animation]);
 
   useEffect(() => {
     return () => {
@@ -1967,13 +2164,51 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const viewportBox = panelsVisible || agentOpen
     ? `top-3 bottom-3 ${centerLeft} ${centerRight} rounded-2xl ring-1 ring-white/[0.07]`
     : "inset-0";
-  const selectionTitle = selectedObject
-    ? selectedObject.kind === "camera"
-      ? { tag: "摄像机", tone: "bg-amber-400/15 text-amber-200", icon: <Video className="h-4 w-4 text-amber-300" /> }
-      : selectedObject.kind === "character"
-        ? { tag: "人物", tone: "bg-indigo-400/15 text-indigo-200", icon: <PersonStanding className="h-4 w-4 text-indigo-300" /> }
-        : { tag: "道具", tone: "bg-emerald-400/15 text-emerald-200", icon: <Box className="h-4 w-4 text-emerald-300" /> }
-    : null;
+  /** 选中路径顶点时右侧走独立页，不与物体/场景检查器混排 */
+  const pathPointPage = useMemo(() => {
+    if (
+      selectedPathPointIndex == null ||
+      !timelineOpen ||
+      drawingTrackId ||
+      !scene?.animation
+    ) {
+      return null;
+    }
+    const track =
+      scene.animation.tracks.find((t) => t.id === selectedTrackId) ??
+      scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
+    if (!track?.motionPathId) return null;
+    const path = scene.animation.motionPaths.find((p) => p.id === track.motionPathId);
+    if (!path) return null;
+    const point = path.points[selectedPathPointIndex];
+    if (!point) return null;
+    return {
+      path,
+      index: selectedPathPointIndex,
+      point,
+    };
+  }, [
+    selectedPathPointIndex,
+    timelineOpen,
+    drawingTrackId,
+    scene?.animation,
+    selectedTrackId,
+    selectedObjectId,
+  ]);
+
+  const selectionTitle = pathPointPage
+    ? {
+        tag: "路径顶点",
+        tone: "bg-amber-400/15 text-amber-200",
+        icon: <Move3d className="h-4 w-4 text-amber-300" />,
+      }
+    : selectedObject
+      ? selectedObject.kind === "camera"
+        ? { tag: "摄像机", tone: "bg-amber-400/15 text-amber-200", icon: <Video className="h-4 w-4 text-amber-300" /> }
+        : selectedObject.kind === "character"
+          ? { tag: "人物", tone: "bg-indigo-400/15 text-indigo-200", icon: <PersonStanding className="h-4 w-4 text-indigo-300" /> }
+          : { tag: "道具", tone: "bg-emerald-400/15 text-emerald-200", icon: <Box className="h-4 w-4 text-emerald-300" /> }
+      : null;
 
   /** 未选中对象时的「分镜」分页：智能分镜 + 构图医生（已移除低频轨迹/五通道） */
   const doctorCamera =
@@ -2191,10 +2426,18 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               </span>
               <div className="flex min-w-0 flex-1 flex-col leading-tight">
                 <span className="truncate text-xs font-medium text-white/90">
-                  {selectedObject ? selectedObject.name : "场景设置"}
+                  {pathPointPage
+                    ? `顶点 ${pathPointPage.index + 1}`
+                    : selectedObject
+                      ? selectedObject.name
+                      : "场景设置"}
                 </span>
                 <span className="text-[10px] text-white/35">
-                  {selectedObject ? "Esc 取消选中 · Delete 删除" : "未选中对象时调整整体环境"}
+                  {pathPointPage
+                    ? pathPointPage.path.name || "运动路径"
+                    : selectedObject
+                      ? "Esc 取消选中 · Delete 删除"
+                      : "未选中对象时调整整体环境"}
                 </span>
               </div>
               {selectionTitle ? (
@@ -2202,8 +2445,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                   <span className={`rounded-md px-1.5 py-0.5 text-[9px] ${selectionTitle.tone}`}>{selectionTitle.tag}</span>
                   <button
                     type="button"
-                    title="取消选中"
-                    onClick={() => setSelectedObjectId(null)}
+                    title={pathPointPage ? "返回" : "取消选中"}
+                    onClick={() => {
+                      if (pathPointPage) {
+                        setSelectedPathPointIndex(null);
+                        return;
+                      }
+                      setSelectedObjectId(null);
+                    }}
                     className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:bg-white/10 hover:text-white"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -2212,7 +2461,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               ) : null}
             </div>
 
-            {!selectedObject ? (
+            {!pathPointPage && !selectedObject ? (
               <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
                 {(
                   [
@@ -2237,7 +2486,33 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             ) : null}
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3 [contain:paint]">
-              {selectedCameraObject ? (
+              {pathPointPage ? (
+                <DirectorPathPointInspector
+                  pathName={pathPointPage.path.name}
+                  index={pathPointPage.index}
+                  pointCount={pathPointPage.path.points.length}
+                  point={pathPointPage.point}
+                  canDelete={pathPointPage.path.points.length > 2}
+                  onAxisChange={(axis, value) => {
+                    const pt = pathPointPage.point;
+                    const next: [number, number, number] = [pt[0], pt[1], pt[2]];
+                    next[axis] = value;
+                    updateMotionPathPoint(
+                      pathPointPage.path.id,
+                      pathPointPage.index,
+                      next
+                    );
+                  }}
+                  onDelete={() => {
+                    if (pathPointPage.path.points.length <= 2) return;
+                    deleteMotionPathPoint(
+                      pathPointPage.path.id,
+                      pathPointPage.index
+                    );
+                    setSelectedPathPointIndex(null);
+                  }}
+                />
+              ) : selectedCameraObject ? (
                 <>
                   <DirectorCameraInspector
                     embedded
@@ -2434,7 +2709,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           <DirectorStageEditor
             scene={displayScene as DirectorSceneState}
             activeCamera={activeCamera}
-            trackPreviewActive={timelineOpen || trackTime != null}
+            // 仅旧 cameraTrack  scrub 锁视口；动画时间轴播放保持自由 Orbit，物件照常跟轨
+            trackPreviewActive={trackTime != null && !scene?.animation}
             selectedObjectId={selectedObjectId}
             cameraPropViewMode={selectedCameraObject ? cameraPropViewMode : null}
             liveCameraRef={liveCameraRef}
@@ -2451,10 +2727,21 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             onCameraLiveTransform={handleCameraLiveTransform}
             onEditorCameraChange={handleEditorCameraChange}
             onShotCameraSelect={selectShotCamera}
+            onDragChange={(dragging, source) => {
+              // 甩镜不打断播放采样；拖物体才暂停，避免 gizmo 与采样互抢
+              if (source === "orbit") return;
+              setViewportInteracting(dragging);
+              if (dragging && timelinePlaying) {
+                setTimelinePlaying(false);
+                toast.message("已暂停预览，便于调整");
+              }
+            }}
             motionPathDrawing={
-              drawingTrackId
+              // 仅绘制中显示草稿；不在未选中时铺全部轨迹（否则导出/空选也会进画面）
+              drawingTrackId && !exporting
                 ? {
                     active: true,
+                    tool: drawingTool,
                     draftPoints: draftPathPoints,
                     onAddPoint: (p) => {
                       setDraftPathPoints((prev) => {
@@ -2468,19 +2755,21 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                         return [...prev, p];
                       });
                     },
+                    onSetDraftPoints: setDraftPathPoints,
                     onFinish: finishMotionPathDrawing,
                   }
-                : timelineOpen && scene?.animation?.motionPaths?.length
-                  ? {
-                      active: false,
-                      draftPoints: [],
-                      onAddPoint: () => {},
-                      onFinish: () => {},
-                    }
-                  : null
+                : null
             }
             motionPathEditing={(() => {
-              if (!timelineOpen || drawingTrackId || !scene?.animation) return null;
+              // 轨迹线：时间轴打开 + 选中该轨/对应模型；导出中隐藏
+              if (
+                exporting ||
+                !timelineOpen ||
+                drawingTrackId ||
+                !scene?.animation
+              ) {
+                return null;
+              }
               const track =
                 scene.animation.tracks.find((t) => t.id === selectedTrackId) ??
                 scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
@@ -2492,7 +2781,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               return {
                 path,
                 enabled: true,
+                selectedPointIndex: selectedPathPointIndex,
+                onSelectPoint: setSelectedPathPointIndex,
                 onUpdatePoint: updateMotionPathPoint,
+                onInsertPoint: insertMotionPathPoint,
+                onDeletePoint: (pathId, index) => {
+                  deleteMotionPathPoint(pathId, index);
+                  setSelectedPathPointIndex(null);
+                },
               };
             })()}
             lensPreview={
@@ -2523,6 +2819,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               playing={timelinePlaying}
               selectedTrackId={selectedTrackId}
               drawingTrackId={drawingTrackId}
+              drawingTool={drawingTrackId ? drawingTool : null}
               selectedObjectId={selectedObjectId}
               canUndo={timelineHistoryTick >= 0 && timelineHistoryRef.current.canUndo}
               canRedo={timelineHistoryTick >= 0 && timelineHistoryRef.current.canRedo}
@@ -2565,17 +2862,26 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                   zoomPxPerSec: Math.min(120, Math.max(24, z)),
                 })
               }
-              onSelectTrack={setSelectedTrackId}
+              onSelectTrack={(id) => {
+                setSelectedTrackId(id);
+                setSelectedPathPointIndex(null);
+              }}
               onCreateTrack={handleCreateTrack}
-              onStartDrawPath={(trackId) => {
+              onStartDrawPath={(trackId, tool = "pen") => {
                 setSelectedTrackId(trackId);
+                setSelectedPathPointIndex(null);
                 const existing = scene.animation?.tracks.find((t) => t.id === trackId);
-                // 延伸：从已有路径末端继续加点
                 const pathId = existing?.motionPathId;
                 const path = pathId
                   ? scene.animation?.motionPaths.find((p) => p.id === pathId)
                   : null;
-                setDraftPathPoints(path?.points?.length ? [...path.points] : []);
+                // 钢笔延伸：保留已有点；否则从模型脚底贴地起笔
+                const extending = Boolean(path?.points?.length) && tool === "pen";
+                const targetObj = scene.objects.find((o) => o.id === existing?.targetId);
+                const groundY = scene.sceneSettings?.ground?.height ?? 0;
+                const foot = footPointOnGround(targetObj, groundY);
+                setDrawingTool(tool);
+                setDraftPathPoints(extending ? [...path!.points] : [foot]);
                 setDrawingTrackId(trackId);
                 setTimelinePlaying(false);
               }}
@@ -2590,6 +2896,22 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                   toast.error("至少一条轨需要路径或 ≥2 个关键帧");
                   return;
                 }
+                setExportCameraTrackId(null);
+                setExportDialogOpen(true);
+              }}
+              onExportCameraTrackVideo={() => {
+                const track = scene.animation?.tracks.find(
+                  (t) => t.id === selectedTrackId && t.kind === "camera"
+                );
+                if (!track) {
+                  toast.error("请先选中一条摄像机轨道");
+                  return;
+                }
+                if (!canExportTimeline) {
+                  toast.error("至少一条轨需要路径或 ≥2 个关键帧");
+                  return;
+                }
+                setExportCameraTrackId(track.id);
                 setExportDialogOpen(true);
               }}
               onClose={() => {
@@ -2614,6 +2936,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           })()}
           exporting={exporting}
           progress={exportProgress}
+          cameraTrackLabel={exportCameraTrackLabel}
           onConfirm={(opts) => void runTimelineExport(opts)}
           onCancel={() => {
             if (exporting) {
@@ -2621,6 +2944,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               return;
             }
             setExportDialogOpen(false);
+            setExportCameraTrackId(null);
           }}
         />
       </div>

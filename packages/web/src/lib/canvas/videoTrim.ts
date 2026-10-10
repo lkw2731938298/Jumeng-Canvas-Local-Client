@@ -1,8 +1,10 @@
 /** 视频节点内联剪辑：入/出点状态与导出 API */
 
 import { apiFetch } from "@/lib/api/client";
-import { notifyAssetsUpdated, type Asset } from "@/lib/api/assets";
+import { notifyAssetsUpdated, uploadAsset, type Asset } from "@/lib/api/assets";
 import { ensureHttpsOssUrl } from "@/lib/signedUrl";
+import { isLocalDesktop } from "@/lib/localDesktop";
+import { withBasePath } from "@/lib/basePath";
 
 /** 最短片段（秒），与后端 MIN_USER_TRIM_DURATION_SEC 对齐 */
 export const MIN_VIDEO_TRIM_SEC = 0.3;
@@ -198,6 +200,205 @@ export async function composeVideoAssets(params: {
   throw new Error("拼接超时，请稍后在素材库查看或重试");
 }
 
+/** 无 ffmpeg 时：浏览器 captureStream + MediaRecorder 兜底切段 */
+async function trimVideoInBrowser(
+  sourceUrl: string,
+  inSec: number,
+  outSec: number
+): Promise<File> {
+  const href = sourceUrl.startsWith("/") ? withBasePath(sourceUrl) : sourceUrl;
+  const video = document.createElement("video");
+  video.playsInline = true;
+  video.muted = true;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+  video.src = href;
+
+  await new Promise<void>((resolve, reject) => {
+    const onMeta = () => {
+      cleanup();
+      resolve();
+    };
+    const onErr = () => {
+      cleanup();
+      reject(new Error("无法加载源视频用于切段"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("loadedmetadata", onMeta);
+      video.removeEventListener("error", onErr);
+    };
+    video.addEventListener("loadedmetadata", onMeta);
+    video.addEventListener("error", onErr);
+    void video.load();
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const onSeeked = () => {
+      video.removeEventListener("seeked", onSeeked);
+      resolve();
+    };
+    video.addEventListener("seeked", onSeeked);
+    try {
+      video.currentTime = Math.max(0, inSec);
+    } catch (err) {
+      video.removeEventListener("seeked", onSeeked);
+      reject(err instanceof Error ? err : new Error("定位入点失败"));
+    }
+  });
+
+  const capture = (
+    video as HTMLVideoElement & { captureStream?: (fps?: number) => MediaStream }
+  ).captureStream;
+  if (typeof capture !== "function") {
+    throw new Error("当前环境不支持浏览器切段，请安装 ffmpeg 并加入 PATH 后重试");
+  }
+  const stream = capture.call(video, 30);
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+    ? "video/webm;codecs=vp9,opus"
+    : MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
+      ? "video/webm;codecs=vp8,opus"
+      : MediaRecorder.isTypeSupported("video/webm")
+        ? "video/webm"
+        : "";
+  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data?.size) chunks.push(e.data);
+  };
+  const stopped = new Promise<Blob>((resolve, reject) => {
+    recorder.onstop = () =>
+      resolve(new Blob(chunks, { type: mime || "video/webm" }));
+    recorder.onerror = () => reject(new Error("浏览器录制切段失败"));
+  });
+
+  recorder.start(250);
+  try {
+    await video.play();
+  } catch {
+    recorder.stop();
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error("无法播放源视频进行切段");
+  }
+
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      if (video.ended || video.currentTime >= outSec - 0.04) {
+        video.pause();
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+
+  if (recorder.state !== "inactive") recorder.stop();
+  stream.getTracks().forEach((t) => t.stop());
+  const blob = await stopped;
+  if (!blob.size) throw new Error("切段结果为空");
+  const ext = blob.type.includes("webm") ? "webm" : "mp4";
+  return new File([blob], `trim-${Date.now()}.${ext}`, {
+    type: blob.type || `video/${ext}`,
+  });
+}
+
+/** 本机桌面：优先 /api/local/video-trim（ffmpeg）；失败则浏览器兜底 */
+async function trimVideoAssetLocal(params: {
+  projectId: string;
+  videoAssetId: string;
+  inSec: number;
+  outSec: number;
+  title?: string;
+  sourceUrl?: string;
+}): Promise<VideoTrimResult> {
+  const res = await fetch(withBasePath("/api/local/video-trim"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: params.projectId,
+      videoAssetId: params.videoAssetId,
+      inSec: params.inSec,
+      outSec: params.outSec,
+      title: params.title,
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    message?: string;
+    content?: {
+      asset?: Record<string, unknown>;
+      inSec?: number;
+      outSec?: number;
+      durationSec?: number;
+      sourceAssetId?: string;
+    };
+    asset?: Record<string, unknown>;
+  };
+
+  if (res.ok) {
+    const content =
+      body.content ??
+      (body.asset
+        ? {
+            asset: body.asset,
+            inSec: params.inSec,
+            outSec: params.outSec,
+            durationSec: params.outSec - params.inSec,
+            sourceAssetId: params.videoAssetId,
+          }
+        : null);
+    if (content?.asset) {
+      const asset = normalizeTrimAsset(content.asset);
+      if (asset.id && asset.fileUrl) {
+        notifyAssetsUpdated();
+        return {
+          asset,
+          inSec: Number(content.inSec) || params.inSec,
+          outSec: Number(content.outSec) || params.outSec,
+          durationSec:
+            Number(content.durationSec) ||
+            Math.max(0, params.outSec - params.inSec),
+          sourceAssetId: String(content.sourceAssetId || params.videoAssetId),
+        };
+      }
+    }
+  }
+
+  const serverMsg = String(body.message || "");
+  // 仅在 ffmpeg 彻底不可用时才浏览器兜底（音画同步/清晰度较差）
+  const needBrowser =
+    Boolean(params.sourceUrl) &&
+    (!res.ok || res.status >= 500) &&
+    /ffmpeg|未找到|PATH|杀毒|下载/i.test(serverMsg);
+
+  if (!needBrowser || !params.sourceUrl) {
+    throw new Error(
+      serverMsg ||
+        (res.ok ? "剪辑结果无效" : `切段失败（${res.status}）`)
+    );
+  }
+
+  const file = await trimVideoInBrowser(
+    params.sourceUrl,
+    params.inSec,
+    params.outSec
+  );
+  const asset = await uploadAsset({
+    file,
+    projectId: params.projectId,
+    category: "video",
+    subcategory: "剪辑",
+    title: params.title || "切段",
+  });
+  return {
+    asset,
+    inSec: params.inSec,
+    outSec: params.outSec,
+    durationSec: Math.max(0, params.outSec - params.inSec),
+    sourceAssetId: params.videoAssetId,
+  };
+}
+
 /** 调用后端 ffmpeg 切段，返回新视频素材 */
 export async function trimVideoAsset(params: {
   projectId: string;
@@ -205,11 +406,17 @@ export async function trimVideoAsset(params: {
   inSec: number;
   outSec: number;
   title?: string;
+  /** 本机兜底：源视频可播放 URL（/api/local/asset?...） */
+  sourceUrl?: string;
 }): Promise<VideoTrimResult> {
   const inSec = Math.max(0, params.inSec);
   const outSec = params.outSec;
   if (!(outSec - inSec >= MIN_VIDEO_TRIM_SEC)) {
     throw new Error(`片段至少 ${MIN_VIDEO_TRIM_SEC} 秒`);
+  }
+
+  if (isLocalDesktop) {
+    return trimVideoAssetLocal({ ...params, inSec, outSec });
   }
 
   const content = await apiFetch<{

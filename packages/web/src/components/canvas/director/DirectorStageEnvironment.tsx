@@ -10,7 +10,6 @@ import { DirectorSceneObject } from "./DirectorSceneObject";
 import { DirectorPanoramaSphere } from "./DirectorPanoramaSphere";
 import { DirectorTransformRegistryProvider } from "./directorTransformRegistry";
 import { DirectorSelectedTransformControls } from "./DirectorSelectedTransformControls";
-import type { DirectorMotionPath } from "@jumeng-canvas/shared";
 import { DirectorMotionPathDrawing } from "./timeline/DirectorMotionPathDrawing";
 import { DirectorMotionPathEditor } from "./timeline/DirectorMotionPathEditor";
 
@@ -51,15 +50,21 @@ export function DirectorStageEnvironment({
   /** 动画时间轴 · 绘制/预览运动路径 */
   motionPathDrawing?: {
     active: boolean;
+    tool?: import("@/lib/director/animation/motionPathDrawTools").MotionPathDrawTool;
     draftPoints: [number, number, number][];
     onAddPoint: (point: [number, number, number]) => void;
-    onFinish: () => void;
+    onSetDraftPoints?: (points: [number, number, number][]) => void;
+    onFinish: (points?: [number, number, number][]) => void;
   } | null;
   /** 已有路径控制点编辑（绘制中禁用） */
   motionPathEditing?: {
-    path: DirectorMotionPath | null;
+    path: import("@jumeng-canvas/shared").DirectorMotionPath | null;
     enabled: boolean;
+    selectedPointIndex?: number | null;
+    onSelectPoint?: (index: number | null) => void;
     onUpdatePoint: (pathId: string, index: number, point: [number, number, number]) => void;
+    onInsertPoint?: (pathId: string, afterIndex: number, point: [number, number, number]) => void;
+    onDeletePoint?: (pathId: string, index: number) => void;
   } | null;
 }) {
   const settings = scene.sceneSettings;
@@ -178,16 +183,13 @@ export function DirectorStageEnvironment({
 
       <DirectorMotionPathDrawing
         active={Boolean(motionPathDrawing?.active)}
+        tool={motionPathDrawing?.tool ?? "pen"}
         draftPoints={motionPathDrawing?.draftPoints ?? []}
         groundHeight={groundY}
-        existingPaths={
-          motionPathDrawing?.active
-            ? []
-            : (scene.animation?.motionPaths ?? []).filter(
-                (p) => !motionPathEditing?.enabled || p.id !== motionPathEditing.path?.id
-              )
-        }
+        // 已有轨迹只由 MotionPathEditor 在「选中轨」时绘制，此处不铺全场路径
+        existingPaths={[]}
         onAddPoint={motionPathDrawing?.onAddPoint ?? (() => {})}
+        onSetDraftPoints={motionPathDrawing?.onSetDraftPoints}
         onFinish={motionPathDrawing?.onFinish ?? (() => {})}
       />
       {!motionPathDrawing?.active && motionPathEditing ? (
@@ -195,7 +197,11 @@ export function DirectorStageEnvironment({
           path={motionPathEditing.path}
           groundHeight={groundY}
           enabled={motionPathEditing.enabled}
+          selectedPointIndex={motionPathEditing.selectedPointIndex}
+          onSelectPoint={motionPathEditing.onSelectPoint}
           onUpdatePoint={motionPathEditing.onUpdatePoint}
+          onInsertPoint={motionPathEditing.onInsertPoint}
+          onDeletePoint={motionPathEditing.onDeletePoint}
         />
       ) : null}
     </DirectorTransformRegistryProvider>

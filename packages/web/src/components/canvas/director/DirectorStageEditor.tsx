@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, type MutableRefObject, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, View } from "@react-three/drei";
-import type { PerspectiveCamera, WebGLRenderer } from "three";
+import { MOUSE, type PerspectiveCamera, type WebGLRenderer } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type {
   CameraPropViewMode,
@@ -56,17 +56,24 @@ export interface DirectorStageCanvasProps {
   /** 动画时间轴 · 地面绘制/预览运动路径 */
   motionPathDrawing?: {
     active: boolean;
+    tool?: import("@/lib/director/animation/motionPathDrawTools").MotionPathDrawTool;
     draftPoints: [number, number, number][];
     onAddPoint: (point: [number, number, number]) => void;
-    onFinish: () => void;
+    onSetDraftPoints?: (points: [number, number, number][]) => void;
+    onFinish: (points?: [number, number, number][]) => void;
   } | null;
   /** 已有路径控制点编辑 */
   motionPathEditing?: {
     path: import("@jumeng-canvas/shared").DirectorMotionPath | null;
     enabled: boolean;
+    selectedPointIndex?: number | null;
+    onSelectPoint?: (index: number | null) => void;
     onUpdatePoint: (pathId: string, index: number, point: [number, number, number]) => void;
+    onInsertPoint?: (pathId: string, afterIndex: number, point: [number, number, number]) => void;
+    onDeletePoint?: (pathId: string, index: number) => void;
   } | null;
-  onDragChange?: (dragging: boolean) => void;
+  /** source=orbit：仅甩镜；source=object：拖物体/gizmo（上层可据此决定是否暂停播放） */
+  onDragChange?: (dragging: boolean, source?: "orbit" | "object") => void;
 }
 
 function DirectorViewLayers() {
@@ -194,29 +201,43 @@ function DirectorOrbitControls({
   target,
   onCameraChange,
   onInteractingChange,
+  /** 绘制轨迹时：左键留给加点，右键旋转、中键缩放 */
+  pathDrawing = false,
 }: {
   enabled: boolean;
   target: [number, number, number];
   onCameraChange: (camera: DirectorCameraState) => void;
   onInteractingChange: (active: boolean) => void;
+  pathDrawing?: boolean;
 }) {
-  const { camera } = useThree();
+  const { camera, controls } = useThree();
 
   const handleEnd = useCallback(() => {
     if (!enabled) return;
     const cam = camera as PerspectiveCamera;
+    // 落盘真实 Orbit 注视点（含平移），勿用可能过期的 props.target
+    const orbit = controls as OrbitControlsImpl | null;
+    const lookAt: [number, number, number] = orbit
+      ? [orbit.target.x, orbit.target.y, orbit.target.z]
+      : [...target];
     onCameraChange({
       position: [cam.position.x, cam.position.y, cam.position.z],
-      target: [...target],
+      target: lookAt,
       fov: cam.fov,
     });
-  }, [camera, enabled, onCameraChange, target]);
+  }, [camera, controls, enabled, onCameraChange, target]);
 
   return (
     <OrbitControls
       makeDefault
       enabled={enabled}
       target={target}
+      // 绘制中禁用左键旋转，避免与地面加点抢手势；右键旋转、中键缩放
+      mouseButtons={
+        pathDrawing
+          ? { LEFT: -1 as unknown as MOUSE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }
+          : { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+      }
       onStart={() => onInteractingChange(true)}
       onEnd={() => {
         onInteractingChange(false);
@@ -254,22 +275,32 @@ function MainDirectorView({
   const interactionLocksRef = useRef(0);
 
   const setInteracting = useCallback(
-    (active: boolean) => {
+    (active: boolean, source: "orbit" | "object" = "object") => {
       interactionLocksRef.current += active ? 1 : -1;
       if (interactionLocksRef.current < 0) interactionLocksRef.current = 0;
-      onDragChange?.(active);
+      onDragChange?.(active, source);
     },
     [onDragChange]
+  );
+  const setOrbitInteracting = useCallback(
+    (active: boolean) => setInteracting(active, "orbit"),
+    [setInteracting]
+  );
+  const setObjectInteracting = useCallback(
+    (active: boolean) => setInteracting(active, "object"),
+    [setInteracting]
   );
 
   const selectedObject = scene.objects.find((o) => o.id === selectedObjectId) ?? null;
   const isCameraFirstPerson =
     selectedObject?.kind === "camera" && cameraPropViewMode === "firstPerson";
-  const isDirectorView =
+  const pathDrawing = Boolean(motionPathDrawing?.active);
+  /** 可 Orbit 的导演自由视角（绘制轨迹时仍可转镜，仅隐藏机位标记） */
+  const orbitEnabled =
     scene.viewMode === "director" &&
     !trackPreviewActive &&
-    !isCameraFirstPerson &&
-    !motionPathDrawing?.active;
+    !isCameraFirstPerson;
+  const isDirectorView = orbitEnabled && !pathDrawing;
   const filmAspect = aspectRatioToNumber(scene.sceneSettings?.aspectRatio ?? "16:9");
   const orbitTargetKey = useMemo(
     () =>
@@ -279,10 +310,16 @@ function MainDirectorView({
         .join("|"),
     [scene.objects]
   );
-  const orbitTarget = useMemo(
-    () => computeDirectorOrbitTarget(scene),
-    [orbitTargetKey]
-  );
+  /**
+   * 自由视角优先用用户存的 camera.target，避免打开时间轴后物件采样位移
+   * 带动 Orbit 注视点突变（表现为「视角被改了 / 转不动」）。
+   */
+  const orbitTarget = useMemo((): [number, number, number] => {
+    if (orbitEnabled && Array.isArray(scene.camera?.target) && scene.camera.target.length === 3) {
+      return scene.camera.target as [number, number, number];
+    }
+    return computeDirectorOrbitTarget(scene);
+  }, [orbitEnabled, scene, orbitTargetKey, scene.camera?.target]);
 
   return (
     <>
@@ -297,7 +334,7 @@ function MainDirectorView({
         onSelectObject={onSelectObject}
         onObjectTransform={onObjectTransform}
         onCameraLiveTransform={onCameraLiveTransform}
-        onDragChange={setInteracting}
+        onDragChange={setObjectInteracting}
         resolveCharacterModelUrl={resolveCharacterModelUrl}
         resolveColorMapUrl={resolveColorMapUrl}
         mannequinEditMode={mannequinEditMode}
@@ -322,9 +359,9 @@ function MainDirectorView({
           liveTransformRef={liveCameraTransformRef}
           filmAspect={filmAspect}
         />
-      ) : isDirectorView ? (
+      ) : orbitEnabled ? (
         <DirectorOrbitCameraBootstrap
-          enabled={isDirectorView}
+          enabled={orbitEnabled}
           cameraState={activeCamera}
           orbitTarget={orbitTarget}
         />
@@ -332,10 +369,11 @@ function MainDirectorView({
         <ActiveViewCamera state={activeCamera} />
       )}
       <DirectorOrbitControls
-        enabled={isDirectorView}
+        enabled={orbitEnabled}
+        pathDrawing={pathDrawing}
         target={orbitTarget}
         onCameraChange={onEditorCameraChange}
-        onInteractingChange={setInteracting}
+        onInteractingChange={setOrbitInteracting}
       />
       <SceneCaptureBridge
         onReady={onCaptureReady}

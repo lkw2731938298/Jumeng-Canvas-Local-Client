@@ -16,7 +16,24 @@ export function getMotionPathCurve(path: DirectorMotionPath): CatmullRomCurve3 |
     for (const k of curveCache.keys()) {
       if (k.startsWith(`${path.id}:`)) curveCache.delete(k);
     }
-    const pts = path.points.map((p) => new Vector3(p[0], p[1], p[2]));
+    // 过滤非法/连续重合点，避免 CatmullRom 产出 NaN
+    const pts: Vector3[] = [];
+    for (const p of path.points) {
+      if (!p || p.length < 3) continue;
+      if (![p[0], p[1], p[2]].every(Number.isFinite)) continue;
+      const v = new Vector3(p[0], p[1], p[2]);
+      const last = pts[pts.length - 1];
+      if (last && last.distanceToSquared(v) < 1e-10) continue;
+      pts.push(v);
+    }
+    if (pts.length < 2) return null;
+    // 闭合路径若首尾重合，去掉末点交给 closed 处理
+    if (path.closed && pts.length >= 3) {
+      const first = pts[0]!;
+      const end = pts[pts.length - 1]!;
+      if (first.distanceToSquared(end) < 1e-8) pts.pop();
+    }
+    if (pts.length < 2) return null;
     curve = new CatmullRomCurve3(pts, !!path.closed, "catmullrom", 0.5);
     curveCache.set(key, curve);
   }
@@ -50,4 +67,31 @@ export function invalidateMotionPathCache(pathId?: string) {
   for (const k of curveCache.keys()) {
     if (k.startsWith(`${pathId}:`)) curveCache.delete(k);
   }
+}
+
+/**
+ * 供 drei Line 使用：剔除非有限坐标与连续重合点。
+ * 零长度折线会导致 LineSegmentsGeometry.computeBoundingSphere 半径为 NaN。
+ */
+export function sanitizePathLinePoints(
+  raw: Array<[number, number, number] | Vector3>
+): Vector3[] | null {
+  const pts: Vector3[] = [];
+  for (const p of raw) {
+    const x = Array.isArray(p) ? p[0] : p.x;
+    const y = Array.isArray(p) ? p[1] : p.y;
+    const z = Array.isArray(p) ? p[2] : p.z;
+    if (![x, y, z].every(Number.isFinite)) continue;
+    const v = new Vector3(x, y, z);
+    const last = pts[pts.length - 1];
+    if (last && last.distanceToSquared(v) < 1e-10) continue;
+    pts.push(v);
+  }
+  if (pts.length < 2) return null;
+  let extent = 0;
+  for (let i = 1; i < pts.length; i++) {
+    extent = Math.max(extent, pts[i]!.distanceToSquared(pts[0]!));
+  }
+  if (extent < 1e-8) return null;
+  return pts;
 }

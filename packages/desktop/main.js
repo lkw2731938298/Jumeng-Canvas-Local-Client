@@ -378,10 +378,29 @@ function releaseStaleNextLock(webDir) {
   }
 }
 
+function resolveBundledFfmpeg() {
+  const exe =
+    process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+  const candidates = [];
+  if (app.isPackaged && process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, "ffmpeg", exe));
+  }
+  // 开发态：源码树 packages/desktop/resources/ffmpeg
+  candidates.push(path.join(__dirname, "resources", "ffmpeg", exe));
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
 function nextEnvBase() {
   const dataParent = dataParentForNext();
   const jumengRoot = path.join(dataParent, "JumengCanvas");
-  return {
+  const env = {
     ...process.env,
     NEXT_PUBLIC_LOCAL_DESKTOP: "1",
     NEXT_PUBLIC_ADMIN_AUTH_DISABLED: "true",
@@ -391,6 +410,15 @@ function nextEnvBase() {
     JUMENG_DATA_PARENT: dataParent,
     JUMENG_LOCAL_DATA_DIR: jumengRoot,
   };
+  if (app.isPackaged && process.resourcesPath) {
+    env.JUMENG_RESOURCES_PATH = process.resourcesPath;
+  }
+  const ffmpeg = resolveBundledFfmpeg();
+  if (ffmpeg) {
+    env.FFMPEG_PATH = ffmpeg;
+    env.JUMENG_FFMPEG = ffmpeg;
+  }
+  return env;
 }
 
 function wrapChild(child) {
