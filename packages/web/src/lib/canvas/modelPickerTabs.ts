@@ -33,8 +33,17 @@ const IMAGE_TAB_RULES: TabRule[] = [
   { id: "comfyui", label: "ComfyUI", match: (m) => m.provider === "comfyui" },
 ];
 
+/** 视频超分 / 增强类 */
+function isVideoUpscaleModel(m: CanvasModel): boolean {
+  const blob = `${m.name} ${m.displayName || ""}`.toLowerCase();
+  return /upscale|seedvr|topaz|enhance|video_sr|video_hd|hd_video|超分|高清增强|视频高清|视频超分/.test(
+    blob
+  );
+}
+
 /** 与主平台分镜「选取视频模型」Tab 顺序对齐 */
 const VIDEO_TAB_RULES: TabRule[] = [
+  { id: "upscale", label: "视频超分", match: isVideoUpscaleModel },
   { id: "vidu", label: "Vidu", match: (m) => m.provider === "vidu" },
   {
     id: "wan",

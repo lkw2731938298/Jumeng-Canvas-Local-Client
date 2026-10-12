@@ -8,6 +8,23 @@
   padding: clamp(24px, 8.5vh, 94px) 24px clamp(24px, 9vh, 104px);
 }
 
+/* 画布弹窗：占满 DialogContent，避免 absolute 脱离弹窗高度 */
+.st-wrap--dialog {
+  position: relative;
+  inset: auto;
+  height: min(880px, calc(92vh - 24px));
+  max-height: inherit;
+  padding: 16px;
+}
+
+.st-wrap--dialog .st-panel {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+}
+
 .st-panel {
   display: flex;
   width: min(1380px, max(900px, 70.7vw));

@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Settings, User } from "lucide-react";
 import { AppThemePicker } from "@/components/user/AppThemePicker";
 import { GlobalWatermarkToggle } from "@/components/user/GlobalWatermarkToggle";
+import { UserSettingsDialog } from "@/components/settings/UserSettingsDialog";
 
 interface UserAccountMenuProps {
   displayName: string;
@@ -16,7 +17,7 @@ interface UserAccountMenuProps {
   menuPosition?: "below" | "side";
 }
 
-/** 开源本地版账户菜单：仅设置 / 主题 / 水印 */
+/** 开源本地版账户菜单：用户设置 / 主题 / 水印 */
 export function UserAccountMenu({
   displayName,
   variant = "canvas",
@@ -26,6 +27,8 @@ export function UserAccountMenu({
   const router = useRouter();
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  /** 画布内打开用户设置弹窗，不跳转离开画布 */
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const showMenu = (menu: HTMLElement) => {
     if (hideTimerRef.current) {
@@ -47,6 +50,10 @@ export function UserAccountMenu({
 
   const goSettings = () => {
     closeMenu();
+    if (variant === "canvas") {
+      setSettingsOpen(true);
+      return;
+    }
     router.push("/settings");
   };
 
@@ -61,85 +68,91 @@ export function UserAccountMenu({
   const dividerClass = "border-border";
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={(e) => {
-        showMenu(e.currentTarget.querySelector(".user-account-menu") as HTMLElement);
-      }}
-      onMouseLeave={(e) => {
-        hideMenu(e.currentTarget.querySelector(".user-account-menu") as HTMLElement);
-      }}
-    >
-      {trigger ? (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={goSettings}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              goSettings();
-            }
-          }}
-          className="cursor-pointer"
-        >
-          {trigger}
-        </div>
-      ) : (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={goSettings}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              goSettings();
-            }
-          }}
-          className={`relative flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${triggerClass}`}
-          style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}
-        >
-          <User
-            className={`h-3.5 w-3.5 ${variant === "projects" ? "text-white/50" : "text-muted-foreground"}`}
-          />
-          <span className={variant === "projects" ? "text-white/90" : "text-foreground"}>
-            {displayName}
-          </span>
-        </div>
-      )}
-
+    <>
       <div
-        ref={menuRef}
-        className={`user-account-menu absolute z-40 w-56 rounded-xl border py-1 ${
-          menuPosition === "side" ? "bottom-0 left-full ml-2" : "right-0 top-full mt-0"
-        } ${menuClass}`}
-        style={{
-          display: "none",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-        }}
-        onMouseEnter={() => {
-          if (hideTimerRef.current) {
-            clearTimeout(hideTimerRef.current);
-            hideTimerRef.current = null;
-          }
+        className="relative"
+        onMouseEnter={(e) => {
+          showMenu(e.currentTarget.querySelector(".user-account-menu") as HTMLElement);
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.display = "none";
+          hideMenu(e.currentTarget.querySelector(".user-account-menu") as HTMLElement);
         }}
       >
-        <button
-          type="button"
-          onClick={goSettings}
-          className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${itemClass}`}
+        {trigger ? (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={goSettings}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                goSettings();
+              }
+            }}
+            className="cursor-pointer"
+          >
+            {trigger}
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={goSettings}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                goSettings();
+              }
+            }}
+            className={`relative flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${triggerClass}`}
+            style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}
+          >
+            <User
+              className={`h-3.5 w-3.5 ${variant === "projects" ? "text-white/50" : "text-muted-foreground"}`}
+            />
+            <span className={variant === "projects" ? "text-white/90" : "text-foreground"}>
+              {displayName}
+            </span>
+          </div>
+        )}
+
+        <div
+          ref={menuRef}
+          className={`user-account-menu absolute z-40 w-56 rounded-xl border py-1 ${
+            menuPosition === "side" ? "bottom-0 left-full ml-2" : "right-0 top-full mt-0"
+          } ${menuClass}`}
+          style={{
+            display: "none",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+          }}
+          onMouseEnter={() => {
+            if (hideTimerRef.current) {
+              clearTimeout(hideTimerRef.current);
+              hideTimerRef.current = null;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.display = "none";
+          }}
         >
-          <Settings className="h-4 w-4" />
-          本地设置
-        </button>
-        <div className={`my-1 border-t ${dividerClass}`} />
-        <GlobalWatermarkToggle itemClass={itemClass} labelClass={labelClass} />
-        <AppThemePicker itemClass={itemClass} labelClass={labelClass} />
+          <button
+            type="button"
+            onClick={goSettings}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${itemClass}`}
+          >
+            <Settings className="h-4 w-4" />
+            用户设置
+          </button>
+          <div className={`my-1 border-t ${dividerClass}`} />
+          <GlobalWatermarkToggle itemClass={itemClass} labelClass={labelClass} />
+          <AppThemePicker itemClass={itemClass} labelClass={labelClass} />
+        </div>
       </div>
-    </div>
+
+      {variant === "canvas" ? (
+        <UserSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      ) : null}
+    </>
   );
 }

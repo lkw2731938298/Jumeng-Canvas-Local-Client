@@ -160,17 +160,12 @@ export function AgentCanvasMediaModelMenu(props: Props) {
   });
 
   const imageModels = useMemo(() => {
-    const api = (imageQuery.data || []).filter(
-      (m) => m.isAvailable !== false && m.isConfigured !== false
-    );
-    return buildModelOptions(api, ["image"], []);
+    // 本地 listModels 已按设置勾选过滤；此处勿再按 isConfigured 丢掉
+    return buildModelOptions(imageQuery.data || [], ["image"], []);
   }, [imageQuery.data]);
 
   const videoModels = useMemo(() => {
-    const api = (videoQuery.data || []).filter(
-      (m) => m.isAvailable !== false && m.isConfigured !== false
-    );
-    return buildModelOptions(api, ["video"], []);
+    return buildModelOptions(videoQuery.data || [], ["video"], []);
   }, [videoQuery.data]);
 
   const list = tab === "image" ? imageModels : videoModels;

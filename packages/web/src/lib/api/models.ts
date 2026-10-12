@@ -1,13 +1,30 @@
 import { apiFetch } from "./client";
 import { isLocalDesktop } from "@/lib/localDesktop";
 import { localStore } from "@/lib/local/store";
+import { isVideoUpscaleModelId } from "@/lib/local/setupCatalog";
 import {
   canonicalizeImagePresets,
   canonicalizeVideoPresets,
 } from "@/lib/local/presetTemplates";
 import { resolveModelCanvasCaps } from "@/lib/local/modelGenerationCaps";
 import type { ModelCanvasCaps } from "@/lib/local/modelGenerationCaps";
+import type { LocalModel } from "@/lib/local/types";
 import type { GenerationPresetsConfig } from "@/types/generationPresets";
+
+/** 纠正设置里已勾选、却被关键词误判成非视频的超分模型 */
+function repairLocalModelCategories(items: LocalModel[]): {
+  models: LocalModel[];
+  changed: boolean;
+} {
+  let changed = false;
+  const models = items.map((m) => {
+    const id = (m.upstreamModel || m.name || "").trim();
+    if (!isVideoUpscaleModelId(id) || m.category === "video") return m;
+    changed = true;
+    return { ...m, category: "video" as const };
+  });
+  return { models, changed };
+}
 
 /** 图片：统一比例，并按四级能力解析过滤清晰度 */
 function sanitizeLocalImagePresets(
@@ -134,7 +151,10 @@ export async function listModels(params?: {
   search?: string;
 }) {
   if (isLocalDesktop) {
-    const items = await localStore().listModels();
+    // 本地权威：设置页勾选启用的模型；不再套商业端 isConfigured/isImplemented
+    const raw = await localStore().listModels();
+    const { models: items, changed } = repairLocalModelCategories(raw);
+    if (changed) await localStore().saveModels(items);
     let out: CanvasModel[] = items
       .filter((m) => m.enabled !== false)
       .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))

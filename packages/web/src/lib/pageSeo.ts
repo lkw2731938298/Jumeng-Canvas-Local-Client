@@ -33,8 +33,8 @@ export const SKILLS_SEO = pageSeo(
 
 /** 个人中心页 `/account`（开源已重定向至设置） */
 export const ACCOUNT_SEO = pageSeo(
-  "本地设置-聚梦画布",
-  "本地设置",
+  "用户设置-聚梦画布",
+  "用户设置",
   "配置供应商与模型。"
 );
 

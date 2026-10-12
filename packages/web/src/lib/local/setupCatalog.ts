@@ -65,6 +65,15 @@ export function catalogSourceLabel(source: CatalogSource): string {
   return SOURCE_LABEL[source];
 }
 
+/** 视频超分 / 增强类 id（无 video 字样时也须归视频，避免落成 text） */
+export function isVideoUpscaleModelId(modelId: string): boolean {
+  const s = (modelId || "").toLowerCase();
+  // 不用裸 enhance，避免图片增强被误判成视频
+  return /upscale|seedvr|topaz|video[_-]?sr|video[_-]?hd|hd[_-]?video|超分|高清增强|视频高清|视频超分|(video[^a-z0-9]*enhance|enhance[^a-z0-9]*video)/.test(
+    s
+  );
+}
+
 /**
  * 按模型 id 推断画布分类。顺序：音频 → 视频 → 图片 → 文本。
  * 上游 /v1/models 不给 category，只能靠 id 关键词。
@@ -82,6 +91,9 @@ export function inferModelCategory(modelId: string): LocalModelCategory {
   ) {
     return "audio";
   }
+
+  // 视频超分须抢在图片规则前（id 常含 image/enhance 字样）
+  if (isVideoUpscaleModelId(s)) return "video";
 
   // 视频：路径后缀 + 常见家族（含 ltx / minimax / seedance）
   if (

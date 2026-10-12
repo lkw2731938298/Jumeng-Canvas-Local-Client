@@ -312,7 +312,7 @@ export default function LocalGenerationJobsPage() {
   const syncOrAttach = (j: LocalGenerationJob) => void (j.providerTaskId ? syncUpstream(j) : attachTaskId(j));
 
   return (
-    <HuabuPublicShell page="jobs">
+    <HuabuPublicShell sidebar page="jobs">
       <div className="jc-wrap">
         <section className="jc-panel jm-panel" aria-label="任务中心">
           <header className="jc-head">

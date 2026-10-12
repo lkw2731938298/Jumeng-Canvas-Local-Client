@@ -289,7 +289,7 @@ html[data-app-glow="off"] .jm-glow {
   cursor: pointer;
 }
 
-/* ---------- 左侧竖栏（仅项目页） ---------- */
+/* ---------- 左侧竖栏（项目 / 任务 / 设置） ---------- */
 .jm-rail {
   position: absolute;
   left: 16px;

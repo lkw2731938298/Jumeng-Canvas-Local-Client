@@ -7,6 +7,7 @@ import {
 } from "@/lib/canvas/mediaModels";
 import { resolveModelSeries } from "@/lib/canvas/modelSeries";
 import { TEXT_MODEL_OPTIONS } from "@/lib/canvas/textModels";
+import { isLocalDesktop } from "@/lib/localDesktop";
 import { getNodeDef } from "@/types/node-registry";
 
 export type ModelCategory = "text" | "image" | "video" | "audio";
@@ -83,6 +84,8 @@ function isLikelyVideoModelName(name: string): boolean {
 function modelAllowedForCategories(model: CanvasModel, categories: ModelCategory[]): boolean {
   const cat = (model.category || "").trim().toLowerCase() as ModelCategory;
   if (!categories.includes(cat)) return false;
+  // 本地画布：设置里勾选什么就展示什么，不再套商业端命名启发式
+  if (isLocalDesktop) return true;
   // 图片-only 列表：即使 category 被误标为 image，也不展示视频模型
   if (categories.includes("image") && !categories.includes("video") && isLikelyVideoModelName(model.name)) {
     return false;

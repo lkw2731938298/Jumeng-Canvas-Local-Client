@@ -96,13 +96,8 @@ export async function resolveNodeModel(
   const category = getNodeModelCategory(nodeType);
   if (!category) return null;
   const apiModels = await loadModels(category);
-  const mockUi = process.env.NEXT_PUBLIC_AI_MOCK_ENABLED === "true";
-  const configured = apiModels.filter((m) => {
-    if (m.isImplemented === false) return false;
-    if (mockUi) return true;
-    return m.isConfigured !== false && m.isAvailable;
-  });
-  const pool = configured.length > 0 ? configured : apiModels;
+  // 本地 / 目录列表即权威（设置勾选）；勿再按 configured/implemented 过滤
+  const pool = apiModels;
   if (pool.length === 0) return null;
 
   // 节点已写入的 model 优先（批量成片预设），避免因密钥未配而回退到纯 i2v

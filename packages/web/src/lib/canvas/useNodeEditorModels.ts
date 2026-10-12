@@ -36,15 +36,9 @@ export function useNodeEditorModels(sourceNodeType: string | undefined, selected
     enabled: modelCategories.length > 0,
   });
 
-  const configuredModels = useMemo(
-    () =>
-      (apiModels ?? []).filter(
-        (m) => m.isConfigured !== false && m.isImplemented !== false && m.isAvailable
-      ),
-    [apiModels]
-  );
-
-  const modelsForOptions = configuredModels.length > 0 ? configuredModels : (apiModels ?? []);
+  // 本地：listModels 已只返回设置页勾选启用的模型，原样进下拉
+  // 商业端：仅按 isAvailable，不再二次过滤 configured/implemented
+  const modelsForOptions = useMemo(() => apiModels ?? [], [apiModels]);
 
   const modelOptions = useMemo(
     () => buildModelOptions(modelsForOptions, modelCategories, []),

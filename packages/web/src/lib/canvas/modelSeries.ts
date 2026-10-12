@@ -3,6 +3,10 @@
  */
 
 const SERIES_RULES: Array<{ series: string; pattern: RegExp }> = [
+  {
+    series: "视频超分",
+    pattern: /upscale|seedvr|topaz|video[_-]?sr|超分|高清增强|视频高清|视频超分/i,
+  },
   { series: "Seedance", pattern: /seedance/i },
   { series: "HappyHorse", pattern: /happyhorse|happy[_-]?horse/i },
   { series: "PixVerse", pattern: /pixverse/i },

@@ -22,7 +22,7 @@ import "./jmShell.css";
 
 type HuabuPublicShellProps = {
   children: React.ReactNode;
-  /** 左侧竖栏：仅项目页显示 */
+  /** 左侧竖栏：项目 / 任务 / 设置页显示 */
   sidebar?: boolean;
   /** 页面标识，供样式区分（projects / jobs / settings） */
   page?: "projects" | "jobs" | "settings";
@@ -79,7 +79,7 @@ export function HuabuPublicShell({ children, sidebar = false, page }: HuabuPubli
             type="button"
             aria-label="帮助"
             title="帮助"
-            onClick={() => toast.message("请在本地设置中配置模型后开始创作")}
+            onClick={() => toast.message("请在用户设置中配置模型后开始创作")}
           >
             <CircleHelp size={17} strokeWidth={1.8} />
           </button>

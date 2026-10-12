@@ -39,7 +39,7 @@ export function Sidebar() {
           </button>
           <button
             onClick={() => router.push("/settings")}
-            title="本地设置"
+            title="用户设置"
             className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
               settingsActive
                 ? "bg-primary/20 text-primary"
