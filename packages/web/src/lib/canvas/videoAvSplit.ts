@@ -2,6 +2,8 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { notifyAssetsUpdated, type Asset, type AssetCategory } from "@/lib/api/assets";
+import { withBasePath } from "@/lib/basePath";
+import { isLocalDesktop } from "@/lib/localDesktop";
 import { ensureHttpsOssUrl } from "@/lib/signedUrl";
 
 function normalizeAsset(raw: Record<string, unknown>, fallbackCategory: AssetCategory): Asset {
@@ -38,6 +40,52 @@ export type VideoAvSplitResult = {
   sourceAssetId: string;
 };
 
+/** 本机：/api/local/video-av-split（ffmpeg），不依赖云端 :8001 */
+async function splitVideoAvAssetLocal(params: {
+  projectId: string;
+  videoAssetId: string;
+  audioTitle?: string;
+  videoTitle?: string;
+}): Promise<VideoAvSplitResult> {
+  const res = await fetch(withBasePath("/api/local/video-av-split"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: params.projectId,
+      videoAssetId: params.videoAssetId,
+      audioTitle: params.audioTitle,
+      videoTitle: params.videoTitle,
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    message?: string;
+    content?: {
+      audioAsset?: Record<string, unknown>;
+      videoAsset?: Record<string, unknown>;
+      sourceAssetId?: string;
+    };
+  };
+  if (!res.ok) {
+    throw new Error(String(body.message || `音视频分离失败（${res.status}）`));
+  }
+  const content = body.content;
+  const audioAsset = normalizeAsset(content?.audioAsset ?? {}, "audio");
+  const videoAsset = normalizeAsset(content?.videoAsset ?? {}, "video");
+  if (!audioAsset.id || !audioAsset.fileUrl) {
+    throw new Error("分离音频未返回有效素材");
+  }
+  if (!videoAsset.id || !videoAsset.fileUrl) {
+    throw new Error("无声视频未返回有效素材");
+  }
+  notifyAssetsUpdated();
+  return {
+    audioAsset,
+    videoAsset,
+    sourceAssetId: String(content?.sourceAssetId ?? params.videoAssetId),
+  };
+}
+
 /** 调用后端音视频分离，返回分离音频 + 无声视频素材 */
 export async function splitVideoAvAsset(params: {
   projectId: string;
@@ -45,6 +93,10 @@ export async function splitVideoAvAsset(params: {
   audioTitle?: string;
   videoTitle?: string;
 }): Promise<VideoAvSplitResult> {
+  if (isLocalDesktop) {
+    return splitVideoAvAssetLocal(params);
+  }
+
   const content = await apiFetch<{
     audioAsset: Record<string, unknown>;
     videoAsset: Record<string, unknown>;

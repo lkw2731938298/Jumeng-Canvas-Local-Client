@@ -26,6 +26,7 @@ import { sizeFromMedia } from "@/lib/canvas/nodeSizing";
 import { useNodeAssetMedia } from "@/lib/canvas/useNodeAssetMedia";
 import { canvasStreamUrlFromUrl, normalizeStorageUrl } from "@/lib/api/storageUrl";
 import { registerVideoNodeRef } from "@/lib/canvas/videoNodeRegistry";
+import { registerAudioNodeRef } from "@/lib/canvas/audioNodeRegistry";
 import { mediaDurationToBillSeconds } from "@/lib/canvas/canvasVideoToolBilling";
 import { assetHasImageThumbnail } from "@/components/canvas/panels/AssetThumbnail";
 import { useMediaNodeActive } from "@/lib/canvas/useMediaNodeActive";
@@ -734,12 +735,14 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
   const nodeId = props.id;
   const data = props.data as WorkflowNodeData;
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const inlineVideoTrim = useCanvasStore((s) => s.inlineVideoTrim);
   const anchorRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   // 与图片/视频一致：经 manifest / 签名 URL 解析，避免过期直链无法播放
   const { url } = useNodeAssetMedia(nodeId, { urlParamKey: "audioUrl" });
   const volume = Number(data.params?.volume ?? 1);
+  const trimActive = inlineVideoTrim?.nodeId === nodeId;
 
   const {
     inputRef,
@@ -754,14 +757,30 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
     setPickerOpen,
     openSourceMenu,
     applyAsset,
-    uploadBtnVisible,
-    showUploadButton,
   } = useMediaUpload(
     { urlParamKey: "audioUrl", accept: "audio/*", category: "audio" },
     nodeId,
     updateNodeData,
     anchorRef
   );
+
+  // 顶栏「上传音频」：本地 / 资产（与视频节点一致，避免卡片上方再叠一个上传钮）
+  useEffect(() => {
+    const onLocalUpload = (event: Event) => {
+      const detail = (event as CustomEvent<{ nodeId?: string }>).detail;
+      if (detail?.nodeId === nodeId) handleUpload();
+    };
+    const onAssetUpload = (event: Event) => {
+      const detail = (event as CustomEvent<{ nodeId?: string }>).detail;
+      if (detail?.nodeId === nodeId) setPickerOpen(true);
+    };
+    window.addEventListener("canvas:audio-upload-local", onLocalUpload);
+    window.addEventListener("canvas:audio-upload-asset", onAssetUpload);
+    return () => {
+      window.removeEventListener("canvas:audio-upload-local", onLocalUpload);
+      window.removeEventListener("canvas:audio-upload-asset", onAssetUpload);
+    };
+  }, [nodeId, handleUpload, setPickerOpen]);
 
   const fileLabel = useMemo(() => {
     if (!url) return "音频文件";
@@ -787,15 +806,43 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
     setPlaying(false);
   }, [url]);
 
+  // 注册 audio 元素，供顶栏「分段」读取片长
+  useEffect(() => {
+    registerAudioNodeRef(nodeId, audioRef.current);
+    return () => registerAudioNodeRef(nodeId, null);
+  }, [nodeId, url]);
+
+  // 分段模式：从入点起播，到出点停
+  useEffect(() => {
+    if (!trimActive || !url) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const inSec = useCanvasStore.getState().inlineVideoTrim?.inSec ?? 0;
+    try {
+      audio.currentTime = inSec;
+    } catch {
+      /* ignore */
+    }
+    registerAudioNodeRef(nodeId, audio);
+  }, [trimActive, nodeId, url]);
+
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !url) return;
     if (audio.paused) {
+      if (trimActive) {
+        const trim = useCanvasStore.getState().inlineVideoTrim;
+        const inSec = trim?.nodeId === nodeId ? trim.inSec : 0;
+        const outSec = trim?.nodeId === nodeId ? trim.outSec : Number.POSITIVE_INFINITY;
+        if (audio.currentTime < inSec || audio.currentTime >= outSec - 0.02) {
+          audio.currentTime = inSec;
+        }
+      }
       void audio.play().catch(() => {});
     } else {
       audio.pause();
     }
-  }, [url]);
+  }, [url, trimActive, nodeId]);
 
   return (
     <BaseNode
@@ -805,29 +852,19 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
       color="#ec4899"
       status={data.status ?? "idle"}
       bodyFlush
-      aboveCard={
-        url ? (
-          <MediaUploadOverlay
-            placement="above"
-            visible={uploadBtnVisible}
-            uploading={uploading}
-            label="点击上传音频"
-            iconOnly
-            onOpenMenu={openSourceMenu}
-          />
-        ) : undefined
-      }
     >
       <div
         ref={anchorRef}
-        className={`relative flex h-full w-full flex-col items-center justify-center gap-2${url ? " cursor-pointer" : ""}`}
-        onClick={url ? showUploadButton : undefined}
+        className="relative flex h-full w-full flex-col items-center justify-center gap-2"
       >
         {url ? (
           <>
             {/* 隐藏 audio：由卡片中央按钮驱动播放已有音频 */}
             <audio
-              ref={audioRef}
+              ref={(el) => {
+                audioRef.current = el;
+                registerAudioNodeRef(nodeId, el);
+              }}
               src={url}
               preload="metadata"
               className="hidden"
@@ -857,7 +894,13 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
               </span>
             </div>
             <Music className="pointer-events-none absolute right-2 top-2 h-4 w-4 text-pink-300/35" />
-            <AudioNodeControls audioRef={audioRef} src={url} volume={volume} />
+            <AudioNodeControls
+              audioRef={audioRef}
+              src={url}
+              volume={volume}
+              trimActive={trimActive}
+              nodeId={nodeId}
+            />
           </>
         ) : (
           <MediaUploadOverlay

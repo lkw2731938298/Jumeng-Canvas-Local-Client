@@ -104,9 +104,11 @@ import { isLibraryUiLockedParams } from "@/lib/canvas/materialLibrary";
 import { createRotateNode } from "@/lib/canvas/createRotateNode";
 import { runCutoutGenerate } from "@/lib/canvas/runCutoutGenerate";
 import { MIN_VIDEO_TRIM_SEC, trimVideoAsset } from "@/lib/canvas/videoTrim";
+import { clampTrimRange, MIN_AUDIO_TRIM_SEC, trimAudioAsset } from "@/lib/canvas/audioTrim";
 import { navigateToVideoEditor } from "@/lib/canvas/videoEditorNavigation";
 import { cropVideoAsset } from "@/lib/canvas/videoCrop";
 import { splitVideoAvAsset } from "@/lib/canvas/videoAvSplit";
+import { getAudioNodeRef } from "@/lib/canvas/audioNodeRegistry";
 import { runVideoStoryboardParse } from "@/lib/canvas/videoStoryboardParse";
 import { STORYBOARD_FROM_VIDEO_TOOL } from "@/lib/canvas/viralRemakePipeline";
 import {
@@ -371,6 +373,13 @@ function requestImageUploadAction(nodeId: string, action: "local" | "asset") {
 function requestVideoUploadAction(nodeId: string, action: "local" | "asset") {
   window.dispatchEvent(
     new CustomEvent(`canvas:video-upload-${action}`, { detail: { nodeId } })
+  );
+}
+
+/** 音频顶栏上传菜单：本地上传 / 从资产选择 */
+function requestAudioUploadAction(nodeId: string, action: "local" | "asset") {
+  window.dispatchEvent(
+    new CustomEvent(`canvas:audio-upload-${action}`, { detail: { nodeId } })
   );
 }
 
@@ -698,7 +707,12 @@ export function NodeTopMenuOverlay() {
 
   const framePickActive = Boolean(isVideoNode && selectedNodeId && framePickNodeId === selectedNodeId);
   const trimActive = Boolean(
-    isVideoNode && selectedNodeId && inlineVideoTrim?.nodeId === selectedNodeId
+    (isVideoNode || isAudioNode) &&
+      selectedNodeId &&
+      inlineVideoTrim?.nodeId === selectedNodeId
+  );
+  const audioTrimActive = Boolean(
+    isAudioNode && selectedNodeId && inlineVideoTrim?.nodeId === selectedNodeId
   );
   const videoCropActive = Boolean(
     isVideoNode && selectedNodeId && inlineVideoCrop?.nodeId === selectedNodeId
@@ -1143,6 +1157,36 @@ export function NodeTopMenuOverlay() {
     openInlineVideoTrim(selectedNodeId, dur);
   }, [selectedNodeId, videoUrl, closeOtherVideoMenus, openInlineVideoTrim]);
 
+  /** 进入音频节点内联分段（入/出点） */
+  const handleOpenAudioTrim = useCallback(() => {
+    if (!selectedNodeId || !audioUrl) {
+      toast.error("请先上传或生成音频");
+      return;
+    }
+    const nid = selectedNodeId;
+    const audio = getAudioNodeRef(nid);
+    let dur =
+      audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : undefined;
+    // 元数据未就绪时先打开，再短轮询回填片长，避免出点卡在 0.3s、进度条不可拖
+    openInlineVideoTrim(nid, dur);
+    if (dur && dur > 0) return;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      const el = getAudioNodeRef(nid);
+      const d = el && Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+      if (d > 0) {
+        window.clearInterval(timer);
+        const state = useCanvasStore.getState().inlineVideoTrim;
+        if (state?.nodeId === nid) {
+          useCanvasStore.getState().patchInlineVideoTrim(clampTrimRange(0, d, d));
+        }
+      } else if (tries >= 40) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+  }, [selectedNodeId, audioUrl, openInlineVideoTrim]);
+
   /** 成片节点：打开剪辑台并回填 composeMeta */
   const handleReopenVideoEditor = useCallback(() => {
     if (!projectId || !selectedNodeId) return;
@@ -1338,6 +1382,103 @@ export function NodeTopMenuOverlay() {
     updateNodeData,
     updateNodeParam,
     videoUrl,
+  ]);
+
+  /** 确认音频分段：本机 ffmpeg 切段 → 右侧新建音频节点并连线 */
+  const handleConfirmAudioTrim = useCallback(async () => {
+    if (
+      !selectedNodeId ||
+      !projectId ||
+      !audioUrl ||
+      !node ||
+      !inlineVideoTrim ||
+      !audioTrimActive ||
+      savingTrim
+    ) {
+      return;
+    }
+    const assetId = String(
+      ((node.data as WorkflowNodeData)?.params as Record<string, unknown> | undefined)?.assetId ??
+        ""
+    ).trim();
+    if (!assetId) {
+      toast.error("当前音频缺少素材 ID，请重新上传后再分段");
+      return;
+    }
+    const { inSec, outSec } = inlineVideoTrim;
+    if (!(outSec - inSec >= MIN_AUDIO_TRIM_SEC)) {
+      toast.error(`片段至少 ${MIN_AUDIO_TRIM_SEC} 秒`);
+      return;
+    }
+
+    setSavingTrim(true);
+    const sourceLabel =
+      String((node.data as WorkflowNodeData)?.label ?? "音频").trim() || "音频";
+    try {
+      const { asset } = await trimAudioAsset({
+        projectId,
+        audioAssetId: assetId,
+        inSec,
+        outSec,
+        title: `${sourceLabel} · 分段`,
+      });
+
+      const { width } = resolveNodeSize(node.width, node.height);
+      const worldPos = getNodeWorldPosition(node, allNodes);
+      const siblingOffset =
+        edges.filter((e) => e.source === selectedNodeId && e.sourceHandle === "audio")
+          .length * 32;
+
+      addNodeFromAsset(
+        {
+          id: asset.id,
+          category: "audio",
+          fileUrl: asset.fileUrl,
+          title: "分段",
+        },
+        { x: worldPos.x + width + 48, y: worldPos.y + siblingOffset }
+      );
+
+      const newNodeId = useCanvasStore.getState().selectedNodeId;
+      if (newNodeId) {
+        connectNodes({
+          source: selectedNodeId,
+          target: newNodeId,
+          sourceHandle: "audio",
+          targetHandle: REFERENCE_INPUT_ID,
+        });
+        updateNodeParam(newNodeId, "toolMode", "audio_trim");
+        updateNodeParam(newNodeId, "trimMeta", {
+          sourceAssetId: assetId,
+          inSec,
+          outSec,
+        });
+        updateNodeData(newNodeId, { label: "分段" });
+      }
+
+      closeInlineVideoTrim();
+      notifyAssetsUpdated();
+      toast.success("已生成音频分段节点");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "音频分段失败");
+    } finally {
+      setSavingTrim(false);
+    }
+  }, [
+    addNodeFromAsset,
+    allNodes,
+    audioTrimActive,
+    audioUrl,
+    closeInlineVideoTrim,
+    connectNodes,
+    edges,
+    inlineVideoTrim,
+    node,
+    projectId,
+    savingTrim,
+    selectedNodeId,
+    updateNodeData,
+    updateNodeParam,
   ]);
 
   /** 人声分离 / 消除人声：RunningHub Vocals / Other → 右侧音频节点 */
@@ -2462,7 +2603,7 @@ export function NodeTopMenuOverlay() {
     ...OVERLAY_STYLE,
     // 有下拉展开时再抬高，确保盖住底部编辑浮层
     zIndex: anyMenuOpen ? CANVAS_OVERLAY_Z_TOP_MENU_OPEN : CANVAS_OVERLAY_Z_TOP_MENU,
-    ...(framePickActive || trimActive
+    ...(framePickActive || trimActive || audioTrimActive
       ? { border: "1px solid rgba(167, 139, 250, 0.55)" }
       : {}),
   });
@@ -2857,7 +2998,8 @@ export function NodeTopMenuOverlay() {
           </>
         ) : null}
 
-        {!framePickActive && !trimActive && !videoCropActive && !isImageNode ? (
+        {/* 仅视频顶栏：上传（音频有独立上传入口，避免与分段顶栏叠成两个按钮） */}
+        {isVideoNode && !framePickActive && !trimActive && !videoCropActive ? (
           <div ref={uploadMenuRef} className="relative">
             <button
               type="button"
@@ -3364,19 +3506,117 @@ export function NodeTopMenuOverlay() {
           </>
         ) : null}
 
-        {/* 音频顶栏：下载 */}
+        {/* 音频顶栏：分段 / 上传 / 下载 */}
         {isAudioNode ? (
           <>
-            <button
-              type="button"
-              disabled={!audioUrl}
-              onClick={() => void handleDownloadAudio()}
-              className="inline-flex items-center rounded-md p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-              title={!audioUrl ? "请先上传或生成音频" : "下载"}
-              aria-label="下载"
-            >
-              <Download className="h-4 w-4 shrink-0" />
-            </button>
+            {!audioTrimActive ? (
+              <>
+                <TopMenuActionButton
+                  label="分段"
+                  icon={<Scissors strokeWidth={1.75} />}
+                  disabled={!audioUrl}
+                  title={!audioUrl ? "请先上传或生成音频" : "分段：选入/出点并导出新音频节点"}
+                  onClick={handleOpenAudioTrim}
+                />
+                <div ref={uploadMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setUploadMenuOpen((open) => !open)}
+                    className={`inline-flex items-center rounded-md p-2 transition-colors ${
+                      uploadMenuOpen
+                        ? "bg-white/15 text-white"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="上传音频"
+                    aria-label="上传音频"
+                    aria-expanded={uploadMenuOpen}
+                  >
+                    <Upload className="h-4 w-4 shrink-0" />
+                  </button>
+                  {uploadMenuOpen ? (
+                    <div
+                      className={`absolute left-0 top-full ${CANVAS_OVERLAY_DROPDOWN_CLASS} mt-1.5 min-w-[168px] overflow-hidden rounded-xl border border-white/10 bg-[rgba(34,34,42,0.98)] py-1 shadow-2xl backdrop-blur-xl`}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedNodeId) return;
+                          requestAudioUploadAction(selectedNodeId, "local");
+                          setUploadMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[14px] text-white/85 transition-colors hover:bg-white/[0.08]"
+                      >
+                        <Upload className="size-[18px] shrink-0 text-white/70" strokeWidth={1.75} />
+                        本地上传
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedNodeId) return;
+                          requestAudioUploadAction(selectedNodeId, "asset");
+                          setUploadMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[14px] text-white/85 transition-colors hover:bg-white/[0.08]"
+                      >
+                        <FolderOpen className="size-[18px] shrink-0 text-white/70" strokeWidth={1.75} />
+                        从资产选择
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <span className="mx-0.5 h-4 w-px bg-white/10" aria-hidden />
+                <button
+                  type="button"
+                  disabled={!audioUrl}
+                  onClick={() => void handleDownloadAudio()}
+                  className="inline-flex items-center rounded-md p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  title={!audioUrl ? "请先上传或生成音频" : "下载"}
+                  aria-label="下载"
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="px-1.5 text-[12px] tabular-nums text-white/70">
+                  {formatVideoTime(inlineVideoTrim?.inSec ?? 0)} –{" "}
+                  {formatVideoTime(inlineVideoTrim?.outSec ?? 0)}
+                  <span className="ml-1 text-white/40">
+                    (
+                    {formatVideoTime(
+                      Math.max(0, (inlineVideoTrim?.outSec ?? 0) - (inlineVideoTrim?.inSec ?? 0))
+                    )}
+                    )
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  disabled={savingTrim}
+                  onClick={() => void handleConfirmAudioTrim()}
+                  className="inline-flex items-center gap-1 rounded-md bg-pink-500/90 px-2.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-pink-500 disabled:opacity-50"
+                  title="确认分段并生成新节点"
+                >
+                  {savingTrim ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <Scissors className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                  )}
+                  {savingTrim ? "分段中…" : "确认分段"}
+                </button>
+                <button
+                  type="button"
+                  disabled={savingTrim}
+                  onClick={closeInlineVideoTrim}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                  title="取消 (Esc)"
+                >
+                  <X className="h-3.5 w-3.5 shrink-0" />
+                  取消
+                </button>
+              </>
+            )}
           </>
         ) : null}
       </div>

@@ -109,41 +109,59 @@ export function nearestMotionPathPointIndex(
   return best;
 }
 
+/** 整条路径刚体平移（形状不变，采样点精确跟着走） */
+export function translateMotionPathByDelta(
+  path: DirectorMotionPath,
+  delta: [number, number, number]
+): DirectorMotionPath {
+  if (path.points.length === 0) return path;
+  const [dx, dy, dz] = delta;
+  if (dx * dx + dy * dy + dz * dz < 1e-16) return path;
+  invalidateMotionPathCache(path.id);
+  return {
+    ...path,
+    points: path.points.map(
+      (p) => [p[0] + dx, p[1] + dy, p[2] + dz] as [number, number, number]
+    ),
+  };
+}
+
 /**
- * 把路径在 along01 处的采样点挪到 target（世界坐标）。
- * 不能直接把最近控制点设成 target（Catmull 上播放头未必落在该点），
- * 而是反复把「目标 − 当前采样」加到最近点上，使松手后模型停在拖到的位置。
+ * 把 along01 处采样挪到 target：用「目标 − 当前采样」平移整条路径。
+ * 比只推单个控制点稳定，避免多拖几次乱跑 / 弹回原位。
  */
+export function moveMotionPathSampleTo(
+  path: DirectorMotionPath,
+  along01: number,
+  target: [number, number, number]
+): DirectorMotionPath {
+  if (path.points.length === 0) return path;
+  const u = Math.min(1, Math.max(0, along01));
+  invalidateMotionPathCache(path.id);
+  const sample = sampleMotionPath(path, u);
+  if (!sample) {
+    // 单点 / 退化：直接写第一个点
+    const points = path.points.map((p, i) =>
+      i === 0 ? ([...target] as [number, number, number]) : p
+    );
+    invalidateMotionPathCache(path.id);
+    return { ...path, points };
+  }
+  return translateMotionPathByDelta(path, [
+    target[0] - sample.position[0],
+    target[1] - sample.position[1],
+    target[2] - sample.position[2],
+  ]);
+}
+
+/** @deprecated 改用 moveMotionPathSampleTo（整路径平移更稳） */
 export function nudgeMotionPathTowardPosition(
   path: DirectorMotionPath,
   along01: number,
   target: [number, number, number],
-  iterations = 4
+  _iterations = 4
 ): DirectorMotionPath {
-  if (path.points.length === 0) return path;
-  let points = path.points.map(
-    (p) => [...p] as [number, number, number]
-  );
-  const u = Math.min(1, Math.max(0, along01));
-  for (let iter = 0; iter < iterations; iter++) {
-    const working: DirectorMotionPath = { ...path, points };
-    invalidateMotionPathCache(path.id);
-    const sample = sampleMotionPath(working, u);
-    if (!sample) break;
-    const dx = target[0] - sample.position[0];
-    const dy = target[1] - sample.position[1];
-    const dz = target[2] - sample.position[2];
-    if (dx * dx + dy * dy + dz * dz < 1e-10) break;
-    const idx = nearestMotionPathPointIndex(working, u);
-    const pt = points[idx]!;
-    points = points.map((p, i) =>
-      i === idx
-        ? ([pt[0] + dx, pt[1] + dy, pt[2] + dz] as [number, number, number])
-        : p
-    );
-  }
-  invalidateMotionPathCache(path.id);
-  return { ...path, points };
+  return moveMotionPathSampleTo(path, along01, target);
 }
 
 /**

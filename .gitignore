@@ -27,7 +27,3 @@ config/lan.env
 *.pem
 *.key
 !*.example.env
-
-packages/desktop/.cache/
-runtime/
-

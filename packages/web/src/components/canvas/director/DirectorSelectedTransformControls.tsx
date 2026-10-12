@@ -66,17 +66,21 @@ export function DirectorSelectedTransformControls({
     if (!controls || !target) return;
 
     const handleDraggingChanged = (event: { value: boolean }) => {
-      draggingRef.current = event.value;
       if (event.value) {
+        if (draggingRef.current) return;
+        draggingRef.current = true;
         onDragChange?.(true);
         return;
       }
-      // 必须先落盘 transform，再解除 interacting。
-      // 若先解除，采样会用旧路径把 Object3D 写回「移动前」的点。
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      // 先落盘再解除 interacting；延迟一帧 unsuspend，避免采样用旧路径写回原位
       flushSync(() => {
         emitTransform();
       });
-      onDragChange?.(false);
+      requestAnimationFrame(() => {
+        onDragChange?.(false);
+      });
     };
 
     controls.addEventListener("dragging-changed", handleDraggingChanged);

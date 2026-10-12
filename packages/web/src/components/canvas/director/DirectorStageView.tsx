@@ -47,7 +47,7 @@ import {
   evaluateTimeline,
   exportTimelineVideo,
   invalidateMotionPathCache,
-  nudgeMotionPathTowardPosition,
+  moveMotionPathSampleTo,
   openOrCreateAnimation,
   resolveExportSize,
   syncScenePlacementToTimelineStart,
@@ -626,30 +626,25 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                     auto.playhead,
                     duration
                   );
-                  const nudged = nudgeMotionPathTowardPosition(
+                  // 整条路径按「目标 − 当前采样」平移，松手位置精确、多拖不弹回
+                  const moved = moveMotionPathSampleTo(
                     path,
                     along,
                     targetPos
                   );
-                  // 清掉播放头附近旧的 position 关键帧，避免盖住已改的路径又弹回旧点
-                  const playhead = auto.playhead;
                   animation = {
                     ...anim,
                     motionPaths: anim.motionPaths.map((p) =>
-                      p.id === path.id ? nudged : p
+                      p.id === path.id ? moved : p
                     ),
                     tracks: anim.tracks.map((t) => {
                       if (t.id !== track!.id) return t;
+                      // 清掉会盖住路径的旧 position 关键帧，避免再弹回
                       return {
                         ...t,
                         keyframes: t.keyframes
                           .map((k) => {
-                            if (
-                              k.position == null ||
-                              Math.abs(k.time - playhead) > 0.05
-                            ) {
-                              return k;
-                            }
+                            if (k.position == null) return k;
                             const { position: _p, ...rest } = k;
                             return rest as typeof k;
                           })
@@ -736,11 +731,11 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             : null;
           if (track && !track.locked && path && path.points.length >= 1) {
             const along = track.motionPathStart ?? 0;
-            const nudged = nudgeMotionPathTowardPosition(path, along, targetPos);
+            const moved = moveMotionPathSampleTo(path, along, targetPos);
             animation = {
               ...animation,
               motionPaths: animation.motionPaths.map((p) =>
-                p.id === path.id ? nudged : p
+                p.id === path.id ? moved : p
               ),
             };
           }

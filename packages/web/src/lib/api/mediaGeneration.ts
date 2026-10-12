@@ -244,16 +244,31 @@ async function generateFromMediaNodeLocal(
           Number.parseInt(String(durationRaw).replace(/[^\d]/g, ""), 10) || 5;
         const resolution = pickCanvasClarityFromOptions(request.generationOptions, "2K");
         const ratio = pickCanvasAspectFromOptions(request.generationOptions, "16:9");
+        const isAudioRef = (r: { type?: string; url?: string }) => {
+          const u = String(r.url || "").trim();
+          if (r.type === "audio") return true;
+          if (u.startsWith("data:audio")) return true;
+          if (/\.(mp3|wav|m4a|aac|ogg|flac)(\?|$)/i.test(u)) return true;
+          if (/file=[^&]*\.(mp3|wav|m4a|aac|ogg|flac)/i.test(u)) return true;
+          return false;
+        };
+        // 本机 /api/local/asset 常无扩展名：必须显式排除 audio，否则会被当成图片 →「图片加载失败」
         const rawImageUrls = (request.references ?? [])
-          .filter(
-            (r) =>
-              r.type === "image" ||
-              /\.(png|jpe?g|webp|gif)(\?|$)/i.test(String(r.url || "")) ||
-              String(r.url || "").startsWith("data:image") ||
-              (/\/api\/local\//i.test(String(r.url || "")) &&
-                r.type !== "video" &&
-                !/\.(mp4|webm|mov)(\?|$)/i.test(String(r.url || "")))
-          )
+          .filter((r) => {
+            const u = String(r.url || "").trim();
+            if (!u || isAudioRef(r) || r.type === "video") return false;
+            if (r.type === "image") return true;
+            if (/\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)) return true;
+            if (u.startsWith("data:image")) return true;
+            if (
+              /\/api\/local\//i.test(u) &&
+              !/\.(mp4|webm|mov|mp3|wav|m4a|aac|ogg|flac)(\?|$)/i.test(u) &&
+              !/file=[^&]*\.(mp4|webm|mov|mp3|wav|m4a|aac|ogg|flac)/i.test(u)
+            ) {
+              return true;
+            }
+            return false;
+          })
           .map((r) => String(r.url || "").trim())
           .filter(Boolean);
         if (request.sourceUrl?.trim()) {
@@ -314,6 +329,32 @@ async function generateFromMediaNodeLocal(
           );
         }
 
+        // 参考音频（Seedance 多模态等）：与商业网关 reference_audio 对齐
+        const audioUrls: string[] = [];
+        const intendedAudioRefs = (request.references ?? []).filter((r) => {
+          const u = String(r.url || "").trim();
+          return Boolean(u) && isAudioRef(r);
+        });
+        for (const r of intendedAudioRefs) {
+          const u = String(r.url || "").trim();
+          if (!u) continue;
+          const resolved = await resolveLocalMediaUrlForUpstream(u, {
+            requirePublicHttps: !jumengOfficial,
+            jumengUpload: jumengCreds,
+          });
+          if (!resolved) {
+            throw new Error(
+              `参考音频未能提交（${u.slice(0, 80)}）。请确认音频可播放，或启用「参考图 OSS」`
+            );
+          }
+          audioUrls.push(resolved);
+        }
+        if (intendedAudioRefs.length > 0 && audioUrls.length === 0) {
+          throw new Error(
+            "画布有参考音频，但未能提交给上游。请确认音频节点已有文件后重试"
+          );
+        }
+
         const raw = await localGenerateVideo({
           modelId: request.model,
           prompt: request.prompt,
@@ -322,6 +363,7 @@ async function generateFromMediaNodeLocal(
           ratio: String(ratio),
           imageUrls,
           videoUrls,
+          audioUrls,
           onProviderTaskId: noteProviderTaskId,
           onSubmittedRefs: noteSubmittedRefs,
           signal: options?.signal,

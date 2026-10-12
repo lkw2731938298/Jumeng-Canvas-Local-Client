@@ -2245,12 +2245,30 @@ export async function resolveLocalMediaUrlForUpstream(
     );
   }
 
+  /** 按 MIME / URL 猜扩展名（含音频，避免 .m4a 被当成 .mp4） */
+  const guessMediaExt = (contentType: string, sourceUrl: string): string => {
+    const ct = (contentType || "").toLowerCase();
+    const fromUrl =
+      sourceUrl.match(/\.(mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov)(?:\?|$)/i)?.[1] ||
+      sourceUrl.match(/file=[^&]*\.(mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov)/i)?.[1];
+    if (fromUrl) return fromUrl.toLowerCase();
+    if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
+    if (ct.includes("wav")) return "wav";
+    if (ct.includes("aac")) return "aac";
+    if (ct.includes("ogg")) return "ogg";
+    if (ct.includes("flac")) return "flac";
+    if (ct.startsWith("audio/")) return "m4a";
+    if (ct.includes("webm")) return "webm";
+    if (ct.includes("quicktime") || ct.includes("mov")) return "mov";
+    return "mp4";
+  };
+
   // 聚梦官方：未配 OSS 时用官方文件上传拿公网直链，上限 100MB
   const jumengCreds = opts?.jumengUpload;
   if (!oss && jumengCreds?.apiBase && jumengCreds?.apiKey) {
     const loaded = await fetchUrlAsDataUrl(raw);
-    const contentType = loaded.contentType || "video/mp4";
-    const ext = contentType.includes("webm") ? "webm" : contentType.includes("mov") ? "mov" : "mp4";
+    const contentType = loaded.contentType || "application/octet-stream";
+    const ext = guessMediaExt(contentType, raw);
     const uploaded = await uploadRefToJumengFiles({
       creds: jumengCreds,
       base64OrDataUrl: loaded.dataUrl,
@@ -2261,18 +2279,16 @@ export async function resolveLocalMediaUrlForUpstream(
   }
   if (oss) {
     const loaded = await fetchUrlAsDataUrl(raw);
+    const contentType = loaded.contentType || "application/octet-stream";
+    const ext = guessMediaExt(contentType, raw);
     const uploaded = await uploadLocalBytesToUserOss({
       base64OrDataUrl: loaded.dataUrl,
-      contentType: loaded.contentType || "video/mp4",
-      filename: loaded.contentType.includes("webm")
-        ? "ref.webm"
-        : loaded.contentType.includes("mov")
-          ? "ref.mov"
-          : "ref.mp4",
+      contentType,
+      filename: `ref.${ext}`,
     });
     if (!isCleanPublicHttpsUrl(uploaded)) {
       throw new Error(
-        `参考视频 OSS 未得到干净公网直链（${uploaded.slice(0, 100)}）。请关闭阻止公共访问后重试`
+        `参考媒体 OSS 未得到干净公网直链（${uploaded.slice(0, 100)}）。请关闭阻止公共访问后重试`
       );
     }
     return markUpstreamReadyRef(uploaded);
@@ -2573,6 +2589,8 @@ export async function localGenerateVideo(params: {
   imageUrls?: string[];
   /** 参考视频公网 URL（需用户 OSS 或外链） */
   videoUrls?: string[];
+  /** 参考音频公网 URL / data URL（Seedance 多模态 reference_audio） */
+  audioUrls?: string[];
   /** 拿到上游 task_id 时回调（写入本机任务列表） */
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
@@ -2637,8 +2655,10 @@ export async function localGenerateVideo(params: {
   // 聚梦参考素材：OSS 直链 → 官方 files/upload 直链（免 OSS）→ base64 兜底
   let publicImgs: string[] = [];
   let publicVideos: string[] = [];
+  let publicAudios: string[] = [];
   const requestedImg = (params.imageUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
   const requestedVid = (params.videoUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
+  const requestedAud = (params.audioUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
   if (jumeng) {
     const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
     for (const u of requestedImg.slice(0, 3)) {
@@ -2653,9 +2673,23 @@ export async function localGenerateVideo(params: {
       }
       publicVideos.push(v);
     }
+    for (const u of requestedAud.slice(0, 3)) {
+      const a = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
+      if (!a) {
+        throw new Error(
+          `参考音频未能提交（${u.slice(0, 60)}）。请确认音频可播放，或配置「参考图 OSS」`
+        );
+      }
+      publicAudios.push(a);
+    }
   } else {
-    publicImgs = requestedImg.filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:image")).slice(0, 3);
+    publicImgs = requestedImg
+      .filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:image"))
+      .slice(0, 3);
     publicVideos = requestedVid.filter((u) => isPublicFetchableUrl(u)).slice(0, 2);
+    publicAudios = requestedAud
+      .filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:audio"))
+      .slice(0, 3);
   }
 
   // 聚梦 minimax-h3 等通道：上游报「最多支持 0 个参考视频」
@@ -2673,9 +2707,11 @@ export async function localGenerateVideo(params: {
     );
   }
 
-  if (requestedImg.length + requestedVid.length > 0 && publicImgs.length + publicVideos.length === 0) {
+  const requestedTotal = requestedImg.length + requestedVid.length + requestedAud.length;
+  const publicTotal = publicImgs.length + publicVideos.length + publicAudios.length;
+  if (requestedTotal > 0 && publicTotal === 0) {
     throw new Error(
-      `已选择 ${requestedImg.length + requestedVid.length} 个参考，但未能打进上游请求。请确认素材可用后重试`
+      `已选择 ${requestedTotal} 个参考，但未能打进上游请求。请确认素材可用后重试`
     );
   }
 
@@ -2712,10 +2748,21 @@ export async function localGenerateVideo(params: {
         promptText = `须参考${vids}中的动作、镜头与画面内容。${promptText}`.slice(0, 20000);
       }
     }
+    // 音频参考：补 [Audio N]
+    if (publicAudios.length > 0) {
+      const missing: number[] = [];
+      for (let i = 1; i <= publicAudios.length; i++) {
+        if (!promptText.includes(`[Audio ${i}]`)) missing.push(i);
+      }
+      if (missing.length) {
+        const auds = missing.map((n) => `[Audio ${n}]`).join("、");
+        promptText = `须参考${auds}中的人声/配乐节奏与情绪。${promptText}`.slice(0, 20000);
+      }
+    }
   }
   promptText = promptText.slice(0, 20000);
 
-  const submittedUrls = [...publicImgs, ...publicVideos];
+  const submittedUrls = [...publicImgs, ...publicVideos, ...publicAudios];
   const submittedMeta = describeSubmittedRefs(submittedUrls);
   // 超时 / 报错时任务页也能看出参考到底带没带、带的是直链还是 base64
   await params.onSubmittedRefs?.({
@@ -2731,7 +2778,7 @@ export async function localGenerateVideo(params: {
   const sizeForUpstream = videoSizeMode === "tier" ? resolution : ratio;
 
   console.info(
-    "[localGenerateVideo] promptLen=%s preview=%s sizeMode=%s size=%s ratio=%s resolution=%s duration=%s refs img=%s vid=%s",
+    "[localGenerateVideo] promptLen=%s preview=%s sizeMode=%s size=%s ratio=%s resolution=%s duration=%s refs img=%s vid=%s aud=%s",
     promptText.length,
     promptText.slice(0, 80).replace(/\s+/g, " "),
     videoSizeMode,
@@ -2740,7 +2787,8 @@ export async function localGenerateVideo(params: {
     resolution,
     duration,
     requestedImg.length,
-    requestedVid.length
+    requestedVid.length,
+    requestedAud.length
   );
 
   // 对齐商业 jumengai._build_jumengai_video_payload：content + role；prompt 必须与 content[0].text 一致
@@ -2759,6 +2807,13 @@ export async function localGenerateVideo(params: {
       role: "reference_video",
     });
   }
+  for (const u of publicAudios) {
+    content.push({
+      type: "audio_url",
+      audio_url: { url: u },
+      role: "reference_audio",
+    });
+  }
   const metadata: Record<string, unknown> = {
     resolution,
     ratio,
@@ -2772,6 +2827,7 @@ export async function localGenerateVideo(params: {
   // 第三方 OpenAI 兼容网关维持原画布行为，参考图仍需用户自配 OSS 公网直链。
   const imgRefsAreDataUrls = jumeng && publicImgs.some((u) => u.startsWith("data:"));
   const vidRefsAreDataUrls = jumeng && publicVideos.some((u) => u.startsWith("data:"));
+  const audRefsAreDataUrls = jumeng && publicAudios.some((u) => u.startsWith("data:"));
 
   if (publicImgs.length) {
     metadata.imageMode = "reference";
@@ -2783,6 +2839,13 @@ export async function localGenerateVideo(params: {
     if (!vidRefsAreDataUrls) {
       metadata.video_urls = publicVideos;
       metadata.referenceVideos = publicVideos;
+    }
+  }
+  if (publicAudios.length) {
+    metadata.audio_url = publicAudios[0];
+    if (!audRefsAreDataUrls) {
+      metadata.audio_urls = publicAudios;
+      metadata.referenceAudio = publicAudios;
     }
   }
 
@@ -2816,10 +2879,22 @@ export async function localGenerateVideo(params: {
       body.video_urls = publicVideos;
     }
   }
+  if (publicAudios.length) {
+    body.audio = publicAudios[0];
+    body.audio_url = publicAudios[0];
+    if (!audRefsAreDataUrls) {
+      body.audios = publicAudios;
+      body.audio_urls = publicAudios;
+    }
+  }
 
-  // base64 参考：对齐 jumeng-media 插件的提交体，去掉 content / 别名字段，
-  // 只留 model/prompt/size/resolution/duration/seconds/image + metadata.parameters
-  if (jumeng && imgRefsAreDataUrls && publicVideos.length === 0) {
+  // base64 仅图、无视频/音频时：对齐 jumeng-media 精简体；有音视频参考时保留 content/role
+  if (
+    jumeng &&
+    imgRefsAreDataUrls &&
+    publicVideos.length === 0 &&
+    publicAudios.length === 0
+  ) {
     const minimal: Record<string, unknown> = {
       model: upstreamModel,
       prompt: promptText,
