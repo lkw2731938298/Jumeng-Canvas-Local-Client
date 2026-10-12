@@ -5,9 +5,10 @@
  * 选中轨即显示控制点；可拖、中点插入、选中后 Delete 删除。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { DirectorMotionPath } from "@jumeng-canvas/shared";
 import {
   getMotionPathCurve,
@@ -45,8 +46,17 @@ function PathControlPoint({
   onSelect: () => void;
   onUpdatePoint: (pathId: string, index: number, point: [number, number, number]) => void;
 }) {
-  const { camera, gl } = useThree();
+  const { camera, gl, controls } = useThree();
   const dragging = useRef(false);
+  const dragYRef = useRef(groundHeight);
+  const orbitWasEnabled = useRef(true);
+  const pathIdRef = useRef(pathId);
+  const indexRef = useRef(index);
+  const onUpdateRef = useRef(onUpdatePoint);
+  pathIdRef.current = pathId;
+  indexRef.current = index;
+  onUpdateRef.current = onUpdatePoint;
+
   const plane = useMemo(
     () => new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundHeight),
     [groundHeight]
@@ -55,43 +65,87 @@ function PathControlPoint({
   const ndc = useRef(new THREE.Vector2());
   const hit = useRef(new THREE.Vector3());
 
-  // 地面拖 XZ，保留顶点当前 Y（高度改右侧栏）
-  const project = (clientX: number, clientY: number): [number, number, number] | null => {
-    const rect = gl.domElement.getBoundingClientRect();
-    ndc.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    ndc.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.current.setFromCamera(ndc.current, camera);
-    if (!raycaster.current.ray.intersectPlane(plane, hit.current)) return null;
-    const y = Number.isFinite(point[1]) ? point[1] : groundHeight;
-    return [hit.current.x, y, hit.current.z];
+  const project = useCallback(
+    (clientX: number, clientY: number): [number, number, number] | null => {
+      const rect = gl.domElement.getBoundingClientRect();
+      ndc.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.current.setFromCamera(ndc.current, camera);
+      if (!raycaster.current.ray.intersectPlane(plane, hit.current)) return null;
+      return [hit.current.x, dragYRef.current, hit.current.z];
+    },
+    [camera, gl.domElement, plane]
+  );
+
+  const onWindowMove = useCallback(
+    (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const next = project(e.clientX, e.clientY);
+      if (!next) return;
+      invalidateMotionPathCache(pathIdRef.current);
+      onUpdateRef.current(pathIdRef.current, indexRef.current, next);
+    },
+    [project]
+  );
+
+  const endDrag = useCallback(
+    (e: PointerEvent) => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      try {
+        gl.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      const orbit = controls as OrbitControlsImpl | null;
+      if (orbit) orbit.enabled = orbitWasEnabled.current;
+      window.removeEventListener("pointermove", onWindowMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+    },
+    [controls, gl.domElement, onWindowMove]
+  );
+
+  useEffect(
+    () => () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      window.removeEventListener("pointermove", onWindowMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+      const orbit = controls as OrbitControlsImpl | null;
+      if (orbit) orbit.enabled = orbitWasEnabled.current;
+    },
+    [controls, endDrag, onWindowMove]
+  );
+
+  const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.nativeEvent.preventDefault();
+    onSelect();
+
+    const y = point[1];
+    dragYRef.current = Number.isFinite(y) ? y : groundHeight;
+    dragging.current = true;
+
+    // 拖顶点时关掉 Orbit，避免转镜与地面射线同时改世界坐标
+    const orbit = controls as OrbitControlsImpl | null;
+    orbitWasEnabled.current = orbit?.enabled ?? true;
+    if (orbit) orbit.enabled = false;
+
+    try {
+      gl.domElement.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    window.addEventListener("pointermove", onWindowMove);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
   };
 
   return (
-    <mesh
-      position={point}
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.stopPropagation();
-        onSelect();
-        (e.target as HTMLElement)?.setPointerCapture?.(e.pointerId);
-        dragging.current = true;
-      }}
-      onPointerMove={(e) => {
-        if (!dragging.current) return;
-        e.stopPropagation();
-        const next = project(e.clientX, e.clientY);
-        if (!next) return;
-        invalidateMotionPathCache(pathId);
-        onUpdatePoint(pathId, index, next);
-      }}
-      onPointerUp={(e) => {
-        e.stopPropagation();
-        dragging.current = false;
-      }}
-      onPointerCancel={() => {
-        dragging.current = false;
-      }}
-    >
+    <mesh position={point} onPointerDown={onPointerDown}>
       <sphereGeometry args={[selected ? 0.14 : 0.11, 16, 16]} />
       <meshBasicMaterial
         color={selected ? "#fde68a" : "#fbbf24"}

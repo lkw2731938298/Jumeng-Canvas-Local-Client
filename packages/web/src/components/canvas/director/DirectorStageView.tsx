@@ -47,8 +47,11 @@ import {
   evaluateTimeline,
   exportTimelineVideo,
   invalidateMotionPathCache,
+  nudgeMotionPathTowardPosition,
   openOrCreateAnimation,
   resolveExportSize,
+  syncScenePlacementToTimelineStart,
+  motionPathAlongAtTime,
   TimelineHistoryStack,
   upsertKeyframe,
   motionPathToolClosed,
@@ -302,12 +305,12 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const displayScene = useMemo(() => {
     if (!scene) return null;
     if (!timelineSample || !timelineOpen) return scene;
-    // 拖拽/甩镜时不要用采样盖住 live 位姿（否则 gizmo 一松就弹回）
-    if (viewportInteracting) return scene;
+    // 始终对全体物体采样。拖 gizmo 时靠 suspendTransformSync 冻结被拖物体，
+    // 切勿退回原始 scene（否则其它带动画的模型会弹回底位姿）。
     const applied = applySampleToScene(scene, timelineSample);
     // 主舞台保持导演自由相机；轨上 directorCamera 只给导出/镜头监视器用
     return { ...applied, camera: scene.camera };
-  }, [scene, timelineSample, timelineOpen, viewportInteracting]);
+  }, [scene, timelineSample, timelineOpen]);
 
   const activeCamera = useMemo(() => {
     if (!scene) return null;
@@ -556,56 +559,202 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   );
 
   const handleObjectTransform = useCallback(
-    (id: string, transform: DirectorObject["transform"]) => {
+    (
+      id: string,
+      transform: DirectorObject["transform"],
+      mode: DirectorTransformMode = "translate"
+    ) => {
       const auto = timelineAutoKfRef.current;
-      const shouldAutoKf =
-        auto.open && auto.autoKeyframe && !auto.drawingTrackId;
-      if (shouldAutoKf && auto.playing) {
+      const timelineActive = auto.open && !auto.drawingTrackId;
+      if (timelineActive && auto.playing) {
         setTimelinePlaying(false);
       }
       patchScene((prev) => {
         const objects = prev.objects.map((obj) => {
           if (obj.id !== id) return obj;
-          const next: DirectorObject = { ...obj, transform };
-          if (obj.kind === "camera" && obj.lookAt) {
-            next.lookAt = syncCameraLookAtFromTransform(transform, obj.lookAt);
+          // 只改当前模式对应通道，避免移动时把路径朝向写进 base rotation
+          const nextTransform =
+            mode === "translate"
+              ? { ...obj.transform, position: [...transform.position] as [number, number, number] }
+              : mode === "rotate"
+                ? { ...obj.transform, rotation: [...transform.rotation] as [number, number, number] }
+                : mode === "scale"
+                  ? { ...obj.transform, scale: [...transform.scale] as [number, number, number] }
+                  : transform;
+          const next: DirectorObject = { ...obj, transform: nextTransform };
+          if (obj.kind === "camera" && obj.lookAt && mode === "translate") {
+            next.lookAt = syncCameraLookAtFromTransform(nextTransform, obj.lookAt);
           }
           return next;
         });
+
         let animation = prev.animation;
-        // P1 自动帧：时间轴打开且开关开启时，在播放头写入完整 transform
-        if (shouldAutoKf && animation?.ui?.autoKeyframe) {
-          const track = animation.tracks.find((t) => t.targetId === id);
+        const targetPos = [
+          transform.position[0],
+          transform.position[1],
+          transform.position[2],
+        ] as [number, number, number];
+
+        if (timelineActive) {
           const obj = objects.find((o) => o.id === id);
-          if (track && !track.locked && obj) {
-            timelineHistoryRef.current.pushBefore(animation);
-            setTimelineHistoryTick((n) => n + 1);
-            const lookAt =
-              obj.kind === "camera"
-                ? ([...(obj.lookAt ?? [0, 1, 0])] as [number, number, number])
-                : undefined;
-            const kf = createAnimKeyframe(auto.playhead, {
-              position: [...transform.position] as [number, number, number],
-              rotation: [...transform.rotation] as [number, number, number],
-              scale: [...transform.scale] as [number, number, number],
-              lookAt,
-              fov: obj.kind === "camera" ? obj.fov ?? 45 : undefined,
-            });
+          if (obj) {
+            let anim = animation ?? openOrCreateAnimation({ ...prev, objects });
+            let track = anim.tracks.find((t) => t.targetId === id);
+            if (!track) {
+              const kind =
+                obj.kind === "camera"
+                  ? "camera"
+                  : obj.kind === "character"
+                    ? "character"
+                    : "prop";
+              track = createAnimTrack(kind, id, obj.name || id);
+              anim = { ...anim, tracks: [...anim.tracks, track] };
+            }
+            if (!track.locked) {
+              timelineHistoryRef.current.pushBefore(anim);
+              setTimelineHistoryTick((n) => n + 1);
+              if (mode === "translate") {
+                // 移动：有路径则改播放头对应路径点；无路径写位置关键帧
+                const pathId = track.motionPathId;
+                const path = pathId
+                  ? anim.motionPaths.find((p) => p.id === pathId)
+                  : null;
+                if (path && path.points.length >= 1) {
+                  const duration = Math.max(0.1, anim.duration);
+                  const along = motionPathAlongAtTime(
+                    track,
+                    auto.playhead,
+                    duration
+                  );
+                  const nudged = nudgeMotionPathTowardPosition(
+                    path,
+                    along,
+                    targetPos
+                  );
+                  // 清掉播放头附近旧的 position 关键帧，避免盖住已改的路径又弹回旧点
+                  const playhead = auto.playhead;
+                  animation = {
+                    ...anim,
+                    motionPaths: anim.motionPaths.map((p) =>
+                      p.id === path.id ? nudged : p
+                    ),
+                    tracks: anim.tracks.map((t) => {
+                      if (t.id !== track!.id) return t;
+                      return {
+                        ...t,
+                        keyframes: t.keyframes
+                          .map((k) => {
+                            if (
+                              k.position == null ||
+                              Math.abs(k.time - playhead) > 0.05
+                            ) {
+                              return k;
+                            }
+                            const { position: _p, ...rest } = k;
+                            return rest as typeof k;
+                          })
+                          .filter(
+                            (k) =>
+                              k.position != null ||
+                              k.rotation != null ||
+                              k.scale != null ||
+                              k.lookAt != null ||
+                              k.fov != null ||
+                              k.motion != null
+                          ),
+                      };
+                    }),
+                  };
+                } else {
+                  const kf = createAnimKeyframe(auto.playhead, {
+                    position: targetPos,
+                  });
+                  animation = {
+                    ...anim,
+                    tracks: anim.tracks.map((t) =>
+                      t.id === track!.id
+                        ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) }
+                        : t
+                    ),
+                  };
+                }
+              } else if (mode === "rotate") {
+                const rot = [...transform.rotation] as [number, number, number];
+                const lookAt =
+                  obj.kind === "camera"
+                    ? ([...(obj.lookAt ?? [0, 1, 0])] as [number, number, number])
+                    : undefined;
+                animation = {
+                  ...anim,
+                  tracks: anim.tracks.map((t) => {
+                    if (t.id !== track!.id) return t;
+                    const keyframes =
+                      t.keyframes.length === 0
+                        ? [
+                            createAnimKeyframe(auto.playhead, {
+                              rotation: rot,
+                              lookAt,
+                            }),
+                          ]
+                        : t.keyframes.map((k) => ({
+                            ...k,
+                            rotation: [...rot] as [number, number, number],
+                            ...(lookAt
+                              ? { lookAt: [...lookAt] as [number, number, number] }
+                              : {}),
+                          }));
+                    return { ...t, orientToPath: false, keyframes };
+                  }),
+                };
+              } else if (mode === "scale") {
+                const scl = [...transform.scale] as [number, number, number];
+                animation = {
+                  ...anim,
+                  tracks: anim.tracks.map((t) => {
+                    if (t.id !== track!.id) return t;
+                    const keyframes =
+                      t.keyframes.length === 0
+                        ? [createAnimKeyframe(auto.playhead, { scale: scl })]
+                        : t.keyframes.map((k) => ({
+                            ...k,
+                            scale: [...scl] as [number, number, number],
+                          }));
+                    return { ...t, keyframes };
+                  }),
+                };
+              }
+            } else {
+              animation = anim;
+            }
+          }
+        } else if (animation && mode === "translate") {
+          // 场景摆放模式：挪模型时把路径首帧（u=start）一起推过去，保持摆放=首帧
+          const track = animation.tracks.find((t) => t.targetId === id);
+          const pathId = track?.motionPathId;
+          const path = pathId
+            ? animation.motionPaths.find((p) => p.id === pathId)
+            : null;
+          if (track && !track.locked && path && path.points.length >= 1) {
+            const along = track.motionPathStart ?? 0;
+            const nudged = nudgeMotionPathTowardPosition(path, along, targetPos);
             animation = {
               ...animation,
-              tracks: animation.tracks.map((t) =>
-                t.id === track.id
-                  ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) }
-                  : t
+              motionPaths: animation.motionPaths.map((p) =>
+                p.id === path.id ? nudged : p
               ),
             };
           }
         }
-        return {
+
+        const next: DirectorSceneState = {
           ...prev,
           objects,
           ...(animation ? { animation, version: "1.3" as const } : {}),
         };
+        // 摆放位姿与时间轴 t=0 对齐
+        return next.animation
+          ? (syncScenePlacementToTimelineStart(next) as DirectorSceneState)
+          : next;
       });
       liveCameraRef.current = null;
       liveCameraTransformRef.current = null;
@@ -646,10 +795,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       liveCameraTransformRef.current = null;
       const pos = [...selectedObject.transform.position] as [number, number, number];
       pos[axis] = value;
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        position: pos,
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          position: pos,
+        },
+        "translate"
+      );
     },
     [handleObjectTransform, selectedObject]
   );
@@ -661,10 +814,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       liveCameraTransformRef.current = null;
       const lookAt = [...(selectedObject.lookAt ?? [0, 1, 0])] as [number, number, number];
       lookAt[axis] = value;
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        rotation: rotationFromPositionLookAt(selectedObject.transform.position, lookAt),
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          rotation: rotationFromPositionLookAt(selectedObject.transform.position, lookAt),
+        },
+        "rotate"
+      );
       updateSelectedObjectField({ lookAt, lookAtMode: "manual", lookAtObjectId: null });
     },
     [handleObjectTransform, selectedObject, updateSelectedObjectField]
@@ -1189,10 +1346,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       if (!selectedObject) return;
       const rot = [...selectedObject.transform.rotation] as [number, number, number];
       rot[axis] = value;
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        rotation: rot,
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          rotation: rot,
+        },
+        "rotate"
+      );
     },
     [handleObjectTransform, selectedObject]
   );
@@ -1202,10 +1363,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       if (!selectedObject) return;
       const scale = [...selectedObject.transform.scale] as [number, number, number];
       scale[axis] = Math.max(0.01, value);
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        scale,
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          scale,
+        },
+        "scale"
+      );
     },
     [handleObjectTransform, selectedObject]
   );
@@ -1214,10 +1379,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     (value: number) => {
       if (!selectedObject) return;
       const v = Math.max(0.01, value);
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        scale: [v, v, v],
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          scale: [v, v, v],
+        },
+        "scale"
+      );
     },
     [handleObjectTransform, selectedObject]
   );
@@ -1288,10 +1457,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       const target = scene?.objects.find((o) => o.id === lookAtObjectId);
       if (!target) return;
       const lookAt = [...target.transform.position] as [number, number, number];
-      handleObjectTransform(selectedObject.id, {
-        ...selectedObject.transform,
-        rotation: rotationFromPositionLookAt(selectedObject.transform.position, lookAt),
-      });
+      handleObjectTransform(
+        selectedObject.id,
+        {
+          ...selectedObject.transform,
+          rotation: rotationFromPositionLookAt(selectedObject.transform.position, lookAt),
+        },
+        "rotate"
+      );
       updateSelectedObjectField({
         lookAtObjectId,
         lookAtMode: "target",
@@ -1459,7 +1632,12 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           timelineHistoryRef.current.pushBefore(base);
           setTimelineHistoryTick((n) => n + 1);
         }
-        return { ...prev, version: "1.3", animation: updater(base) };
+        const next: DirectorSceneState = {
+          ...prev,
+          version: "1.3",
+          animation: updater(base),
+        };
+        return syncScenePlacementToTimelineStart(next) as DirectorSceneState;
       });
     },
     [patchScene]
@@ -1470,7 +1648,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     if (!current) return;
     const prev = timelineHistoryRef.current.undo(current);
     if (!prev) return;
-    patchScene((s) => ({ ...s, version: "1.3", animation: prev }));
+    patchScene((s) =>
+      syncScenePlacementToTimelineStart({
+        ...s,
+        version: "1.3",
+        animation: prev,
+      }) as DirectorSceneState
+    );
     setTimelineHistoryTick((n) => n + 1);
     setTimelinePlaying(false);
   }, [patchScene, scene?.animation]);
@@ -1480,7 +1664,13 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     if (!current) return;
     const next = timelineHistoryRef.current.redo(current);
     if (!next) return;
-    patchScene((s) => ({ ...s, version: "1.3", animation: next }));
+    patchScene((s) =>
+      syncScenePlacementToTimelineStart({
+        ...s,
+        version: "1.3",
+        animation: next,
+      }) as DirectorSceneState
+    );
     setTimelineHistoryTick((n) => n + 1);
     setTimelinePlaying(false);
   }, [patchScene, scene?.animation]);
@@ -1491,16 +1681,26 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       setTimelineOpen((open) => {
         if (open === next) return open;
         if (next) {
-          patchScene((prev) => ({
-            ...prev,
-            version: "1.3",
-            animation: openOrCreateAnimation(prev),
-          }));
+          patchScene((prev) => {
+            const withAnim: DirectorSceneState = {
+              ...prev,
+              version: "1.3",
+              animation: openOrCreateAnimation(prev),
+            };
+            // 进入时间轴：摆放与首帧对齐
+            return syncScenePlacementToTimelineStart(withAnim) as DirectorSceneState;
+          });
           setTimelinePlayhead(0);
         } else {
           setTimelinePlaying(false);
           setDrawingTrackId(null);
           setDraftPathPoints([]);
+          // 回场景摆放：物体位姿取时间轴首帧
+          patchScene((prev) =>
+            prev.animation
+              ? (syncScenePlacementToTimelineStart(prev) as DirectorSceneState)
+              : prev
+          );
         }
         return next;
       });
@@ -2727,6 +2927,9 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             onCameraLiveTransform={handleCameraLiveTransform}
             onEditorCameraChange={handleEditorCameraChange}
             onShotCameraSelect={selectShotCamera}
+            suspendTransformObjectId={
+              viewportInteracting ? selectedObjectId : null
+            }
             onDragChange={(dragging, source) => {
               // 甩镜不打断播放采样；拖物体才暂停，避免 gizmo 与采样互抢
               if (source === "orbit") return;

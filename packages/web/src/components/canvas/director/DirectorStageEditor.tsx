@@ -47,7 +47,11 @@ export interface DirectorStageCanvasProps {
   /** 人体模型：坐标轴变换 vs 视口关节拖拽（互斥） */
   mannequinEditMode?: "transform" | "pose";
   onSelectObject: (id: string | null) => void;
-  onObjectTransform: (id: string, transform: DirectorObject["transform"]) => void;
+  onObjectTransform: (
+    id: string,
+    transform: DirectorObject["transform"],
+    mode: DirectorTransformMode
+  ) => void;
   onCameraLiveTransform: (id: string, transform: DirectorObject["transform"]) => void;
   onEditorCameraChange: (camera: DirectorCameraState) => void;
   onShotCameraSelect: (id: string) => void;
@@ -74,6 +78,8 @@ export interface DirectorStageCanvasProps {
   } | null;
   /** source=orbit：仅甩镜；source=object：拖物体/gizmo（上层可据此决定是否暂停播放） */
   onDragChange?: (dragging: boolean, source?: "orbit" | "object") => void;
+  /** 拖 gizmo 中的物体 id：暂停该物体 React→Object3D 位姿同步 */
+  suspendTransformObjectId?: string | null;
 }
 
 function DirectorViewLayers() {
@@ -271,6 +277,7 @@ function MainDirectorView({
   motionPathDrawing = null,
   motionPathEditing = null,
   onDragChange,
+  suspendTransformObjectId = null,
 }: Omit<DirectorStageCanvasProps, "stageBodyRef" | "mainViewRef" | "liveCameraRef" | "lensPreview">) {
   const interactionLocksRef = useRef(0);
 
@@ -331,6 +338,7 @@ function MainDirectorView({
         transformMode={transformMode}
         cameraPropViewMode={cameraPropViewMode}
         interactive
+        suspendTransformObjectId={suspendTransformObjectId}
         onSelectObject={onSelectObject}
         onObjectTransform={onObjectTransform}
         onCameraLiveTransform={onCameraLiveTransform}

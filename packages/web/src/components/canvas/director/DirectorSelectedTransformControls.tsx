@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import type { Group } from "three";
 import type { TransformControls as TransformControlsImpl } from "three-stdlib";
 import { TransformControls } from "@react-three/drei";
@@ -20,7 +21,11 @@ export function DirectorSelectedTransformControls({
   object: DirectorObject;
   transformMode: DirectorTransformMode;
   gridSnap?: boolean;
-  onTransform: (id: string, transform: DirectorObject["transform"]) => void;
+  onTransform: (
+    id: string,
+    transform: DirectorObject["transform"],
+    mode: DirectorTransformMode
+  ) => void;
   onLiveTransform?: (id: string, transform: DirectorObject["transform"]) => void;
   onDragChange?: (dragging: boolean) => void;
 }) {
@@ -45,7 +50,7 @@ export function DirectorSelectedTransformControls({
       target.rotation.set(...next.rotation);
       target.scale.set(...next.scale);
     }
-    onTransform(object.id, next);
+    onTransform(object.id, next, transformMode);
   };
 
   const emitLiveTransform = () => {
@@ -62,8 +67,16 @@ export function DirectorSelectedTransformControls({
 
     const handleDraggingChanged = (event: { value: boolean }) => {
       draggingRef.current = event.value;
-      onDragChange?.(event.value);
-      if (!event.value) emitTransform();
+      if (event.value) {
+        onDragChange?.(true);
+        return;
+      }
+      // 必须先落盘 transform，再解除 interacting。
+      // 若先解除，采样会用旧路径把 Object3D 写回「移动前」的点。
+      flushSync(() => {
+        emitTransform();
+      });
+      onDragChange?.(false);
     };
 
     controls.addEventListener("dragging-changed", handleDraggingChanged);
@@ -80,7 +93,7 @@ export function DirectorSelectedTransformControls({
       space={isCamera && transformMode === "translate" ? "world" : "local"}
       size={isCamera ? 0.85 : 1}
       onObjectChange={isCamera ? emitLiveTransform : undefined}
-      onMouseUp={emitTransform}
+      // 落盘只走 dragging-changed(false)，避免 mouseUp 早于 interacting 结束造成弹回
     />
   );
 }

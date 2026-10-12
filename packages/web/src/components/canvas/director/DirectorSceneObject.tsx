@@ -120,6 +120,8 @@ export function DirectorSceneObject({
   modelUrl = null,
   colorMapUrl = null,
   aspectRatio = "16:9",
+  /** gizmo 拖拽中：勿把 React 位姿写回 Object3D，否则会盖住拖拽并牵动其它采样 */
+  suspendTransformSync = false,
   onSelect,
   onBonePoseChange,
 }: {
@@ -136,6 +138,7 @@ export function DirectorSceneObject({
   /** 模型颜色贴图 URL（对应 colorMapAssetId） */
   colorMapUrl?: string | null;
   aspectRatio?: string;
+  suspendTransformSync?: boolean;
   onSelect: (id: string) => void;
   onBonePoseChange?: (id: string, bone: string, rotation: [number, number, number]) => void;
 }) {
@@ -169,19 +172,25 @@ export function DirectorSceneObject({
   }, [object.id, registerTransformGroup]);
 
   useLayoutEffect(() => {
+    if (suspendTransformSync) return;
     const group = groupRef.current;
     if (!group) return;
     syncGroupTransform(group);
-  }, [transform]);
+  }, [transform, suspendTransformSync]);
 
   const bonePose = object.bonePose ?? createDefaultBonePose(object.gender ?? "male");
+  const declarativeTransform = suspendTransformSync
+    ? {}
+    : {
+        position: transform.position,
+        rotation: transform.rotation,
+        scale: transform.scale,
+      };
 
   return (
     <group
       ref={groupRef}
-      position={transform.position}
-      rotation={transform.rotation}
-      scale={transform.scale}
+      {...declarativeTransform}
       userData={{ directorObjectId: object.id }}
       onClick={(e) => {
         e.stopPropagation();

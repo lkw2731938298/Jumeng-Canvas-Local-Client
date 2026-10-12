@@ -70,6 +70,83 @@ export function invalidateMotionPathCache(pathId?: string) {
 }
 
 /**
+ * 播放头进度 u∈[0,1]（已含 motionPathStart/End）上，离曲线采样点最近的控制点下标。
+ * 用于「移动模型 = 改该时刻对应的路径点」。
+ */
+export function nearestMotionPathPointIndex(
+  path: DirectorMotionPath,
+  along01: number
+): number {
+  const pts = path.points;
+  if (pts.length <= 1) return 0;
+  const u = Math.min(1, Math.max(0, along01));
+  const curve = getMotionPathCurve(path);
+  let tx: number;
+  let ty: number;
+  let tz: number;
+  if (curve) {
+    const p = curve.getPointAt(u);
+    tx = p.x;
+    ty = p.y;
+    tz = p.z;
+  } else {
+    const i = Math.round(u * (pts.length - 1));
+    return Math.min(pts.length - 1, Math.max(0, i));
+  }
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]!;
+    const d =
+      (p[0] - tx) * (p[0] - tx) +
+      (p[1] - ty) * (p[1] - ty) +
+      (p[2] - tz) * (p[2] - tz);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * 把路径在 along01 处的采样点挪到 target（世界坐标）。
+ * 不能直接把最近控制点设成 target（Catmull 上播放头未必落在该点），
+ * 而是反复把「目标 − 当前采样」加到最近点上，使松手后模型停在拖到的位置。
+ */
+export function nudgeMotionPathTowardPosition(
+  path: DirectorMotionPath,
+  along01: number,
+  target: [number, number, number],
+  iterations = 4
+): DirectorMotionPath {
+  if (path.points.length === 0) return path;
+  let points = path.points.map(
+    (p) => [...p] as [number, number, number]
+  );
+  const u = Math.min(1, Math.max(0, along01));
+  for (let iter = 0; iter < iterations; iter++) {
+    const working: DirectorMotionPath = { ...path, points };
+    invalidateMotionPathCache(path.id);
+    const sample = sampleMotionPath(working, u);
+    if (!sample) break;
+    const dx = target[0] - sample.position[0];
+    const dy = target[1] - sample.position[1];
+    const dz = target[2] - sample.position[2];
+    if (dx * dx + dy * dy + dz * dz < 1e-10) break;
+    const idx = nearestMotionPathPointIndex(working, u);
+    const pt = points[idx]!;
+    points = points.map((p, i) =>
+      i === idx
+        ? ([pt[0] + dx, pt[1] + dy, pt[2] + dz] as [number, number, number])
+        : p
+    );
+  }
+  invalidateMotionPathCache(path.id);
+  return { ...path, points };
+}
+
+/**
  * 供 drei Line 使用：剔除非有限坐标与连续重合点。
  * 零长度折线会导致 LineSegmentsGeometry.computeBoundingSphere 半径为 NaN。
  */

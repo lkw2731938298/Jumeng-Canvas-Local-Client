@@ -4,7 +4,7 @@
  * - 已安装：用资源目录内便携 Node 跑 Next standalone
  * 配置/项目默认落在 userData（打包态通过环境变量交给 Next）。
  */
-const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -533,10 +533,13 @@ function resolveAppIconPath() {
 
 function showBootWindow() {
   const icon = resolveAppIconPath();
+  // 去掉 File/Edit/View… 系统菜单栏
+  Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     ...(icon ? { icon } : {}),
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -546,6 +549,11 @@ function showBootWindow() {
     show: true,
     title: "聚梦无限画布",
   });
+  try {
+    mainWindow.setMenuBarVisibility(false);
+  } catch {
+    /* ignore */
+  }
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };

@@ -40,8 +40,9 @@ def load_brand() -> Image.Image:
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
-            if a < 8 or (r < 28 and g < 28 and b < 28):
-                px[x, y] = (r, g, b, 0)
+            # 近黑底一律透明（含原先带不透明黑底的 AI logo）
+            if a < 8 or (r < 48 and g < 48 and b < 48):
+                px[x, y] = (0, 0, 0, 0)
     return im
 
 
@@ -62,17 +63,9 @@ def upscale_brand(brand: Image.Image, target: int) -> Image.Image:
 
 
 def make_square_icon(brand: Image.Image, size: int) -> Image.Image:
-    canvas = Image.new("RGBA", (size, size), BG)
-    # 轻微径向暖色晕光
-    glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    cx = cy = size // 2
-    for i, alpha in enumerate((40, 24, 12)):
-        r = int(size * (0.42 - i * 0.08))
-        gd.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(*ACCENT_MID, alpha))
-    canvas = Image.alpha_composite(canvas, glow.filter(ImageFilter.GaussianBlur(radius=size // 10)))
-
-    logo = upscale_brand(brand, int(size * 0.72))
+    # 透明底：安装包 / 快捷方式 / 标题栏不再带黑方块
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    logo = upscale_brand(brand, int(size * 0.88))
     x = (size - logo.width) // 2
     y = (size - logo.height) // 2
     canvas.paste(logo, (x, y), logo)

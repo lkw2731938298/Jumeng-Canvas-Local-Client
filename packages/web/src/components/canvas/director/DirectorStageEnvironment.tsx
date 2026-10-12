@@ -21,6 +21,8 @@ export function DirectorStageEnvironment({
   cameraPropViewMode = null,
   interactive = false,
   mannequinEditMode = "transform",
+  /** 正在拖 gizmo 的物体：暂停其位姿 React 回写 */
+  suspendTransformObjectId = null,
   onSelectObject,
   onObjectTransform,
   onCameraLiveTransform,
@@ -39,8 +41,13 @@ export function DirectorStageEnvironment({
   interactive?: boolean;
   /** 人体模型编辑：坐标轴 / 关节（视口骨骼手柄） */
   mannequinEditMode?: "transform" | "pose";
+  suspendTransformObjectId?: string | null;
   onSelectObject?: (id: string | null) => void;
-  onObjectTransform?: (id: string, transform: DirectorObject["transform"]) => void;
+  onObjectTransform?: (
+    id: string,
+    transform: DirectorObject["transform"],
+    mode: DirectorTransformMode
+  ) => void;
   onCameraLiveTransform?: (id: string, transform: DirectorObject["transform"]) => void;
   onDragChange?: (dragging: boolean) => void;
   resolveCharacterModelUrl?: (object: DirectorObject) => string | null;
@@ -157,6 +164,7 @@ export function DirectorStageEnvironment({
               modelUrl={obj.kind === "character" ? resolveCharacterModelUrl?.(obj) ?? null : null}
               colorMapUrl={obj.kind !== "camera" ? resolveColorMapUrl?.(obj) ?? null : null}
               aspectRatio={aspectRatio}
+              suspendTransformSync={suspendTransformObjectId === obj.id}
               onSelect={onSelectObject ?? (() => {})}
               onBonePoseChange={onBonePoseChange}
             />

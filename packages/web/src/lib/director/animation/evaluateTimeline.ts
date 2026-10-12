@@ -90,6 +90,18 @@ function trackProgress(track: DirectorAnimTrack, time: number, duration: number)
   return applySpeedCurve(raw, track.speedCurve);
 }
 
+/** 与 evaluateTrack 相同的路径参数 along∈[start,end]，供视口挪点与求值对齐 */
+export function motionPathAlongAtTime(
+  track: DirectorAnimTrack,
+  time: number,
+  duration: number
+): number {
+  const u = trackProgress(track, time, Math.max(0.1, duration));
+  const start = track.motionPathStart ?? 0;
+  const end = track.motionPathEnd ?? 1;
+  return lerp(start, end, u);
+}
+
 function evaluateTrack(
   track: DirectorAnimTrack,
   time: number,
@@ -108,6 +120,12 @@ function evaluateTrack(
   /** 本段轨迹已走路程（米），用于步态相位 */
   let pathDistance = 0;
   const pathId = track.motionPathId;
+  /** 播放头附近的位置关键帧：盖住路径（P1），其它时刻仍走路径 */
+  const POSITION_OVERRIDE_EPS = 0.05;
+  const positionOverride = kfs.find(
+    (k) =>
+      k.position != null && Math.abs(k.time - time) <= POSITION_OVERRIDE_EPS
+  );
   if (pathId) {
     const path = paths.get(pathId);
     if (path && path.points.length >= 2) {
@@ -121,19 +139,28 @@ function evaluateTrack(
         const curve = getMotionPathCurve(path);
         const pathLen = curve?.getLength() ?? 0;
         pathDistance = pathLen * Math.abs(end - start) * u;
-        const pathControlsXZ = track.pathControlsXZ !== false;
-        if (pathControlsXZ) {
-          // 路径管 XZ，Y 优先用关键帧（若有 position 关键帧则保留插值 Y）
-          const hasYKey = kfs.some((k) => k.position != null);
+        if (positionOverride?.position) {
           position = [
-            sample.position[0],
-            hasYKey ? position[1] : sample.position[1],
-            sample.position[2],
+            positionOverride.position[0],
+            positionOverride.position[1],
+            positionOverride.position[2],
           ];
+          moving = false;
         } else {
-          position = sample.position;
+          const pathControlsXZ = track.pathControlsXZ !== false;
+          if (pathControlsXZ) {
+            // 路径管 XZ；无「盖住」关键帧时 Y 可用插值/路径
+            const hasYKey = kfs.some((k) => k.position != null);
+            position = [
+              sample.position[0],
+              hasYKey ? position[1] : sample.position[1],
+              sample.position[2],
+            ];
+          } else {
+            position = sample.position;
+          }
         }
-        if (track.orientToPath) {
+        if (track.orientToPath && !positionOverride) {
           if (track.kind === "camera") {
             lookAt = [
               position[0] + sample.tangent[0],
@@ -280,4 +307,19 @@ export function applySampleToScene(
       };
     }),
   };
+}
+
+/**
+ * 场景摆放 ← 时间轴首帧（t=0 采样）。
+ * 有 animation 的物体（及主机位）写回 objects/camera，使关闭时间轴时的摆放与首帧一致。
+ */
+export function syncScenePlacementToTimelineStart(
+  scene: DirectorSceneState
+): DirectorSceneState {
+  if (!scene.animation) return scene;
+  const sample = evaluateTimeline(scene, 0, scene.animation);
+  if (!Object.keys(sample.objects).length && !sample.directorCamera) {
+    return scene;
+  }
+  return applySampleToScene(scene, sample);
 }
