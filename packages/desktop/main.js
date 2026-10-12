@@ -75,12 +75,34 @@ function registerIpc() {
   ipcMain.handle("desktop:getAppVersion", async () => app.getVersion());
 
   ipcMain.handle("desktop:checkDesktopUpdate", async () => checkDesktopUpdate());
-  ipcMain.handle("desktop:applyDesktopUpdate", async () => {
-    const result = await applyDesktopUpdate();
+  ipcMain.handle("desktop:applyDesktopUpdate", async (event) => {
+    // 向发起更新的渲染进程推送下载/安装进度
+    const result = await applyDesktopUpdate({
+      onProgress: (progress) => {
+        try {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send("desktop:updateProgress", progress);
+          }
+        } catch {
+          /* 窗口已关则忽略 */
+        }
+      },
+    });
     if (result.updated && result.restarting) {
+      try {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("desktop:updateProgress", {
+            phase: "install",
+            percent: null,
+            message: "正在安装并重启，完成后将自动打开…",
+          });
+        }
+      } catch {
+        /* ignore */
+      }
       setTimeout(() => {
         app.quit();
-      }, 400);
+      }, 600);
     }
     return result;
   });

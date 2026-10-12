@@ -228,11 +228,24 @@ export type DesktopUpdateApplyResult = {
   remoteVersion?: string;
 };
 
+/** Electron 更新进度（主进程 → 渲染进程） */
+export type DesktopUpdateProgress = {
+  phase: "download" | "install";
+  /** 0～1；未知时为 null */
+  percent?: number | null;
+  received?: number | null;
+  total?: number | null;
+  message?: string;
+};
+
 export type JumengDesktopBridge = LocalDesktopApi & {
   isPackaged?: () => Promise<boolean>;
   getAppVersion?: () => Promise<string>;
   checkDesktopUpdate?: () => Promise<DesktopUpdateCheckResult>;
   applyDesktopUpdate?: () => Promise<DesktopUpdateApplyResult>;
+  onDesktopUpdateProgress?: (
+    callback: (progress: DesktopUpdateProgress) => void
+  ) => () => void;
 };
 
 declare global {

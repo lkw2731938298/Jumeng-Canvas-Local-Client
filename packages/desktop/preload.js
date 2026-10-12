@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("jumengDesktop", {
   getAppVersion: () => ipcRenderer.invoke("desktop:getAppVersion"),
   checkDesktopUpdate: () => ipcRenderer.invoke("desktop:checkDesktopUpdate"),
   applyDesktopUpdate: () => ipcRenderer.invoke("desktop:applyDesktopUpdate"),
+  /** 订阅更新进度；返回取消订阅函数。payload: { phase, percent, received, total, message } */
+  onDesktopUpdateProgress: (callback) => {
+    if (typeof callback !== "function") return () => {};
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on("desktop:updateProgress", handler);
+    return () => ipcRenderer.removeListener("desktop:updateProgress", handler);
+  },
   readConfig: () => ipcRenderer.invoke("desktop:readConfig"),
   writeConfig: (cfg) => ipcRenderer.invoke("desktop:writeConfig", cfg),
   listProviders: () => ipcRenderer.invoke("desktop:listProviders"),
