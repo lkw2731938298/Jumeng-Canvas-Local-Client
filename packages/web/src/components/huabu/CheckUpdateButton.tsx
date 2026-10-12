@@ -14,7 +14,10 @@ import {
 } from "@/components/ui/dialog";
 import { withBasePath } from "@/lib/basePath";
 import { getDesktopApi } from "@/lib/local/types";
-import type { DesktopUpdateCheckResult } from "@/lib/local/types";
+import type {
+  DesktopUpdateCheckResult,
+  DesktopUpdateProgress,
+} from "@/lib/local/types";
 
 interface UpdateCheckResult {
   localVersion: string;
@@ -44,6 +47,13 @@ const RESTART_TIMEOUT_MS = 10 * 60_000;
 function isDesktopUpdaterAvailable(): boolean {
   const api = getDesktopApi();
   return Boolean(api?.checkDesktopUpdate && api?.applyDesktopUpdate);
+}
+
+function formatBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n < 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function requestCheck(): Promise<UpdateCheckResult> {
@@ -91,7 +101,10 @@ export function CheckUpdateButton() {
   const [applying, setApplying] = useState(false);
   const [info, setInfo] = useState<UpdateCheckResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [progress, setProgress] = useState<DesktopUpdateProgress | null>(null);
   const silentChecked = useRef(false);
+  const unsubProgress = useRef<(() => void) | null>(null);
   const desktopMode = isDesktopUpdaterAvailable();
 
   useEffect(() => {
@@ -114,6 +127,13 @@ export function CheckUpdateButton() {
       });
     return () => {
       alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      unsubProgress.current?.();
+      unsubProgress.current = null;
     };
   }, []);
 
@@ -144,25 +164,52 @@ export function CheckUpdateButton() {
   const onApply = async () => {
     setConfirmOpen(false);
     setApplying(true);
-    const id = toast.loading(
-      desktopMode
-        ? "正在从官网下载安装包，完成后将自动覆盖安装并重启…"
-        : "正在从 Gitee 下载新版本，可能需要 1～3 分钟…"
-    );
-    try {
-      if (desktopMode) {
+
+    if (desktopMode) {
+      setProgress({
+        phase: "download",
+        percent: 0,
+        received: 0,
+        total: null,
+        message: "正在准备下载…",
+      });
+      setProgressOpen(true);
+      unsubProgress.current?.();
+      unsubProgress.current =
+        getDesktopApi()?.onDesktopUpdateProgress?.((p) => {
+          setProgress(p);
+        }) ?? null;
+
+      try {
         const r = await getDesktopApi()!.applyDesktopUpdate!();
         sessionStorage.removeItem(SESSION_KEY);
         if (!r.updated) {
-          toast.success(`已是最新版本 v${r.fromVersion || r.localVersion}`, { id });
+          unsubProgress.current?.();
+          unsubProgress.current = null;
+          setProgressOpen(false);
+          toast.success(`已是最新版本 v${r.fromVersion || r.localVersion}`);
           setApplying(false);
           return;
         }
-        toast.loading(`正在安装 v${r.toVersion || r.remoteVersion}，应用即将退出…`, { id });
-        // 主进程会 quit；无需再 setApplying
+        setProgress({
+          phase: "install",
+          percent: null,
+          message: `正在安装 v${r.toVersion || r.remoteVersion}，应用即将退出并自动打开…`,
+        });
+        // 主进程即将 quit；进度订阅保留到进程结束，勿在此处 unsubscribe
+        return;
+      } catch (err) {
+        unsubProgress.current?.();
+        unsubProgress.current = null;
+        setProgressOpen(false);
+        toast.error(err instanceof Error ? err.message : "更新失败");
+        setApplying(false);
         return;
       }
+    }
 
+    const id = toast.loading("正在从 Gitee 下载新版本，可能需要 1～3 分钟…");
+    try {
       const res = await fetch(UPDATE_API, {
         method: "POST",
         headers: { "x-jumeng-update": "1" },
@@ -206,6 +253,21 @@ export function CheckUpdateButton() {
 
   const busy = checking || applying;
   const hasUpdate = Boolean(info?.hasUpdate);
+  const downloadPct =
+    progress?.phase === "download" && progress.percent != null
+      ? Math.min(100, Math.max(0, Math.round(progress.percent * 100)))
+      : null;
+  const progressTitle =
+    progress?.phase === "install"
+      ? "正在安装"
+      : downloadPct != null
+        ? `正在下载 ${downloadPct}%`
+        : "正在下载";
+  const progressHint =
+    progress?.message ||
+    (progress?.phase === "install"
+      ? "安装完成后将自动打开新版本"
+      : "正在从官网下载安装包…");
 
   return (
     <>
@@ -241,6 +303,51 @@ export function CheckUpdateButton() {
             </Button>
             <Button onClick={() => void onApply()}>立即更新</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 桌面版：下载百分比 + 安装阶段提示（静默 NSIS 无细粒度安装百分比） */}
+      <Dialog
+        open={progressOpen}
+        onOpenChange={(open) => {
+          // 更新进行中不允许关掉进度窗，避免误以为已取消
+          if (!open && applying) return;
+          setProgressOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{progressTitle}</DialogTitle>
+            <DialogDescription>{progressHint}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+              {progress?.phase === "install" || downloadPct == null ? (
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-violet-400/80" />
+              ) : (
+                <div
+                  className="h-full rounded-full bg-violet-400 transition-[width] duration-200 ease-out"
+                  style={{ width: `${downloadPct}%` }}
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-white/45">
+              <span>
+                {progress?.phase === "install"
+                  ? "安装中（覆盖安装，请稍候）"
+                  : downloadPct != null
+                    ? `${downloadPct}%`
+                    : "获取大小中…"}
+              </span>
+              <span>
+                {progress?.phase === "download"
+                  ? `${formatBytes(progress.received)} / ${formatBytes(progress.total)}`
+                  : info?.remoteVersion
+                    ? `v${info.remoteVersion}`
+                    : ""}
+              </span>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

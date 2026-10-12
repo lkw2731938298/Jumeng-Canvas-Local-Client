@@ -82,6 +82,10 @@ function fetchJson(url, timeoutMs = 20_000) {
   });
 }
 
+/**
+ * 下载文件；onProgress({ phase, percent, received, total })
+ * percent 为 0～1；无 Content-Length 时 percent 为 null。
+ */
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const go = (u, redirects = 0) => {
@@ -102,13 +106,36 @@ function downloadFile(url, dest, onProgress) {
           }
           const total = Number(res.headers["content-length"] || 0);
           let received = 0;
+          let lastEmit = 0;
+          let lastPercentBucket = -1;
+          const emit = (force = false) => {
+            if (!onProgress) return;
+            const now = Date.now();
+            const pct = total > 0 ? received / total : null;
+            const bucket = pct == null ? -1 : Math.floor(pct * 100);
+            // 节流：约每 200ms 或每涨 1% 推一次，结束时强制推
+            if (!force && now - lastEmit < 200 && bucket === lastPercentBucket) return;
+            lastEmit = now;
+            lastPercentBucket = bucket;
+            onProgress({
+              phase: "download",
+              percent: pct,
+              received,
+              total: total > 0 ? total : null,
+            });
+          };
           const file = fs.createWriteStream(dest);
           res.on("data", (chunk) => {
             received += chunk.length;
-            if (onProgress && total > 0) onProgress(received / total);
+            emit(false);
           });
           res.pipe(file);
-          file.on("finish", () => file.close(() => resolve()));
+          file.on("finish", () =>
+            file.close(() => {
+              emit(true);
+              resolve({ received, total: total > 0 ? total : received });
+            }),
+          );
           file.on("error", reject);
         },
       );
@@ -152,6 +179,7 @@ async function checkDesktopUpdate() {
 
 /**
  * 下载安装包后退出应用并静默安装（NSIS /S）。
+ * onProgress({ phase: 'download'|'install', percent, received, total, message })
  * 调用方应在返回后尽快结束主进程。
  */
 async function applyDesktopUpdate({ onProgress } = {}) {
@@ -165,23 +193,67 @@ async function applyDesktopUpdate({ onProgress } = {}) {
   const tmpDir = path.join(app.getPath("temp"), "jumeng-canvas-update");
   fs.mkdirSync(tmpDir, { recursive: true });
   const dest = path.join(tmpDir, info.setupName || DEFAULT_SETUP_NAME);
+
+  onProgress?.({
+    phase: "download",
+    percent: 0,
+    received: 0,
+    total: null,
+    message: "正在连接官网…",
+  });
   await downloadFile(info.setupUrl, dest, onProgress);
 
-  // 延迟启动安装器，给 Electron 退出留时间；/S 静默覆盖
-  const bat = path.join(tmpDir, "run-update.bat");
-  const batBody = [
-    "@echo off",
-    "ping 127.0.0.1 -n 3 >nul",
-    `"${dest}" /S`,
-    `start "" "${process.execPath}"`,
-  ].join("\r\n");
-  fs.writeFileSync(bat, batBody, "utf8");
+  // 静默 NSIS 无细粒度百分比；进入安装阶段后由安装器接管，应用即将退出
+  onProgress?.({
+    phase: "install",
+    percent: null,
+    received: null,
+    total: null,
+    message: "下载完成，正在准备安装…",
+  });
 
-  spawn("cmd.exe", ["/c", bat], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  }).unref();
+  // 等主进程退出 → NSIS /S --force-run（静默覆盖并自动打开）
+  // PowerShell 写路径，避免 bat 下中文安装目录乱码
+  const ps1 = path.join(tmpDir, "run-update.ps1");
+  const esc = (s) => String(s || "").replace(/'/g, "''");
+  const exePath = process.execPath;
+  const shortcutName = "聚梦无限画布.lnk";
+  // 进程名与 productName 一致（无 .exe）
+  const processName = "聚梦无限画布";
+  const psBody = [
+    "$ErrorActionPreference = 'Continue'",
+    // 给 Electron app.quit 留时间，避免安装时文件占用
+    "Start-Sleep -Seconds 4",
+    `$setup = '${esc(dest)}'`,
+    `$app = '${esc(exePath)}'`,
+    "if (-not (Test-Path -LiteralPath $setup)) { exit 1 }",
+    // /S 静默；--force-run 让 assisted NSIS 在静默结束后拉起应用（见 electron-builder installSection）
+    "Start-Process -FilePath $setup -ArgumentList '/S','--force-run' -Wait",
+    "Start-Sleep -Seconds 2",
+    // 若安装器未成功拉起，再兜底启动（避免双开：先看进程）
+    `$running = Get-Process -Name '${esc(processName)}' -ErrorAction SilentlyContinue`,
+    "if ($running) { exit 0 }",
+    "if (Test-Path -LiteralPath $app) { Start-Process -FilePath $app; exit 0 }",
+    `$lnkUser = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
+    `$lnkMachine = Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
+    "foreach ($lnk in @($lnkUser, $lnkMachine)) {",
+    "  if (Test-Path -LiteralPath $lnk) { Start-Process -FilePath $lnk; exit 0 }",
+    "}",
+    "exit 0",
+    "",
+  ].join("\r\n");
+  // UTF-8 BOM，便于 Windows PowerShell 正确解析中文路径
+  fs.writeFileSync(ps1, `\uFEFF${psBody}`, "utf8");
+
+  spawn(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1],
+    {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    },
+  ).unref();
 
   return {
     updated: true,
