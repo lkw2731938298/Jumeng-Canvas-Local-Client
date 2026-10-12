@@ -28,8 +28,8 @@ import { importProjectPackIntoCurrent } from "@/lib/canvas/projectPack";
 import { ensureHttpsOssUrl } from "@/lib/signedUrl";
 import {
   PROMPT_LIBRARY_FILTER_ALL,
-  PromptLibraryCategoryFilter,
-  filterPromptLibraryItems,
+  MaterialLibraryCategoryFilter,
+  filterLibraryItemsByTag,
   type PromptLibraryFilterId,
 } from "@/components/canvas/PromptLibraryCategoryFilter";
 
@@ -56,7 +56,8 @@ export function MaterialLibraryPanel({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<MaterialLibraryCategory>("style");
-  const [promptFilter, setPromptFilter] = useState<PromptLibraryFilterId>(PROMPT_LIBRARY_FILTER_ALL);
+  // 各库共用二级分类筛选（风格/特效/角色/提示词/模板）
+  const [tagFilter, setTagFilter] = useState<PromptLibraryFilterId>(PROMPT_LIBRARY_FILTER_ALL);
   const [importingId, setImportingId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
@@ -67,13 +68,10 @@ export function MaterialLibraryPanel({
   });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
-  const promptCategories = useMemo(
-    () => data?.promptCategories ?? [],
-    [data?.promptCategories]
-  );
+  const tagCategories = useMemo(() => data?.categories ?? [], [data?.categories]);
   const visibleItems = useMemo(
-    () => (tab === "prompt" ? filterPromptLibraryItems(items, promptFilter) : items),
-    [tab, items, promptFilter]
+    () => filterLibraryItemsByTag(items, tagFilter, tab),
+    [tab, items, tagFilter]
   );
   const loading = isOpen && (isLoading || isFetching) && items.length === 0;
 
@@ -153,7 +151,7 @@ export function MaterialLibraryPanel({
       : tab === "prompt"
         ? "选择后落可编辑文本节点（可连图片/视频节点作参考）"
         : tab === "template"
-          ? "点击模板：将工程包合并导入当前画布，内容落在视口中心"
+          ? "连通官网首页模版库；点击后将工程包合并导入当前画布（视口中心）"
           : "选择后落图片节点（无上下弹窗，可连图片/视频节点作参考）";
 
   return (
@@ -183,7 +181,7 @@ export function MaterialLibraryPanel({
                 type="button"
                 onClick={() => {
                   setTab(t.key);
-                  setPromptFilter(PROMPT_LIBRARY_FILTER_ALL);
+                  setTagFilter(PROMPT_LIBRARY_FILTER_ALL);
                 }}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${
                   tab === t.key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
@@ -201,14 +199,13 @@ export function MaterialLibraryPanel({
           </p>
 
           <div className="flex-1 overflow-y-auto px-4 py-3">
-            {tab === "prompt" ? (
-              <PromptLibraryCategoryFilter
-                categories={promptCategories}
-                items={items}
-                value={promptFilter}
-                onChange={setPromptFilter}
-              />
-            ) : null}
+            <MaterialLibraryCategoryFilter
+              categories={tagCategories}
+              items={items}
+              library={tab}
+              value={tagFilter}
+              onChange={setTagFilter}
+            />
             {loading ? (
               <div className="py-8 text-center text-xs text-white/25">加载中...</div>
             ) : visibleItems.length === 0 ? (

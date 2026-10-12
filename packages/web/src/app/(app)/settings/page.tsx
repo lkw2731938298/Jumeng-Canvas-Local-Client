@@ -15,7 +15,6 @@ import { AppearanceSettingsPanel } from "@/components/settings/AppearanceSetting
 import { useAppTheme } from "@/components/providers/AppThemeProvider";
 import { DataLocationSettingsPanel } from "@/components/settings/DataLocationSettingsPanel";
 import { UserOssSettingsPanel } from "@/components/settings/UserOssSettingsPanel";
-import pkg from "../../../../package.json";
 import "./settingsPage.css";
 import {
   LocalSetupHome,
@@ -46,9 +45,6 @@ function uid() {
 
 type TabId = AdvancedTab;
 type SettingsGroup = "appearance" | "models" | "storage";
-
-/** 版本号取自 web 包 package.json */
-const APP_VERSION = pkg.version;
 
 const EMPTY_MODEL = (category: LocalModel["category"] = "text"): LocalModel => {
   const id = uid();
@@ -267,7 +263,6 @@ export default function LocalSettingsPage() {
         <section className="st-panel jm-panel" aria-label="设置">
           <header className="st-head">
             <h1>设置</h1>
-            <p>本地工作区 · 版本 {APP_VERSION}</p>
           </header>
 
           <div className="st-body">

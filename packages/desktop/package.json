@@ -1,6 +1,6 @@
 {
   "name": "@jumeng-canvas/desktop",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "main": "main.js",
   "appId": "com.lieka.jumengcanvas",

@@ -19,8 +19,8 @@ import {
 import { ensureHttpsOssUrl } from "@/lib/signedUrl";
 import {
   PROMPT_LIBRARY_FILTER_ALL,
-  PromptLibraryCategoryFilter,
-  filterPromptLibraryItems,
+  MaterialLibraryCategoryFilter,
+  filterLibraryItemsByTag,
   type PromptLibraryFilterId,
 } from "@/components/canvas/PromptLibraryCategoryFilter";
 
@@ -45,7 +45,7 @@ export function CreationMaterialLibraryDialog({
   onSelect: (item: MaterialLibraryItem) => void;
 }) {
   const [tab, setTab] = useState<MaterialLibraryCategory>("style");
-  const [promptFilter, setPromptFilter] = useState<PromptLibraryFilterId>(PROMPT_LIBRARY_FILTER_ALL);
+  const [tagFilter, setTagFilter] = useState<PromptLibraryFilterId>(PROMPT_LIBRARY_FILTER_ALL);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -70,13 +70,10 @@ export function CreationMaterialLibraryDialog({
   });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
-  const promptCategories = useMemo(
-    () => data?.promptCategories ?? [],
-    [data?.promptCategories]
-  );
+  const tagCategories = useMemo(() => data?.categories ?? [], [data?.categories]);
   const visibleItems = useMemo(
-    () => (tab === "prompt" ? filterPromptLibraryItems(items, promptFilter) : items),
-    [tab, items, promptFilter]
+    () => filterLibraryItemsByTag(items, tagFilter, tab),
+    [tab, items, tagFilter]
   );
   const loading = open && (isLoading || isFetching) && items.length === 0;
 
@@ -114,7 +111,7 @@ export function CreationMaterialLibraryDialog({
                 type="button"
                 onClick={() => {
                   setTab(t.key);
-                  setPromptFilter(PROMPT_LIBRARY_FILTER_ALL);
+                  setTagFilter(PROMPT_LIBRARY_FILTER_ALL);
                 }}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${
                   tab === t.key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
@@ -127,14 +124,13 @@ export function CreationMaterialLibraryDialog({
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-3">
-            {tab === "prompt" ? (
-              <PromptLibraryCategoryFilter
-                categories={promptCategories}
-                items={items}
-                value={promptFilter}
-                onChange={setPromptFilter}
-              />
-            ) : null}
+            <MaterialLibraryCategoryFilter
+              categories={tagCategories}
+              items={items}
+              library={tab}
+              value={tagFilter}
+              onChange={setTagFilter}
+            />
             {loading ? (
               <div className="py-8 text-center text-xs text-white/25">加载中...</div>
             ) : visibleItems.length === 0 ? (
