@@ -210,9 +210,9 @@ async function checkDesktopUpdate() {
 }
 
 /**
- * 下载安装包后退出应用并静默安装（NSIS /S）。
- * onProgress({ phase: 'download'|'install', percent, received, total, message })
- * 调用方应在返回后尽快结束主进程。
+ * 下载安装包 → 拉起「更新助手」→ 退出应用 → 助手等待进程结束再打开安装向导。
+ * 注意：界面上的「正在安装」是画布进度窗；应用退出后该窗会消失，这不是安装失败。
+ * 真正安装进度在随后的 NSIS 向导窗口里。
  */
 async function applyDesktopUpdate({ onProgress } = {}) {
   const info = await checkDesktopUpdate();
@@ -235,51 +235,81 @@ async function applyDesktopUpdate({ onProgress } = {}) {
   });
   await downloadFile(info.setupUrl, dest, onProgress);
 
-  // 可见安装向导（有进度条/完成页）。勿用 /S：静默失败时无任何提示，像闪退
   onProgress?.({
     phase: "install",
     percent: null,
     received: null,
     total: null,
-    message: "下载完成，即将打开安装向导…",
+    message:
+      "下载完成。应用将关闭；请留意随后弹出的黑色「更新助手」窗口和安装向导（有进度条）。",
   });
 
-  // 等主进程退出 → 拉起 NSIS 向导（runAfterFinish 会自动打开应用）
-  // PowerShell 写路径，避免 bat 下中文安装目录乱码
+  // 复制到「下载」目录再装，减少 Temp 目录被 SmartScreen 秒拦的概率
+  const downloadsDir = app.getPath("downloads") || path.join(app.getPath("home"), "Downloads");
+  try {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+  } catch {
+    /* ignore */
+  }
+  const setupInDownloads = path.join(downloadsDir, info.setupName || DEFAULT_SETUP_NAME);
+  try {
+    fs.copyFileSync(dest, setupInDownloads);
+  } catch {
+    // 复制失败则仍用 temp 路径
+  }
+  const setupPath = fs.existsSync(setupInDownloads) ? setupInDownloads : dest;
+
   const ps1 = path.join(tmpDir, "run-update.ps1");
   const logPath = path.join(tmpDir, "update-install.log");
   const esc = (s) => String(s || "").replace(/'/g, "''");
   const exePath = process.execPath;
   const shortcutName = "聚梦无限画布.lnk";
-  // 进程名与 productName 一致（无 .exe）
   const processName = "聚梦无限画布";
   const psBody = [
     "$ErrorActionPreference = 'Continue'",
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}",
     `$log = '${esc(logPath)}'`,
     "function Write-Log([string]$m) {",
     "  $line = \"$(Get-Date -Format o) $m\"",
     "  Add-Content -LiteralPath $log -Value $line -Encoding UTF8",
+    "  Write-Host $line",
     "}",
-    // 给 Electron app.quit 留时间，避免安装时文件占用
-    "Start-Sleep -Seconds 3",
-    `$setup = '${esc(dest)}'`,
+    "Write-Host ''",
+    "Write-Host '========================================'",
+    "Write-Host '  聚梦无限画布 · 更新助手'",
+    "Write-Host '  请勿关闭本窗口，正在等待应用退出…'",
+    "Write-Host '========================================'",
+    "Write-Host ''",
+    `$setup = '${esc(setupPath)}'`,
     `$app = '${esc(exePath)}'`,
+    `$procName = '${esc(processName)}'`,
     "Write-Log \"setup=$setup\"",
     "if (-not (Test-Path -LiteralPath $setup)) {",
     "  Write-Log 'setup missing'",
     "  Add-Type -AssemblyName PresentationFramework",
-    "  [System.Windows.MessageBox]::Show('安装包不存在，请重新检查更新。','聚梦无限画布') | Out-Null",
+    "  [System.Windows.MessageBox]::Show('安装包不存在，请重新检查更新或到官网下载。','聚梦无限画布') | Out-Null",
     "  exit 1",
     "}",
-    // 可见向导；若需管理员权限则弹 UAC（勿 /S，避免秒退无提示）
+    // 等待画布进程退出（最多 90 秒），再开安装器，避免文件占用导致秒退
+    "$deadline = (Get-Date).AddSeconds(90)",
+    "while ($true) {",
+    "  $alive = Get-Process -Name $procName -ErrorAction SilentlyContinue",
+    "  if (-not $alive) { Write-Log 'app exited'; break }",
+    "  if ((Get-Date) -gt $deadline) { Write-Log 'wait app exit timeout'; break }",
+    "  Start-Sleep -Seconds 1",
+    "}",
+    "Start-Sleep -Seconds 1",
     "try {",
+    "  Write-Host ''",
+    "  Write-Host '正在打开安装向导（可见进度条）…'",
     "  Write-Log 'starting installer (visible)'",
-    "  $p = Start-Process -FilePath $setup -PassThru -Wait",
+    "  $p = Start-Process -FilePath $setup -WorkingDirectory (Split-Path -Parent $setup) -PassThru -Wait",
     "  $code = if ($null -eq $p) { -1 } else { $p.ExitCode }",
     "  Write-Log \"installer exit=$code\"",
     "  if ($code -ne 0 -and $null -ne $code) {",
     "    Add-Type -AssemblyName PresentationFramework",
     "    [System.Windows.MessageBox]::Show(\"安装未完成（退出码 $code）。可到官网重新下载安装包。\",'聚梦无限画布') | Out-Null",
+    "    exit 1",
     "  }",
     "} catch {",
     "  Write-Log $_.Exception.Message",
@@ -288,8 +318,7 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     "  exit 1",
     "}",
     "Start-Sleep -Seconds 2",
-    // 若安装器未成功拉起，再兜底启动（避免双开：先看进程）
-    `$running = Get-Process -Name '${esc(processName)}' -ErrorAction SilentlyContinue`,
+    `$running = Get-Process -Name $procName -ErrorAction SilentlyContinue`,
     "if ($running) { Write-Log 'app already running'; exit 0 }",
     "if (Test-Path -LiteralPath $app) { Write-Log 'launch execPath'; Start-Process -FilePath $app; exit 0 }",
     `$lnkUser = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
@@ -298,22 +327,25 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     "  if (Test-Path -LiteralPath $lnk) { Write-Log \"launch $lnk\"; Start-Process -FilePath $lnk; exit 0 }",
     "}",
     "Write-Log 'done without relaunch'",
+    "Write-Host '安装流程结束。可关闭本窗口。'",
+    "Start-Sleep -Seconds 4",
     "exit 0",
     "",
   ].join("\r\n");
-  // UTF-8 BOM，便于 Windows PowerShell 正确解析中文路径
   fs.writeFileSync(ps1, `\uFEFF${psBody}`, "utf8");
 
-  spawn(
+  // 助手窗口必须可见，否则用户会以为「正在安装」闪退后什么都没了
+  const child = spawn(
     "powershell.exe",
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1],
     {
       detached: true,
       stdio: "ignore",
-      // 助手脚本可隐藏；安装器本身是独立可见窗口
-      windowsHide: true,
+      // 必须可见：否则画布退出后进度窗消失，用户会以为闪退失败
+      windowsHide: false,
     },
-  ).unref();
+  );
+  child.unref();
 
   return {
     updated: true,

@@ -194,7 +194,8 @@ export function CheckUpdateButton() {
         setProgress({
           phase: "install",
           percent: null,
-          message: `下载完成。应用即将退出，请在随后打开的安装向导中完成安装（有进度条）。`,
+          message:
+            "下载完成。本窗口会随应用关闭（正常现象）；请看随后弹出的黑色「更新助手」和安装向导进度条。",
         });
         // 主进程即将 quit；进度订阅保留到进程结束，勿在此处 unsubscribe
         return;
@@ -259,14 +260,14 @@ export function CheckUpdateButton() {
       : null;
   const progressTitle =
     progress?.phase === "install"
-      ? "正在安装"
+      ? "准备打开安装向导"
       : downloadPct != null
         ? `正在下载 ${downloadPct}%`
         : "正在下载";
   const progressHint =
     progress?.message ||
     (progress?.phase === "install"
-      ? "安装完成后将自动打开新版本"
+      ? "应用关闭后会弹出安装向导（有进度条），请勿当作闪退"
       : "正在从官网下载安装包…");
 
   return (

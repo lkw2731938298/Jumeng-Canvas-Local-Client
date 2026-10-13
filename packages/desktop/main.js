@@ -94,15 +94,17 @@ function registerIpc() {
           event.sender.send("desktop:updateProgress", {
             phase: "install",
             percent: null,
-            message: "即将打开安装向导，请按向导完成安装…",
+            message:
+              "应用即将关闭。请接着看黑色「更新助手」窗口，随后会打开带进度条的安装向导。",
           });
         }
       } catch {
         /* ignore */
       }
+      // 先让更新助手窗口出现，再退出；避免只看到进度窗闪一下
       setTimeout(() => {
         app.quit();
-      }, 600);
+      }, 2500);
     }
     return result;
   });
