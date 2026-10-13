@@ -12,7 +12,9 @@ const { app } = require("electron");
 
 /** 版本清单（小 JSON）+ 安装包直链，均挂在官网 */
 const UPDATE_MANIFEST_URL = "https://www.jumeng.vip/downloads/latest.json";
-const DEFAULT_SETUP_URL = "https://www.jumeng.vip/downloads/JumengCanvas-Setup.exe";
+/** 完整 NSIS 安装包（OSS）；官网「立即下载」与检查更新同一文件，覆盖安装不删 AppData */
+const DEFAULT_SETUP_URL =
+  "https://jumeng-canvas.oss-cn-hangzhou.aliyuncs.com/releases/canvas/JumengCanvas-Setup.exe";
 const DEFAULT_SETUP_NAME = "JumengCanvas-Setup.exe";
 const DOWNLOAD_PAGE = "https://www.jumeng.vip/canvas.html";
 
@@ -241,7 +243,7 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     received: null,
     total: null,
     message:
-      "下载完成。应用将关闭；请留意随后弹出的黑色「更新助手」窗口和安装向导（有进度条）。",
+      "下载完成，正在准备安装…应用即将关闭；请看随后的「更新助手」和安装向导进度条，装完会自动打开。",
   });
 
   // 复制到「下载」目录再装，减少 Temp 目录被 SmartScreen 秒拦的概率
@@ -277,7 +279,10 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     "Write-Host ''",
     "Write-Host '========================================'",
     "Write-Host '  聚梦无限画布 · 更新助手'",
-    "Write-Host '  请勿关闭本窗口，正在等待应用退出…'",
+    "Write-Host '  请勿关闭本窗口'",
+    "Write-Host '  1) 等待应用退出'",
+    "Write-Host '  2) 打开安装向导（有进度条）'",
+    "Write-Host '  3) 装完自动打开画布'",
     "Write-Host '========================================'",
     "Write-Host ''",
     `$setup = '${esc(setupPath)}'`,
@@ -290,20 +295,22 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     "  [System.Windows.MessageBox]::Show('安装包不存在，请重新检查更新或到官网下载。','聚梦无限画布') | Out-Null",
     "  exit 1",
     "}",
-    // 等待画布进程退出（最多 90 秒），再开安装器，避免文件占用导致秒退
-    "$deadline = (Get-Date).AddSeconds(90)",
+    // 等待画布进程退出（最多 120 秒），再开安装器，避免文件占用
+    "Write-Host '正在等待应用退出…'",
+    "$deadline = (Get-Date).AddSeconds(120)",
     "while ($true) {",
     "  $alive = Get-Process -Name $procName -ErrorAction SilentlyContinue",
-    "  if (-not $alive) { Write-Log 'app exited'; break }",
-    "  if ((Get-Date) -gt $deadline) { Write-Log 'wait app exit timeout'; break }",
+    "  if (-not $alive) { Write-Log 'app exited'; Write-Host '应用已退出'; break }",
+    "  if ((Get-Date) -gt $deadline) { Write-Log 'wait app exit timeout'; Write-Host '等待超时，继续安装'; break }",
     "  Start-Sleep -Seconds 1",
     "}",
-    "Start-Sleep -Seconds 1",
+    "Start-Sleep -Seconds 2",
     "try {",
     "  Write-Host ''",
-    "  Write-Host '正在打开安装向导（可见进度条）…'",
+    "  Write-Host '正在打开安装向导（请按提示完成，可见安装进度）…'",
     "  Write-Log 'starting installer (visible)'",
-    "  $p = Start-Process -FilePath $setup -WorkingDirectory (Split-Path -Parent $setup) -PassThru -Wait",
+    "  $wd = Split-Path -Parent $setup",
+    "  $p = Start-Process -FilePath $setup -WorkingDirectory $wd -PassThru -Wait",
     "  $code = if ($null -eq $p) { -1 } else { $p.ExitCode }",
     "  Write-Log \"installer exit=$code\"",
     "  if ($code -ne 0 -and $null -ne $code) {",
@@ -317,35 +324,29 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     "  [System.Windows.MessageBox]::Show(('安装启动失败：' + $_.Exception.Message),'聚梦无限画布') | Out-Null",
     "  exit 1",
     "}",
+    "Write-Host '安装结束，正在启动画布…'",
     "Start-Sleep -Seconds 2",
     `$running = Get-Process -Name $procName -ErrorAction SilentlyContinue`,
     "if ($running) { Write-Log 'app already running'; exit 0 }",
-    "if (Test-Path -LiteralPath $app) { Write-Log 'launch execPath'; Start-Process -FilePath $app; exit 0 }",
+    // NSIS runAfterFinish 可能已拉起；否则兜底启动
+    "if (Test-Path -LiteralPath $app) { Write-Log 'launch execPath'; Start-Process -FilePath $app; Start-Sleep -Seconds 2; exit 0 }",
     `$lnkUser = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
     `$lnkMachine = Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
     "foreach ($lnk in @($lnkUser, $lnkMachine)) {",
     "  if (Test-Path -LiteralPath $lnk) { Write-Log \"launch $lnk\"; Start-Process -FilePath $lnk; exit 0 }",
     "}",
     "Write-Log 'done without relaunch'",
-    "Write-Host '安装流程结束。可关闭本窗口。'",
-    "Start-Sleep -Seconds 4",
+    "Write-Host '若画布未自动打开，请从开始菜单启动「聚梦无限画布」。'",
+    "Start-Sleep -Seconds 5",
     "exit 0",
     "",
   ].join("\r\n");
   fs.writeFileSync(ps1, `\uFEFF${psBody}`, "utf8");
 
-  // 助手窗口必须可见，否则用户会以为「正在安装」闪退后什么都没了
-  const child = spawn(
-    "powershell.exe",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1],
-    {
-      detached: true,
-      stdio: "ignore",
-      // 必须可见：否则画布退出后进度窗消失，用户会以为闪退失败
-      windowsHide: false,
-    },
-  );
-  child.unref();
+  // 关键：必须用 cmd start 脱离 Electron/Chromium Job Object。
+  // 0.1.19 直接 spawn 隐藏 PowerShell 时，app.quit 会在 Sleep 期间杀掉更新进程，
+  // 表现为「下载完退出后完全没反应」（安装包已在 temp，但从未被执行）。
+  launchUpdateOutsideElectronJob(ps1);
 
   return {
     updated: true,
@@ -353,6 +354,47 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     toVersion: info.remoteVersion,
     restarting: true,
   };
+}
+
+/**
+ * 在 Electron 进程树之外拉起更新（Job Object breakaway）。
+ * 0.1.19 直接 spawn 子进程会在 app.quit 时被杀掉；cmd start 生成的新进程不在 Job 内。
+ */
+function launchUpdateOutsideElectronJob(ps1Path) {
+  const comspec = process.env.ComSpec || "cmd.exe";
+  try {
+    spawn(
+      comspec,
+      [
+        "/c",
+        "start",
+        "",
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-WindowStyle",
+        "Normal",
+        "-File",
+        ps1Path,
+      ],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      },
+    ).unref();
+  } catch {
+    try {
+      spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1Path], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: false,
+      }).unref();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 module.exports = {

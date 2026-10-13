@@ -95,16 +95,16 @@ function registerIpc() {
             phase: "install",
             percent: null,
             message:
-              "应用即将关闭。请接着看黑色「更新助手」窗口，随后会打开带进度条的安装向导。",
+              "下载已完成。即将关闭并打开安装向导（有进度条），装完会自动打开画布。",
           });
         }
       } catch {
         /* ignore */
       }
-      // 先让更新助手窗口出现，再退出；避免只看到进度窗闪一下
+      // 先让 cmd start 拉起的更新助手脱离 Job，再退出
       setTimeout(() => {
         app.quit();
-      }, 2500);
+      }, 3000);
     }
     return result;
   });

@@ -195,7 +195,7 @@ export function CheckUpdateButton() {
           phase: "install",
           percent: null,
           message:
-            "下载完成。本窗口会随应用关闭（正常现象）；请看随后弹出的黑色「更新助手」和安装向导进度条。",
+            "下载完成，正在安装…本窗会关闭；请看「更新助手」与安装向导进度条，完成后会自动打开软件。",
         });
         // 主进程即将 quit；进度订阅保留到进程结束，勿在此处 unsubscribe
         return;
@@ -260,14 +260,14 @@ export function CheckUpdateButton() {
       : null;
   const progressTitle =
     progress?.phase === "install"
-      ? "准备打开安装向导"
+      ? "正在安装"
       : downloadPct != null
         ? `正在下载 ${downloadPct}%`
         : "正在下载";
   const progressHint =
     progress?.message ||
     (progress?.phase === "install"
-      ? "应用关闭后会弹出安装向导（有进度条），请勿当作闪退"
+      ? "请完成安装向导；装完后会自动打开聚梦无限画布"
       : "正在从官网下载安装包…");
 
   return (
