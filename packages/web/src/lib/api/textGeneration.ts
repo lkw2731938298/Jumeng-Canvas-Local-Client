@@ -75,7 +75,17 @@ async function generateFromTextNodeLocal(
     throw new AgentTurnAbortedError();
   }
   const refs = request.references ?? [];
-  const imageUrls = collectLocalTextImageUrls(refs);
+  const rawImageUrls = collectLocalTextImageUrls(refs);
+  // 顶栏解析等带图文本：与节点参考同链路（OSS → 官方 files/upload → base64）
+  let imageUrls = rawImageUrls;
+  if (rawImageUrls.length) {
+    const { prepareUpstreamMediaRefs } = await import("@/lib/local/upstreamMediaRefs");
+    const prepared = await prepareUpstreamMediaRefs({
+      modelId: request.model,
+      imageUrls: rawImageUrls,
+    });
+    imageUrls = prepared.imageUrls;
+  }
   // 开源本地无后台 prompt-config：必须按 kind 拼 system/user，否则分镜表只会得到散文而不是 JSON
   const composed = composeLocalTextGeneration({
     content: request.content,
@@ -87,8 +97,8 @@ async function generateFromTextNodeLocal(
     modelId: request.model,
     prompt,
     system: composed.system,
-    // 带图：OpenAI 兼容 vision；自定义模板会由 localGenerateText 明确报错
-    ...(imageUrls.length ? { images: imageUrls } : {}),
+    // 带图：已转上游可用地址；localGenerateText 对 https 直链不再二次压成 data URL
+    ...(imageUrls.length ? { images: imageUrls, imagesAlreadyResolved: true } : {}),
     signal: options?.signal,
   });
   return {

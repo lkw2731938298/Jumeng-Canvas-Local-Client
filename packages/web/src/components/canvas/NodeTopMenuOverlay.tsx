@@ -54,6 +54,7 @@ import {
 } from "@/lib/canvas/canvasToolImageModel";
 import { attachMediaGenerationResultNode } from "@/lib/canvas/canvasToolGeneratedImage";
 import { resolveNodeMediaUrl } from "@/lib/canvas/resolveNodeMediaUrl";
+import { ensureNodeMediaAssetId } from "@/lib/canvas/ensureNodeMediaAssetId";
 import { generateFromMediaNode } from "@/lib/api/mediaGeneration";
 import { formatCreditLabel, getCreditQuote } from "@/lib/api/credits";
 import { invalidateCanvasCreditQueries } from "@/lib/canvas/useGenerationCreditQuote";
@@ -1096,15 +1097,79 @@ export function NodeTopMenuOverlay() {
     [setGenerationOptionsExpanded]
   );
 
+  /** 无 assetId 时从可播放 URL 登记本机素材（素材库锁节点 / 旧上传缺 id） */
+  const resolveVideoAssetId = useCallback(async (): Promise<string | null> => {
+    if (!selectedNodeId || !projectId) return null;
+    const live =
+      ((useCanvasStore.getState().nodes.find((n) => n.id === selectedNodeId)?.data as
+        | WorkflowNodeData
+        | undefined)?.params as Record<string, unknown> | undefined) ?? {};
+    try {
+      return await ensureNodeMediaAssetId({
+        projectId,
+        nodeId: selectedNodeId,
+        category: "video",
+        urlParamKey: "videoUrl",
+        mediaUrl: videoUrl,
+        params: live,
+        title: String((node?.data as WorkflowNodeData | undefined)?.label ?? "视频").trim() || "视频",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "当前视频缺少素材 ID，请重新上传后再试");
+      return null;
+    }
+  }, [node, projectId, selectedNodeId, videoUrl]);
+
+  const resolveAudioAssetId = useCallback(async (): Promise<string | null> => {
+    if (!selectedNodeId || !projectId) return null;
+    const live =
+      ((useCanvasStore.getState().nodes.find((n) => n.id === selectedNodeId)?.data as
+        | WorkflowNodeData
+        | undefined)?.params as Record<string, unknown> | undefined) ?? {};
+    try {
+      return await ensureNodeMediaAssetId({
+        projectId,
+        nodeId: selectedNodeId,
+        category: "audio",
+        urlParamKey: "audioUrl",
+        mediaUrl: audioUrl,
+        params: live,
+        title: String((node?.data as WorkflowNodeData | undefined)?.label ?? "音频").trim() || "音频",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "当前音频缺少素材 ID，请重新上传后再试");
+      return null;
+    }
+  }, [audioUrl, node, projectId, selectedNodeId]);
+
+  const resolveImageAssetId = useCallback(async (): Promise<string | null> => {
+    if (!selectedNodeId || !projectId) return null;
+    const live =
+      ((useCanvasStore.getState().nodes.find((n) => n.id === selectedNodeId)?.data as
+        | WorkflowNodeData
+        | undefined)?.params as Record<string, unknown> | undefined) ?? {};
+    try {
+      return await ensureNodeMediaAssetId({
+        projectId,
+        nodeId: selectedNodeId,
+        category: "image",
+        urlParamKey: "imageUrl",
+        mediaUrl: imageUrl,
+        params: live,
+        title: String((node?.data as WorkflowNodeData | undefined)?.label ?? "图片").trim() || "图片",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "当前图片缺少素材 ID，请重新上传后再试");
+      return null;
+    }
+  }, [imageUrl, node, projectId, selectedNodeId]);
+
   /** 智能擦除：整段视频去字幕 */
   const handleVideoSubtitleErase = useCallback(
     async (mode: SubtitleEraseMode, eraseRect?: { x: number; y: number; w: number; h: number }) => {
       if (!selectedNodeId || !projectId || !videoUrl || !node || subtitleEraseBusy) return;
-      const assetId = String(params.assetId ?? "").trim();
-      if (!assetId) {
-        toast.error("当前视频缺少素材 ID，请重新上传后再试");
-        return;
-      }
+      const assetId = await resolveVideoAssetId();
+      if (!assetId) return;
       setSubtitleEraseBusy(true);
       setVideoSubtitleMenuOpen(false);
       try {
@@ -1124,10 +1189,10 @@ export function NodeTopMenuOverlay() {
     },
     [
       node,
-      params.assetId,
       projectId,
       queryClient,
       refetchAllToolPricing,
+      resolveVideoAssetId,
       selectedNodeId,
       subtitleEraseBusy,
       videoUrl,
@@ -1221,13 +1286,8 @@ export function NodeTopMenuOverlay() {
       return;
     }
 
-    const assetId = String(
-      ((node.data as WorkflowNodeData)?.params as Record<string, unknown> | undefined)?.assetId ?? ""
-    ).trim();
-    if (!assetId) {
-      toast.error("当前视频缺少素材 ID，请重新上传后再裁剪");
-      return;
-    }
+    const assetId = await resolveVideoAssetId();
+    if (!assetId) return;
 
     setSavingVideoCrop(true);
     const sourceLabel =
@@ -1289,6 +1349,7 @@ export function NodeTopMenuOverlay() {
     inlineVideoCrop,
     node,
     projectId,
+    resolveVideoAssetId,
     savingVideoCrop,
     selectedNodeId,
     subtitleEraseBusy,
@@ -1302,13 +1363,8 @@ export function NodeTopMenuOverlay() {
     if (!selectedNodeId || !projectId || !videoUrl || !node || !inlineVideoTrim || savingTrim) {
       return;
     }
-    const assetId = String(
-      ((node.data as WorkflowNodeData)?.params as Record<string, unknown> | undefined)?.assetId ?? ""
-    ).trim();
-    if (!assetId) {
-      toast.error("当前视频缺少素材 ID，请重新上传后再切段");
-      return;
-    }
+    const assetId = await resolveVideoAssetId();
+    if (!assetId) return;
     const { inSec, outSec } = inlineVideoTrim;
     if (!(outSec - inSec >= MIN_VIDEO_TRIM_SEC)) {
       toast.error(`片段至少 ${MIN_VIDEO_TRIM_SEC} 秒`);
@@ -1377,6 +1433,7 @@ export function NodeTopMenuOverlay() {
     inlineVideoTrim,
     node,
     projectId,
+    resolveVideoAssetId,
     savingTrim,
     selectedNodeId,
     updateNodeData,
@@ -1397,14 +1454,8 @@ export function NodeTopMenuOverlay() {
     ) {
       return;
     }
-    const assetId = String(
-      ((node.data as WorkflowNodeData)?.params as Record<string, unknown> | undefined)?.assetId ??
-        ""
-    ).trim();
-    if (!assetId) {
-      toast.error("当前音频缺少素材 ID，请重新上传后再分段");
-      return;
-    }
+    const assetId = await resolveAudioAssetId();
+    if (!assetId) return;
     const { inSec, outSec } = inlineVideoTrim;
     if (!(outSec - inSec >= MIN_AUDIO_TRIM_SEC)) {
       toast.error(`片段至少 ${MIN_AUDIO_TRIM_SEC} 秒`);
@@ -1475,6 +1526,7 @@ export function NodeTopMenuOverlay() {
     inlineVideoTrim,
     node,
     projectId,
+    resolveAudioAssetId,
     savingTrim,
     selectedNodeId,
     updateNodeData,
@@ -1485,11 +1537,8 @@ export function NodeTopMenuOverlay() {
   const handleVideoVocalSeparate = useCallback(
     async (mode: VocalSeparateMode) => {
       if (!selectedNodeId || !projectId || !videoUrl || !node || vocalSeparateBusy) return;
-      const assetId = String(params.assetId ?? "").trim();
-      if (!assetId) {
-        toast.error("当前视频缺少素材 ID，请重新上传后再试");
-        return;
-      }
+      const assetId = await resolveVideoAssetId();
+      if (!assetId) return;
       setVocalSeparateBusy(true);
       setVideoAudioMenuOpen(false);
       try {
@@ -1508,10 +1557,10 @@ export function NodeTopMenuOverlay() {
     },
     [
       node,
-      params.assetId,
       projectId,
       queryClient,
       refetchAllToolPricing,
+      resolveVideoAssetId,
       selectedNodeId,
       videoUrl,
       vocalSeparateBusy,
@@ -1521,11 +1570,8 @@ export function NodeTopMenuOverlay() {
   /** 音视频分离：右侧新建无声视频 + 分离音频节点并连线 */
   const handleVideoAvSplit = useCallback(async () => {
     if (!selectedNodeId || !projectId || !videoUrl || !node || splittingAv) return;
-    const assetId = String(params.assetId ?? "").trim();
-    if (!assetId) {
-      toast.error("当前视频缺少素材 ID，请重新上传后再分离");
-      return;
-    }
+    const assetId = await resolveVideoAssetId();
+    if (!assetId) return;
     setSplittingAv(true);
     const sourceLabel =
       String((node.data as WorkflowNodeData)?.label ?? "视频").trim() || "视频";
@@ -1606,8 +1652,8 @@ export function NodeTopMenuOverlay() {
     connectNodes,
     edges,
     node,
-    params.assetId,
     projectId,
+    resolveVideoAssetId,
     selectedNodeId,
     splittingAv,
     updateNodeData,
@@ -1619,11 +1665,8 @@ export function NodeTopMenuOverlay() {
   const handleVideoFrameEdit = useCallback(
     async (mode: VideoFrameEditMode) => {
       if (!selectedNodeId || !projectId || !videoUrl || !node || frameEditBusy) return;
-      const assetId = String(params.assetId ?? "").trim();
-      if (!assetId) {
-        toast.error("当前视频缺少素材 ID，请重新上传后再编辑");
-        return;
-      }
+      const assetId = await resolveVideoAssetId();
+      if (!assetId) return;
 
       const mounted = getVideoNodeRef(selectedNodeId);
       const knownDur =
@@ -1746,11 +1789,11 @@ export function NodeTopMenuOverlay() {
       frameEditBusy,
       node,
       openInlineVideoTrim,
-      params.assetId,
       params.prompt,
       projectId,
       queryClient,
       refetchAllToolPricing,
+      resolveVideoAssetId,
       selectedNodeId,
       videoFrameEditGenerationOptions,
       videoFrameEditModelName,
@@ -1876,28 +1919,27 @@ export function NodeTopMenuOverlay() {
       switch (kind) {
         case "hd": {
           if (!selectedNodeId || !node) return;
-          const assetId = String(params.assetId ?? "").trim();
-          if (!assetId || !imageUrl) {
-            toast.error("请先上传图片");
-            return;
-          }
-          const created = createHdUpscaleNode({
-            sourceNodeId: selectedNodeId,
-            sourcePosition: node.position,
-            sourceWidth: node.width,
-            sourceHeight: node.height,
-            sourceAsset: {
-              id: assetId,
-              fileUrl: imageUrl,
-              title: "高清",
-            },
-            edges,
-          });
-          if (!created) {
-            toast.error("创建高清节点失败");
-            return;
-          }
-          setRedrawMenuOpen(false);
+          void (async () => {
+            const assetId = await resolveImageAssetId();
+            if (!assetId) return;
+            const created = createHdUpscaleNode({
+              sourceNodeId: selectedNodeId,
+              sourcePosition: node.position,
+              sourceWidth: node.width,
+              sourceHeight: node.height,
+              sourceAsset: {
+                id: assetId,
+                fileUrl: imageUrl,
+                title: "高清",
+              },
+              edges,
+            });
+            if (!created) {
+              toast.error("创建高清节点失败");
+              return;
+            }
+            setRedrawMenuOpen(false);
+          })();
           return;
         }
         case "annotate":
@@ -1910,28 +1952,27 @@ export function NodeTopMenuOverlay() {
         case "rotate": {
           // 右侧新建旋转图片节点（复制源图）并打开旋转工具条
           if (!selectedNodeId || !node) return;
-          const assetId = String(params.assetId ?? "").trim();
-          if (!assetId) {
-            toast.error("请先上传图片");
-            return;
-          }
-          const created = createRotateNode({
-            sourceNodeId: selectedNodeId,
-            sourcePosition: node.position,
-            sourceWidth: node.width,
-            sourceHeight: node.height,
-            sourceAsset: {
-              id: assetId,
-              fileUrl: imageUrl,
-              title: "旋转",
-            },
-            edges,
-          });
-          if (!created) {
-            toast.error("创建旋转节点失败");
-            return;
-          }
-          setRedrawMenuOpen(false);
+          void (async () => {
+            const assetId = await resolveImageAssetId();
+            if (!assetId) return;
+            const created = createRotateNode({
+              sourceNodeId: selectedNodeId,
+              sourcePosition: node.position,
+              sourceWidth: node.width,
+              sourceHeight: node.height,
+              sourceAsset: {
+                id: assetId,
+                fileUrl: imageUrl,
+                title: "旋转",
+              },
+              edges,
+            });
+            if (!created) {
+              toast.error("创建旋转节点失败");
+              return;
+            }
+            setRedrawMenuOpen(false);
+          })();
           return;
         }
         case "outpaint":
@@ -1969,7 +2010,7 @@ export function NodeTopMenuOverlay() {
       openInlineImageCrop,
       openInlineImageErase,
       openInlineImageOutpaint,
-      params.assetId,
+      resolveImageAssetId,
       selectedNodeId,
       setInlineImageDrawColor,
       setInlineImageDrawTool,
@@ -2668,27 +2709,26 @@ export function NodeTopMenuOverlay() {
                   toast.error("请先上传视频");
                   return;
                 }
-                const assetId = String(params.assetId ?? "").trim();
-                if (!assetId) {
-                  toast.error("请先上传视频");
-                  return;
-                }
-                const created = createHdUpscaleNode({
-                  sourceNodeId: selectedNodeId,
-                  sourcePosition: node.position,
-                  sourceWidth: node.width,
-                  sourceHeight: node.height,
-                  sourceAsset: {
-                    id: assetId,
-                    fileUrl: videoUrl,
-                    title: "高清",
-                  },
-                  edges,
-                  mediaKind: "video",
-                });
-                if (!created) {
-                  toast.error("创建高清节点失败");
-                }
+                void (async () => {
+                  const assetId = await resolveVideoAssetId();
+                  if (!assetId) return;
+                  const created = createHdUpscaleNode({
+                    sourceNodeId: selectedNodeId,
+                    sourcePosition: node.position,
+                    sourceWidth: node.width,
+                    sourceHeight: node.height,
+                    sourceAsset: {
+                      id: assetId,
+                      fileUrl: videoUrl,
+                      title: "高清",
+                    },
+                    edges,
+                    mediaKind: "video",
+                  });
+                  if (!created) {
+                    toast.error("创建高清节点失败");
+                  }
+                })();
               }}
             />
             <TopMenuActionButton
@@ -2725,8 +2765,7 @@ export function NodeTopMenuOverlay() {
               onClick={() => {
                 closeOtherVideoMenus();
                 if (!selectedNodeId || !projectId || !node || parsingVideoStoryboard) return;
-                const assetId = String(params.assetId ?? "").trim();
-                if (!assetId || !videoUrl) {
+                if (!videoUrl) {
                   toast.error("请先上传视频");
                   return;
                 }
@@ -2734,6 +2773,8 @@ export function NodeTopMenuOverlay() {
                 setParseVideoProgress("正在创建分镜表…");
                 void (async () => {
                   try {
+                    const assetId = await resolveVideoAssetId();
+                    if (!assetId) return;
                     await runVideoStoryboardParse({
                       projectId,
                       videoNodeId: selectedNodeId,

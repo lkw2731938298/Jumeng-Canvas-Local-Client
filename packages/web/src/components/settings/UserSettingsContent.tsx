@@ -270,9 +270,9 @@ export function UserSettingsContent({
         className
       )}
     >
-      <section className="st-panel jm-panel" aria-label="用户设置">
+      <section className="st-panel jm-panel" aria-label="画布设置">
         <header className="st-head">
-          <h1>用户设置</h1>
+          <h1>画布设置</h1>
         </header>
 
         <div className="st-body">

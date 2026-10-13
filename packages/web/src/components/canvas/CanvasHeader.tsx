@@ -76,7 +76,7 @@ export function CanvasHeader() {
   } = useCanvasStore();
   const isLoading = useCanvasStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
-  const displayName = user?.displayName ?? "本地用户";
+  const displayName = user?.displayName ?? "画布设置";
   const isOwner = projectRole !== "editor";
   const isCollaborator = projectRole === "editor";
   const { peers } = useProjectPresence(projectId, Boolean(projectId) && !isLoading);

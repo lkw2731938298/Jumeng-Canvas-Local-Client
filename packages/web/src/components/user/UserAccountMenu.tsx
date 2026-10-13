@@ -142,7 +142,7 @@ export function UserAccountMenu({
             className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${itemClass}`}
           >
             <Settings className="h-4 w-4" />
-            用户设置
+            画布设置
           </button>
           <div className={`my-1 border-t ${dividerClass}`} />
           <GlobalWatermarkToggle itemClass={itemClass} labelClass={labelClass} />

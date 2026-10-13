@@ -203,8 +203,9 @@ function SetupWizard(
   const startStep =
     props.intent.mode === "refetch" ? 3 : props.intent.mode === "change-key" ? 2 : 1;
   const [step, setStep] = useState(startStep);
+  // 新建接入默认选「聚梦 AI」，与官网推荐一致
   const [platform, setPlatform] = useState<"jumeng" | "other">(
-    editing ? (isJumengProvider(editing) ? "jumeng" : "other") : "other"
+    editing ? (isJumengProvider(editing) ? "jumeng" : "other") : "jumeng"
   );
   const [name, setName] = useState(
     editing?.name || (platform === "jumeng" ? "聚梦 AI" : "我的接口")

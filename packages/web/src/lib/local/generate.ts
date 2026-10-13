@@ -503,6 +503,8 @@ export async function localGenerateText(params: {
   history?: { role: "user" | "assistant"; content: string }[];
   /** 本轮附带的图片（本机素材地址 / data URL / https）；需所选模型支持看图，仅 OpenAI 兼容模式生效 */
   images?: string[];
+  /** 已由 prepareUpstreamMediaRefs 转成上游可用地址时跳过二次转换 */
+  imagesAlreadyResolved?: boolean;
   signal?: AbortSignal;
 }): Promise<string> {
   if (params.signal?.aborted) {
@@ -548,10 +550,20 @@ export async function localGenerateText(params: {
   if (params.system) messages.push({ role: "system", content: params.system });
   for (const m of history) messages.push({ role: m.role, content: m.content });
   if (rawImages.length) {
-    // 多模态消息：图片转成 data URL（本机素材上游访问不到）；助手侧不截断张数
+    // 与节点参考同链路：已解析则直传；否则 OSS → 官方 files/upload → base64
     const parts: unknown[] = [{ type: "text", text: params.prompt }];
+    const jumengCreds = params.imagesAlreadyResolved
+      ? null
+      : await resolveJumengUploadCreds(params.modelId);
     for (const u of rawImages) {
-      const resolved = await resolveLocalImageUrlForUpstream(u, { preferDataUrl: true });
+      const resolved = params.imagesAlreadyResolved
+        ? u
+        : await resolveLocalImageUrlForUpstream(u, {
+            // 聚梦：与节点参考同链路；第三方看图仍允许 data URL
+            preferPublicHttps: jumengCreds !== null,
+            preferDataUrl: jumengCreds === null,
+            jumengUpload: jumengCreds,
+          });
       if (!resolved) throw new Error(`参考图读取失败（${u.slice(0, 80)}），请换一张图`);
       parts.push({ type: "image_url", image_url: { url: resolved } });
     }

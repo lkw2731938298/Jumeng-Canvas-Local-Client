@@ -39,7 +39,7 @@ export function HuabuPublicShell({ children, sidebar = false, page }: HuabuPubli
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
-  const displayName = user?.displayName ?? "本地用户";
+  const displayName = user?.displayName ?? "画布设置";
 
   const createMutation = useMutation({
     mutationFn: () => createProject("未命名项目"),

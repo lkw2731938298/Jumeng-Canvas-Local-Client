@@ -191,7 +191,8 @@ async function generateFromMediaNodeLocal(
   }
   if (request.category === "audio") {
     throw new Error(
-      "本地版暂不支持音频节点直连生成；请先用文本/图片/视频模型，或在设置里用自定义 HTTP 模板接入 TTS"
+      "本地版暂不支持音频节点直连生成；人声分离等请用自定义 HTTP 模板接入，或改用图片/视频模型。" +
+        "参考素材提交链路与节点一致（OSS → 官方文件上传 → base64），待音频通道接通后自动生效"
     );
   }
   if (
@@ -227,14 +228,13 @@ async function generateFromMediaNodeLocal(
           localGenerateVideo,
           persistLocalVideoResult,
           normalizeApiKey,
-          resolveLocalImageUrlsForUpstream,
-          resolveLocalMediaUrlForUpstream,
-          resolveJumengUploadCreds,
         } = await import("@/lib/local/generate");
-        // 聚梦官方接口：参考素材走官方 /v1/files/upload 换公网直链，免配 OSS；
-        // 第三方接口沿用原画布行为，参考素材需用户自配 OSS
-        const jumengCreds = await resolveJumengUploadCreds(request.model);
-        const jumengOfficial = jumengCreds !== null;
+        const {
+          isLikelyAudioMediaUrl,
+          isLikelyVideoMediaUrl,
+          prepareUpstreamMediaRefs,
+        } = await import("@/lib/local/upstreamMediaRefs");
+        // 顶栏视频工具与节点参考同链路：OSS → 官方 /files/upload → base64
         const { localStore } = await import("@/lib/local/store");
         const durationRaw =
           request.generationOptions?.duration ||
@@ -244,112 +244,86 @@ async function generateFromMediaNodeLocal(
           Number.parseInt(String(durationRaw).replace(/[^\d]/g, ""), 10) || 5;
         const resolution = pickCanvasClarityFromOptions(request.generationOptions, "2K");
         const ratio = pickCanvasAspectFromOptions(request.generationOptions, "16:9");
-        const isAudioRef = (r: { type?: string; url?: string }) => {
-          const u = String(r.url || "").trim();
-          if (r.type === "audio") return true;
-          if (u.startsWith("data:audio")) return true;
-          if (/\.(mp3|wav|m4a|aac|ogg|flac)(\?|$)/i.test(u)) return true;
-          if (/file=[^&]*\.(mp3|wav|m4a|aac|ogg|flac)/i.test(u)) return true;
-          return false;
-        };
-        // 本机 /api/local/asset 常无扩展名：必须显式排除 audio，否则会被当成图片 →「图片加载失败」
+        const isAudioRef = (r: { type?: string; url?: string }) =>
+          isLikelyAudioMediaUrl(String(r.url || ""), { type: r.type, category: "audio" });
+
+        // 本机 /api/local/asset 常无扩展名：按 ref.type 区分；sourceUrl 在视频任务中强制当视频
         const rawImageUrls = (request.references ?? [])
           .filter((r) => {
             const u = String(r.url || "").trim();
-            if (!u || isAudioRef(r) || r.type === "video") return false;
-            if (r.type === "image") return true;
+            if (!u || isAudioRef(r)) return false;
+            if (isLikelyVideoMediaUrl(u, { type: r.type, canvasTool: request.canvasTool })) {
+              return false;
+            }
+            if (r.type === "image" || r.type === "file" || r.type === "link") return true;
             if (/\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)) return true;
             if (u.startsWith("data:image")) return true;
-            if (
-              /\/api\/local\//i.test(u) &&
-              !/\.(mp4|webm|mov|mp3|wav|m4a|aac|ogg|flac)(\?|$)/i.test(u) &&
-              !/file=[^&]*\.(mp4|webm|mov|mp3|wav|m4a|aac|ogg|flac)/i.test(u)
-            ) {
-              return true;
+            // 无 type 的本机资产：视频任务里默认不当图片（避免把源视频当图）
+            if (/\/api\/local\//i.test(u) && request.category === "video" && !r.type) {
+              return false;
             }
+            if (/\/api\/local\//i.test(u)) return true;
             return false;
           })
           .map((r) => String(r.url || "").trim())
           .filter(Boolean);
-        if (request.sourceUrl?.trim()) {
-          const su = request.sourceUrl.trim();
-          const sourceIsVideo =
-            /\.(mp4|webm|mov)(\?|$)/i.test(su) || su.startsWith("data:video");
-          if (!sourceIsVideo) rawImageUrls.unshift(su);
-        }
-        const imageUrls = await resolveLocalImageUrlsForUpstream(rawImageUrls, {
-          preferPublicHttps: jumengOfficial,
-          requirePublicHttps: !jumengOfficial,
-          jumengUpload: jumengCreds,
-        });
 
-        const videoUrls: string[] = [];
-        const intendedVideoRefs = (request.references ?? []).filter((r) => {
-          const u = String(r.url || "").trim();
-          if (!u) return false;
-          return (
-            r.type === "video" ||
-            /\.(mp4|webm|mov)(\?|$)/i.test(u) ||
-            u.startsWith("data:video") ||
-            /file=[^&]*\.(mp4|webm|mov)/i.test(u)
-          );
-        });
-        if (request.sourceUrl?.trim()) {
-          const su = request.sourceUrl.trim();
-          if (
-            /\.(mp4|webm|mov)(\?|$)/i.test(su) ||
-            su.startsWith("data:video") ||
-            /file=[^&]*\.(mp4|webm|mov)/i.test(su)
-          ) {
-            intendedVideoRefs.unshift({
-              nodeId: "source",
-              type: "video",
-              url: su,
-              label: "source",
-            } as (typeof intendedVideoRefs)[number]);
-          }
-        }
-        for (const r of intendedVideoRefs) {
+        const rawVideoUrls: string[] = [];
+        for (const r of request.references ?? []) {
           const u = String(r.url || "").trim();
           if (!u) continue;
-          const resolved = await resolveLocalMediaUrlForUpstream(u, {
-            requirePublicHttps: !jumengOfficial,
-            jumengUpload: jumengCreds,
-          });
-          if (!resolved) {
-            throw new Error(
-              `参考视频未能提交（${u.slice(0, 80)}）。聚梦官方上传上限 100MB；更大请压缩或启用「参考图 OSS」`
-            );
+          if (isLikelyVideoMediaUrl(u, { type: r.type, canvasTool: request.canvasTool })) {
+            rawVideoUrls.push(u);
+            continue;
           }
-          videoUrls.push(resolved);
+          // 视频任务 + 无 type 的本机 URL：视为视频参考（顶栏工具常只传 sourceUrl/未标 type）
+          if (
+            request.category === "video" &&
+            !r.type &&
+            /\/api\/local\//i.test(u) &&
+            !isAudioRef(r)
+          ) {
+            rawVideoUrls.push(u);
+          }
         }
-        if (intendedVideoRefs.length > 0 && videoUrls.length === 0) {
+        if (request.sourceUrl?.trim()) {
+          const su = request.sourceUrl.trim();
+          // 视频节点 / 顶栏视频工具：sourceUrl 一律当视频参考（与节点带参考同链路）
+          if (request.category === "video") {
+            rawVideoUrls.unshift(su);
+          } else if (
+            isLikelyVideoMediaUrl(su, {
+              canvasTool: request.canvasTool,
+              forceVideo: true,
+            })
+          ) {
+            rawVideoUrls.unshift(su);
+          } else if (!isAudioRef({ url: su })) {
+            rawImageUrls.unshift(su);
+          }
+        }
+
+        const prepared = await prepareUpstreamMediaRefs({
+          modelId: request.model,
+          imageUrls: rawImageUrls,
+          videoUrls: rawVideoUrls,
+          audioUrls: (request.references ?? [])
+            .filter((r) => isAudioRef(r))
+            .map((r) => String(r.url || "").trim())
+            .filter(Boolean),
+        });
+        const imageUrls = prepared.imageUrls;
+        const videoUrls = prepared.videoUrls;
+        const audioUrls = prepared.audioUrls;
+        if (rawVideoUrls.length > 0 && videoUrls.length === 0) {
           throw new Error(
             "画布有参考视频，但未能提交给上游。未配 OSS 时请保证单段 ≤20MB，或启用「参考图 OSS」"
           );
         }
-
-        // 参考音频（Seedance 多模态等）：与商业网关 reference_audio 对齐
-        const audioUrls: string[] = [];
-        const intendedAudioRefs = (request.references ?? []).filter((r) => {
-          const u = String(r.url || "").trim();
-          return Boolean(u) && isAudioRef(r);
-        });
-        for (const r of intendedAudioRefs) {
-          const u = String(r.url || "").trim();
-          if (!u) continue;
-          const resolved = await resolveLocalMediaUrlForUpstream(u, {
-            requirePublicHttps: !jumengOfficial,
-            jumengUpload: jumengCreds,
-          });
-          if (!resolved) {
-            throw new Error(
-              `参考音频未能提交（${u.slice(0, 80)}）。请确认音频可播放，或启用「参考图 OSS」`
-            );
-          }
-          audioUrls.push(resolved);
-        }
-        if (intendedAudioRefs.length > 0 && audioUrls.length === 0) {
+        if (
+          (request.references ?? []).some((r) => isAudioRef(r)) &&
+          audioUrls.length === 0
+        ) {
           throw new Error(
             "画布有参考音频，但未能提交给上游。请确认音频节点已有文件后重试"
           );
@@ -413,16 +387,11 @@ async function generateFromMediaNodeLocal(
       referenceCount,
     },
     async ({ noteProviderTaskId, noteSubmittedRefs }) => {
-      const {
-        localGenerateImage,
-        persistLocalImageResult,
-        resolveLocalImageUrlsForUpstream,
-        resolveJumengUploadCreds,
-      } = await import("@/lib/local/generate");
-      // 聚梦官方接口：参考图走官方 /v1/files/upload 换公网直链，免配 OSS；
-      // 第三方接口沿用原画布行为，参考图需用户自配 OSS
-      const jumengCreds = await resolveJumengUploadCreds(request.model);
-      const jumengOfficial = jumengCreds !== null;
+      const { localGenerateImage, persistLocalImageResult } = await import(
+        "@/lib/local/generate"
+      );
+      const { prepareUpstreamMediaRefs } = await import("@/lib/local/upstreamMediaRefs");
+      // 顶栏图片工具与节点参考同链路：OSS → 官方 /files/upload → base64
       const opts = request.generationOptions ?? {};
       const aspectRatio = pickCanvasAspectFromOptions(opts, "1:1");
       const resolution = pickCanvasClarityFromOptions(opts, "2K");
@@ -449,16 +418,14 @@ async function generateFromMediaNodeLocal(
           `画布已连接/提及 ${intendedRefs} 个参考，但未解析到可用图片 URL。请确认「图片节点」已有图，并重新连接后重试`
         );
       }
-      const imageUrls = await resolveLocalImageUrlsForUpstream(rawImageUrls, {
-        // 聚梦官方：OSS → 官方 files/upload → base64
-        preferPublicHttps: jumengOfficial,
-        // 第三方网关：必须公网直链
-        requirePublicHttps: !jumengOfficial,
-        jumengUpload: jumengCreds,
+      const prepared = await prepareUpstreamMediaRefs({
+        modelId: request.model,
+        imageUrls: rawImageUrls,
       });
+      const imageUrls = prepared.imageUrls;
       if (rawImageUrls.length > 0 && imageUrls.length === 0) {
         throw new Error(
-          jumengOfficial
+          prepared.jumengOfficial
             ? "参考图未能转换成上游可用格式（https 或 base64），已中止（避免变成纯文生图）"
             : "参考图未能转换成公网直链，已中止。第三方接口请先配置「参考图 OSS」"
         );

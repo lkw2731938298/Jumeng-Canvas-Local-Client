@@ -24,7 +24,7 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
         overlayClassName="bg-black/50 supports-backdrop-filter:backdrop-blur-sm"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>用户设置</DialogTitle>
+          <DialogTitle>画布设置</DialogTitle>
           <DialogDescription>外观、模型服务与存储空间</DialogDescription>
         </DialogHeader>
         {open ? <UserSettingsContent variant="dialog" /> : null}

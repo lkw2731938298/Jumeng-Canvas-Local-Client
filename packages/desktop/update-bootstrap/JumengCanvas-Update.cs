@@ -1,4 +1,4 @@
-﻿// 聚梦无限画布 · 应用内更新引导包
+// 聚梦无限画布 · 应用内更新引导包
 // 0.1.19 用「隐藏 PowerShell」Start-Process 本程序时，子进程 GUI 常被吞掉（用户只见画布退出、无任何窗口）。
 // 因此：无 --ui 时先用 ShellExecute 再拉起自己（可见会话）并 Wait；有 --ui 后再走下载/安装。
 using System;

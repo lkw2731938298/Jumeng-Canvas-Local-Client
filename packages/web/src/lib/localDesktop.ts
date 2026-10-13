@@ -7,5 +7,5 @@ export const isLocalDesktop = true;
 export const LOCAL_USER = {
   id: "local-user",
   phone: "00000000000",
-  displayName: "本地用户",
+  displayName: "画布设置",
 } as const;

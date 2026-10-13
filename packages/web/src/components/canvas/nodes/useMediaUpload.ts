@@ -65,13 +65,17 @@ export function useMediaUpload(
       const currentParams =
         useCanvasStore.getState().nodes.find((n) => n.id === nodeId)?.data.params || {};
 
+      // 本机 fileUrl 常非 OSS 签名链，也必须写入 url 与 assetId，否则顶栏工具会报「缺少素材 ID」
+      const mediaUrl = asset.fileUrl
+        ? isSignedOssUrl(asset.fileUrl)
+          ? ensureHttpsOssUrl(asset.fileUrl)
+          : asset.fileUrl
+        : "";
       updateNodeData(nodeId, {
         params: {
           ...currentParams,
           assetId: asset.id,
-          ...(isSignedOssUrl(asset.fileUrl)
-            ? { [urlParamKey]: ensureHttpsOssUrl(asset.fileUrl) }
-            : {}),
+          ...(mediaUrl ? { [urlParamKey]: mediaUrl } : {}),
         },
       });
       setPickerOpen(false);
