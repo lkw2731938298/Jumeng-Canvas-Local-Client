@@ -85,6 +85,7 @@ function fetchJson(url, timeoutMs = 20_000) {
 /**
  * 下载文件；onProgress({ phase, percent, received, total })
  * percent 为 0～1；无 Content-Length 时 percent 为 null。
+ * 有 Content-Length 时校验落盘大小，避免残缺包被静默安装器秒退。
  */
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
@@ -124,6 +125,11 @@ function downloadFile(url, dest, onProgress) {
               total: total > 0 ? total : null,
             });
           };
+          try {
+            if (fs.existsSync(dest)) fs.unlinkSync(dest);
+          } catch {
+            /* ignore */
+          }
           const file = fs.createWriteStream(dest);
           res.on("data", (chunk) => {
             received += chunk.length;
@@ -133,6 +139,32 @@ function downloadFile(url, dest, onProgress) {
           file.on("finish", () =>
             file.close(() => {
               emit(true);
+              try {
+                const st = fs.statSync(dest);
+                if (st.size < 1024 * 1024) {
+                  reject(new Error("下载文件过小，可能不是完整安装包，请重试"));
+                  return;
+                }
+                if (total > 0 && st.size !== total) {
+                  reject(
+                    new Error(
+                      `下载不完整（${st.size}/${total} 字节），请检查网络后重试`,
+                    ),
+                  );
+                  return;
+                }
+                const fd = fs.openSync(dest, "r");
+                const mag = Buffer.alloc(2);
+                fs.readSync(fd, mag, 0, 2, 0);
+                fs.closeSync(fd);
+                if (mag[0] !== 0x4d || mag[1] !== 0x5a) {
+                  reject(new Error("下载文件不是有效的 Windows 安装包，请重试"));
+                  return;
+                }
+              } catch (e) {
+                reject(e instanceof Error ? e : new Error(String(e)));
+                return;
+              }
               resolve({ received, total: total > 0 ? total : received });
             }),
           );
@@ -203,18 +235,19 @@ async function applyDesktopUpdate({ onProgress } = {}) {
   });
   await downloadFile(info.setupUrl, dest, onProgress);
 
-  // 静默 NSIS 无细粒度百分比；进入安装阶段后由安装器接管，应用即将退出
+  // 可见安装向导（有进度条/完成页）。勿用 /S：静默失败时无任何提示，像闪退
   onProgress?.({
     phase: "install",
     percent: null,
     received: null,
     total: null,
-    message: "下载完成，正在准备安装…",
+    message: "下载完成，即将打开安装向导…",
   });
 
-  // 等主进程退出 → NSIS /S --force-run（静默覆盖并自动打开）
+  // 等主进程退出 → 拉起 NSIS 向导（runAfterFinish 会自动打开应用）
   // PowerShell 写路径，避免 bat 下中文安装目录乱码
   const ps1 = path.join(tmpDir, "run-update.ps1");
+  const logPath = path.join(tmpDir, "update-install.log");
   const esc = (s) => String(s || "").replace(/'/g, "''");
   const exePath = process.execPath;
   const shortcutName = "聚梦无限画布.lnk";
@@ -222,23 +255,49 @@ async function applyDesktopUpdate({ onProgress } = {}) {
   const processName = "聚梦无限画布";
   const psBody = [
     "$ErrorActionPreference = 'Continue'",
+    `$log = '${esc(logPath)}'`,
+    "function Write-Log([string]$m) {",
+    "  $line = \"$(Get-Date -Format o) $m\"",
+    "  Add-Content -LiteralPath $log -Value $line -Encoding UTF8",
+    "}",
     // 给 Electron app.quit 留时间，避免安装时文件占用
-    "Start-Sleep -Seconds 4",
+    "Start-Sleep -Seconds 3",
     `$setup = '${esc(dest)}'`,
     `$app = '${esc(exePath)}'`,
-    "if (-not (Test-Path -LiteralPath $setup)) { exit 1 }",
-    // /S 静默；--force-run 让 assisted NSIS 在静默结束后拉起应用（见 electron-builder installSection）
-    "Start-Process -FilePath $setup -ArgumentList '/S','--force-run' -Wait",
+    "Write-Log \"setup=$setup\"",
+    "if (-not (Test-Path -LiteralPath $setup)) {",
+    "  Write-Log 'setup missing'",
+    "  Add-Type -AssemblyName PresentationFramework",
+    "  [System.Windows.MessageBox]::Show('安装包不存在，请重新检查更新。','聚梦无限画布') | Out-Null",
+    "  exit 1",
+    "}",
+    // 可见向导；若需管理员权限则弹 UAC（勿 /S，避免秒退无提示）
+    "try {",
+    "  Write-Log 'starting installer (visible)'",
+    "  $p = Start-Process -FilePath $setup -PassThru -Wait",
+    "  $code = if ($null -eq $p) { -1 } else { $p.ExitCode }",
+    "  Write-Log \"installer exit=$code\"",
+    "  if ($code -ne 0 -and $null -ne $code) {",
+    "    Add-Type -AssemblyName PresentationFramework",
+    "    [System.Windows.MessageBox]::Show(\"安装未完成（退出码 $code）。可到官网重新下载安装包。\",'聚梦无限画布') | Out-Null",
+    "  }",
+    "} catch {",
+    "  Write-Log $_.Exception.Message",
+    "  Add-Type -AssemblyName PresentationFramework",
+    "  [System.Windows.MessageBox]::Show(('安装启动失败：' + $_.Exception.Message),'聚梦无限画布') | Out-Null",
+    "  exit 1",
+    "}",
     "Start-Sleep -Seconds 2",
     // 若安装器未成功拉起，再兜底启动（避免双开：先看进程）
     `$running = Get-Process -Name '${esc(processName)}' -ErrorAction SilentlyContinue`,
-    "if ($running) { exit 0 }",
-    "if (Test-Path -LiteralPath $app) { Start-Process -FilePath $app; exit 0 }",
+    "if ($running) { Write-Log 'app already running'; exit 0 }",
+    "if (Test-Path -LiteralPath $app) { Write-Log 'launch execPath'; Start-Process -FilePath $app; exit 0 }",
     `$lnkUser = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
     `$lnkMachine = Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs\\${esc(shortcutName)}'`,
     "foreach ($lnk in @($lnkUser, $lnkMachine)) {",
-    "  if (Test-Path -LiteralPath $lnk) { Start-Process -FilePath $lnk; exit 0 }",
+    "  if (Test-Path -LiteralPath $lnk) { Write-Log \"launch $lnk\"; Start-Process -FilePath $lnk; exit 0 }",
     "}",
+    "Write-Log 'done without relaunch'",
     "exit 0",
     "",
   ].join("\r\n");
@@ -251,6 +310,7 @@ async function applyDesktopUpdate({ onProgress } = {}) {
     {
       detached: true,
       stdio: "ignore",
+      // 助手脚本可隐藏；安装器本身是独立可见窗口
       windowsHide: true,
     },
   ).unref();

@@ -94,7 +94,7 @@ function registerIpc() {
           event.sender.send("desktop:updateProgress", {
             phase: "install",
             percent: null,
-            message: "正在安装并重启，完成后将自动打开…",
+            message: "即将打开安装向导，请按向导完成安装…",
           });
         }
       } catch {

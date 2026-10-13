@@ -194,7 +194,7 @@ export function CheckUpdateButton() {
         setProgress({
           phase: "install",
           percent: null,
-          message: `正在安装 v${r.toVersion || r.remoteVersion}，应用即将退出并自动打开…`,
+          message: `下载完成。应用即将退出，请在随后打开的安装向导中完成安装（有进度条）。`,
         });
         // 主进程即将 quit；进度订阅保留到进程结束，勿在此处 unsubscribe
         return;
@@ -293,7 +293,7 @@ export function CheckUpdateButton() {
             <DialogTitle>发现新版本 v{info?.remoteVersion}</DialogTitle>
             <DialogDescription>
               {desktopMode
-                ? `当前版本 v${info?.localVersion}。将从官网下载安装包并覆盖安装（无需先卸载），项目与密钥保存在本机用户目录，不会丢失。`
+                ? `当前版本 v${info?.localVersion}。将下载安装包并打开安装向导（可见进度）。覆盖安装即可，无需先卸载；项目与密钥在本机用户目录，不会丢失。`
                 : `当前版本 v${info?.localVersion}。更新会从 Gitee 下载最新源码并覆盖程序文件，不会影响 data 目录中的项目、素材与模型配置；如依赖有变化，将自动重装并重启画布。`}
             </DialogDescription>
           </DialogHeader>
