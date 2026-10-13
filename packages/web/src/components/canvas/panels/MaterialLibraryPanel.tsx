@@ -213,9 +213,9 @@ export function MaterialLibraryPanel({
             ) : (
               <div className="grid grid-cols-5 gap-2">
                 {/* 一行 5 个；面板加宽加高后约可同时看到 4 行 */}
-                {visibleItems.map((item) => (
+                {visibleItems.map((item, index) => (
                   <button
-                    key={item.id}
+                    key={`${item.id}::${item.packageUrl || item.mediaUrl || index}`}
                     type="button"
                     onClick={() => handleSelect(item)}
                     disabled={importingId === item.id}

@@ -451,13 +451,15 @@ export async function applyMediaGenerateVideo(
       signal: opts.signal,
     });
 
-    const preview = await persistLocalVideoResult({
+    const persisted = await persistLocalVideoResult({
       projectId: opts.projectId,
       nodeId: targetId,
       url: raw.url,
     });
 
-    useCanvasStore.getState().applyNodeGeneratedMedia(targetId, "videoUrl", preview);
+    useCanvasStore
+      .getState()
+      .applyNodeGeneratedMedia(targetId, "videoUrl", persisted.url, persisted.assetId);
     useCanvasStore.getState().updateNodeParam(targetId, "prompt", prompt);
     useCanvasStore.getState().updateNodeParam(targetId, "model", model.name);
     useCanvasStore.getState().scheduleAutoSave();
@@ -469,7 +471,7 @@ export async function applyMediaGenerateVideo(
       nodeId: targetId,
       detail: raw.providerTaskId
         ? `providerTaskId=${raw.providerTaskId}; refs=${refIds.join(",")}`
-        : `refs=${refIds.join(",")}; ${preview.slice(0, 80)}`,
+        : `refs=${refIds.join(",")}; ${persisted.url.slice(0, 80)}`,
     };
   } catch (err) {
     if (isAgentTurnAbortedError(err) || opts.signal?.aborted) {

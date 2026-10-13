@@ -107,6 +107,17 @@ export function itemLibraryTagId(
   }
 }
 
+/** 保证列表 id 唯一（后台/广场偶发重复 id 会触发 React key 警告） */
+function uniquifyMaterialItemIds(items: MaterialLibraryItem[]): MaterialLibraryItem[] {
+  const seen = new Set<string>();
+  return items.map((it, i) => {
+    let id = String(it?.id || "").trim() || `item-${i}`;
+    if (seen.has(id)) id = `${id}__${i}`;
+    seen.add(id);
+    return id === it.id ? it : { ...it, id };
+  });
+}
+
 function categoriesFor(
   data: Record<string, unknown>,
   category?: MaterialLibraryCategory
@@ -189,8 +200,10 @@ export async function listPlazaTemplateLibrary(): Promise<MaterialLibraryListRes
     // 无可导入 zip 的作品跳过（广场「打开工作流」类不进画布模板库）
     if (!pack || !isZipUrl(pack)) continue;
     const catName = String(w.cat || "").trim();
+    // 广场作品 id 常重复（如多条都是 w3），必须带下标保证 React key / 导入态唯一
+    const rawId = String(w.id || "").trim();
     items.push({
-      id: String(w.id || `plaza-${i}`),
+      id: rawId ? `plaza-${rawId}-${i}` : `plaza-${i}`,
       category: "template",
       title: String(w.title || "未命名模板").trim() || "未命名模板",
       mediaType: "image",
@@ -263,7 +276,11 @@ export async function listMaterialLibrary(
       });
     }
 
-    return { items: merged, categories, promptCategories: [] };
+    return {
+      items: uniquifyMaterialItemIds(merged),
+      categories,
+      promptCategories: [],
+    };
   }
 
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
@@ -283,7 +300,7 @@ export async function listMaterialLibrary(
   const data = convertKeys(raw) as Record<string, unknown>;
   const cats = categoriesFor(data, category);
   return {
-    items: (data.items as MaterialLibraryItem[]) ?? [],
+    items: uniquifyMaterialItemIds((data.items as MaterialLibraryItem[]) ?? []),
     categories: cats,
     promptCategories:
       category === "prompt" || !category

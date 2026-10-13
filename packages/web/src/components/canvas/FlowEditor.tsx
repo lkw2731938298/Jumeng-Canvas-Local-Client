@@ -16,10 +16,6 @@ import { Layers, FolderPlus, Ungroup, Play } from "lucide-react";
 import dagre from "dagre";
 import { defaultNodeSize } from "@/lib/canvas/nodeSizing";
 import { navigateToDirectorStage } from "@/lib/canvas/directorNavigation";
-import {
-  ensureStoryboardGridNodeId,
-  linkDirectorToStoryboard,
-} from "@/lib/canvas/storyboardNarrativeBootstrap";
 import { CANVAS_ASSET_MIME, parseAssetDragPayload, nodeTypeForAssetCategory } from "@/lib/canvas/assetDrag";
 import { CANVAS_GROUP_MIME, parseGroupDragPayload } from "@/lib/canvas/groupDrag";
 import { buildGroupSnapshot, getAbsolutePosition, isGroupNode, listUnboundMediaLabels } from "@/lib/canvas/nodeGroup";
@@ -1100,13 +1096,10 @@ export function FlowEditor() {
       }
     }
 
+    // 只建导演台并进入；分镜表由用户按需添加或从「调度故事板」入口绑定
     if (type === "director_stage" && projectId) {
       const node = useCanvasStore.getState().nodes.filter((n) => n.type === "director_stage").at(-1);
       if (node) {
-        const gridId = ensureStoryboardGridNodeId({ preferSelected: false });
-        if (gridId) {
-          linkDirectorToStoryboard({ gridNodeId: gridId, directorNodeId: node.id });
-        }
         void navigateToDirectorStage(projectId, node.id, router.push);
       }
     }

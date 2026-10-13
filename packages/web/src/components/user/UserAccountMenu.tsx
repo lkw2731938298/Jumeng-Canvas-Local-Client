@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Settings, User } from "lucide-react";
 import { AppThemePicker } from "@/components/user/AppThemePicker";
-import { GlobalWatermarkToggle } from "@/components/user/GlobalWatermarkToggle";
 import { UserSettingsDialog } from "@/components/settings/UserSettingsDialog";
 
 interface UserAccountMenuProps {
@@ -17,7 +16,7 @@ interface UserAccountMenuProps {
   menuPosition?: "below" | "side";
 }
 
-/** 开源本地版账户菜单：用户设置 / 主题 / 水印 */
+/** 开源本地版账户菜单：用户设置 / 主题 */
 export function UserAccountMenu({
   displayName,
   variant = "canvas",
@@ -145,7 +144,6 @@ export function UserAccountMenu({
             画布设置
           </button>
           <div className={`my-1 border-t ${dividerClass}`} />
-          <GlobalWatermarkToggle itemClass={itemClass} labelClass={labelClass} />
           <AppThemePicker itemClass={itemClass} labelClass={labelClass} />
         </div>
       </div>

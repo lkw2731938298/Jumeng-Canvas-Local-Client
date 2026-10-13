@@ -26,6 +26,77 @@ const EPHEMERAL_URL_KEYS = ["imageUrl", "videoUrl", "audioUrl"] as const;
 const SECRET_KEY_RE =
   /^(api[_-]?key|secret|token|password|authorization|credential|access[_-]?key|private[_-]?key)$/i;
 
+/** 媒体输入节点 → 预览 URL 字段 / 素材分类（导入补绑、导出写回 assetId） */
+const MEDIA_NODE_URL_KEY: Record<string, (typeof EPHEMERAL_URL_KEYS)[number]> = {
+  image_input: "imageUrl",
+  video_input: "videoUrl",
+  audio_input: "audioUrl",
+};
+const MEDIA_NODE_CATEGORY: Record<string, AssetCategory> = {
+  image_input: "image",
+  video_input: "video",
+  audio_input: "audio",
+};
+
+/**
+ * 历史本地视频落盘曾用 `{nodeId}-{ts}.mp4` 且未写回 assetId；
+ * 导出时又清掉 videoUrl，导致包内有视频文件、节点 params 却为空。
+ * 导入时按旧节点 ID 前缀把孤儿素材绑回去。
+ */
+function findOrphanAssetOldId(
+  oldNodeId: string,
+  category: AssetCategory | undefined,
+  assetMap: Record<string, string>,
+  categoryByOldId: Record<string, AssetCategory>,
+  usedOldIds: Set<string>,
+): string | null {
+  const candidates = Object.keys(assetMap).filter((oldId) => {
+    if (usedOldIds.has(oldId)) return false;
+    if (!(oldId === oldNodeId || oldId.startsWith(`${oldNodeId}-`))) return false;
+    const cat = categoryByOldId[oldId];
+    if (category && cat && cat !== category) return false;
+    return true;
+  });
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0] ?? null;
+}
+
+/** 导出前：无 assetId 的媒体节点按 nodeId 前缀从清单补绑，避免只剩空节点 */
+function bindAssetIdsBeforeExport(
+  nodes: AppNode[],
+  assets: Asset[],
+): AppNode[] {
+  const used = new Set<string>();
+  // 已有引用先占位，避免把同一素材绑给两个节点
+  for (const n of nodes) {
+    const aid = String(n.data?.params?.assetId ?? "").trim();
+    if (aid) used.add(aid);
+  }
+  return nodes.map((node) => {
+    const params = { ...(node.data?.params ?? {}) };
+    if (String(params.assetId ?? "").trim()) return node;
+    const cat = MEDIA_NODE_CATEGORY[node.type || ""];
+    if (!cat) return node;
+    const hits = assets
+      .filter((a) => {
+        if (used.has(a.id)) return false;
+        if (a.category !== cat) return false;
+        return a.id === node.id || a.id.startsWith(`${node.id}-`);
+      })
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const hit = hits[0];
+    if (!hit) return node;
+    used.add(hit.id);
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        params: { ...params, assetId: hit.id },
+      },
+    } as AppNode;
+  });
+}
+
 export type ProjectPackManifest = {
   format: typeof PROJECT_PACK_FORMAT;
   exportedAt: string;
@@ -212,7 +283,10 @@ export async function exportCurrentProjectPack(): Promise<{
   const projectId = state.projectId;
   if (!projectId) throw new Error("项目未加载，无法导出");
 
-  const nodes = state.nodes.map((node) => {
+  const allAssets = await fetchProjectAssetManifest(projectId);
+  // 先把「有文件无 assetId」的媒体节点补上引用，再清 ephemeral URL
+  const nodesBound = bindAssetIdsBeforeExport(state.nodes, allAssets);
+  const nodes = nodesBound.map((node) => {
     const params = sanitizeParams({ ...(node.data?.params ?? {}) });
     return {
       ...node,
@@ -228,7 +302,6 @@ export async function exportCurrentProjectPack(): Promise<{
   const manifestAssets: ProjectPackManifest["assets"] = [];
   const zipFiles: Record<string, Uint8Array> = {};
 
-  const allAssets = await fetchProjectAssetManifest(projectId);
   const referenced = collectAssetIdsFromNodes(nodes);
   // 整项目：清单内全部素材 + 节点引用到但未登记的（尽量完整）
   const byId = new Map(allAssets.map((a) => [a.id, a]));
@@ -370,8 +443,10 @@ export async function importProjectPackIntoCurrent(
     throw new Error("导出包画布数据损坏");
   }
 
-  // 1) 写入媒体，建立旧→新 assetId
+  // 1) 写入媒体，建立旧→新 assetId（并保留 fileUrl 供节点即时预览）
   const assetMap: Record<string, string> = {};
+  const assetUrlByOldId: Record<string, string> = {};
+  const assetCategoryByOldId: Record<string, AssetCategory> = {};
   for (const entry of manifest.assets || []) {
     const raw = files[entry.file];
     if (!raw) continue;
@@ -389,6 +464,8 @@ export async function importProjectPackIntoCurrent(
         title: entry.title || baseName,
       });
       assetMap[entry.id] = uploaded.id;
+      assetUrlByOldId[entry.id] = uploaded.fileUrl;
+      assetCategoryByOldId[entry.id] = category;
     } catch (err) {
       console.warn("[projectPack] upload asset failed", entry.id, err);
     }
@@ -406,6 +483,16 @@ export async function importProjectPackIntoCurrent(
   const dx = anchor.x - center.x;
   const dy = anchor.y - center.y;
 
+  // 已在 params 里引用的旧 assetId 先占位，孤儿补绑时跳过
+  const usedOldAssetIds = new Set<string>();
+  for (const n of flow.nodes) {
+    const rawParams = isRecord(n.data?.params)
+      ? (n.data!.params as Record<string, unknown>)
+      : {};
+    const aid = String(rawParams.assetId ?? "").trim();
+    if (aid && assetMap[aid]) usedOldAssetIds.add(aid);
+  }
+
   const newNodes: AppNode[] = [];
   for (const n of flow.nodes) {
     const def = NODE_REGISTRY[n.type || ""];
@@ -418,6 +505,32 @@ export async function importProjectPackIntoCurrent(
       sanitizeParams(rawParams),
       assetMap,
     ) as Record<string, unknown>;
+
+    // 无 assetId 时按旧节点 ID 前缀补绑（修复广场模板包里「有视频文件、节点却空」）
+    const urlKey = MEDIA_NODE_URL_KEY[n.type || ""];
+    const wantCat = MEDIA_NODE_CATEGORY[n.type || ""];
+    if (urlKey && !String(params.assetId ?? "").trim()) {
+      const orphanOld = findOrphanAssetOldId(
+        n.id,
+        wantCat,
+        assetMap,
+        assetCategoryByOldId,
+        usedOldAssetIds,
+      );
+      if (orphanOld) {
+        usedOldAssetIds.add(orphanOld);
+        params.assetId = assetMap[orphanOld];
+      }
+    }
+
+    // 有 assetId 时写入本地 fileUrl，避免 manifest 未刷新前节点空白
+    const newAssetId = String(params.assetId ?? "").trim();
+    if (urlKey && newAssetId) {
+      const oldId =
+        Object.entries(assetMap).find(([, neu]) => neu === newAssetId)?.[0] || "";
+      const fileUrl = oldId ? assetUrlByOldId[oldId] : "";
+      if (fileUrl) params[urlKey] = fileUrl;
+    }
 
     const parentId =
       n.parentId && idMap[n.parentId] ? idMap[n.parentId] : undefined;

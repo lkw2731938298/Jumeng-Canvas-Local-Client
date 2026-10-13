@@ -3193,19 +3193,22 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
         timeoutMs: syncBudgetMs,
       });
       let preview = url;
+      let videoAssetId: string | undefined;
       if (job.projectId && job.nodeId) {
         try {
-          preview = await persistLocalVideoResult({
+          const persisted = await persistLocalVideoResult({
             projectId: job.projectId,
             nodeId: job.nodeId,
             url,
             apiKey,
           });
+          preview = persisted.url;
+          videoAssetId = persisted.assetId;
         } catch {
           /* 预览失败仍用上游 URL */
         }
       }
-      return finishSucceeded(preview, undefined, "上游视频已完成");
+      return finishSucceeded(preview, videoAssetId, "上游视频已完成");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (/超时/.test(msg)) {
@@ -3330,19 +3333,56 @@ async function pollLocalJumengImageTaskOnce(params: {
   return { pending: "not_found" };
 }
 
-/** 将上游视频 URL 落成本地可播地址 */
+/** 将上游视频 URL 落成本地可播地址，并登记素材 UUID（与 persistLocalImageResult 对齐） */
 export async function persistLocalVideoResult(params: {
   projectId: string;
   nodeId: string;
   url: string;
   apiKey?: string;
-}): Promise<string> {
+  /** 素材库标题 */
+  assetTitle?: string;
+}): Promise<{ url: string; assetId: string }> {
   const rawUrl = params.url?.trim() || "";
   if (!rawUrl) throw new Error("视频结果 URL 为空");
-  if (rawUrl.startsWith("data:") || rawUrl.startsWith("file:") || rawUrl.startsWith("blob:")) {
-    return rawUrl;
+
+  const title =
+    (params.assetTitle || "").trim() ||
+    String(params.nodeId || "").trim() ||
+    "生成视频";
+
+  const saveB64 = async (b64Raw: string): Promise<{ url: string; assetId: string }> => {
+    const b64 = b64Raw.replace(/^data:video\/\w+;base64,/, "").trim();
+    if (!b64) throw new Error("本地视频结果为空：base64 无效");
+    const id = crypto.randomUUID();
+    const fileName = `${id}.mp4`;
+    const saved = await localStore().writeAsset(params.projectId, fileName, b64);
+    await localStore().registerAssetMeta(params.projectId, {
+      id,
+      fileName,
+      title,
+      category: "video",
+      subcategory: null,
+      fileType: "video/mp4",
+      fileSize: Math.floor((b64.length * 3) / 4),
+      createdAt: new Date().toISOString(),
+    });
+    const url = saved.fileUrl.startsWith("data:application/octet-stream")
+      ? `data:video/mp4;base64,${b64}`
+      : saved.fileUrl;
+    return { url, assetId: id };
+  };
+
+  if (rawUrl.startsWith("data:video")) {
+    const b64 = rawUrl.replace(/^data:video\/[\w+.-]+;base64,/i, "");
+    return saveB64(b64);
   }
-  if (!rawUrl.startsWith("http")) return rawUrl;
+  if (rawUrl.startsWith("data:") || rawUrl.startsWith("file:") || rawUrl.startsWith("blob:")) {
+    // 无法可靠转存时仍返回占位 id，避免节点只写 URL、导出后变空
+    return { url: rawUrl, assetId: crypto.randomUUID() };
+  }
+  if (!rawUrl.startsWith("http")) {
+    return { url: rawUrl, assetId: crypto.randomUUID() };
+  }
 
   try {
     const headers: Record<string, string> = {};
@@ -3353,21 +3393,16 @@ export async function persistLocalVideoResult(params: {
       headers,
       timeoutMs: 300_000,
     });
-    if (proxied.status && proxied.status >= 400) return rawUrl;
+    if (proxied.status && proxied.status >= 400) {
+      return { url: rawUrl, assetId: crypto.randomUUID() };
+    }
     if (proxied.base64) {
-      const saved = await localStore().writeAsset(
-        params.projectId,
-        `${params.nodeId}-${Date.now()}.mp4`,
-        proxied.base64
-      );
-      return saved.fileUrl.startsWith("data:application/octet-stream")
-        ? `data:video/mp4;base64,${proxied.base64}`
-        : saved.fileUrl;
+      return saveB64(proxied.base64);
     }
   } catch {
     /* 回退直链 */
   }
-  return rawUrl;
+  return { url: rawUrl, assetId: crypto.randomUUID() };
 }
 
 /* ------------------------------------------------------------------ */

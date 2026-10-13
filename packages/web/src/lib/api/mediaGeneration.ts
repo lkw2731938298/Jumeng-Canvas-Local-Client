@@ -348,23 +348,27 @@ async function generateFromMediaNodeLocal(
           ? providers.find((p) => p.id === model.providerId)
           : undefined;
         const apiKey = normalizeApiKey(model?.apiKey || provider?.apiKey || "");
-        const resultUrl = await persistLocalVideoResult({
+        const persisted = await persistLocalVideoResult({
           projectId: request.projectId,
           nodeId: request.nodeId,
           url: raw.url,
           apiKey,
         });
-        const jobId = Date.now();
+        const resultUrl = persisted.url;
+        const assetId = persisted.assetId;
         return {
           result: {
-            jobId,
+            // 与图片路径一致：用真实 assetId 作 jobId，避免假轮询
+            jobId: assetId,
             status: "succeeded" as const,
             resultUrl,
-            outputAssets: [{ url: resultUrl }],
+            assetId,
+            outputAssets: [{ url: resultUrl, id: assetId, assetId }],
             message: "本地视频生成完成",
             creditCost: 0,
           },
           resultUrlPreview: resultUrl,
+          resultAssetId: assetId,
           upstreamModel: model?.upstreamModel || upstreamModel,
           providerTaskId: raw.providerTaskId,
           submittedReferenceCount: raw.submittedReferenceCount,

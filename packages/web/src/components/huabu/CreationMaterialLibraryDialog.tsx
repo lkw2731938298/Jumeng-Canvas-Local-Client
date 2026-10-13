@@ -138,9 +138,9 @@ export function CreationMaterialLibraryDialog({
             ) : (
               <div className="grid grid-cols-5 gap-2">
                 {/* 一行 5 个；面板加宽加高后约可同时看到 4 行 */}
-                {visibleItems.map((item) => (
+                {visibleItems.map((item, index) => (
                   <button
-                    key={item.id}
+                    key={`${item.id}::${item.packageUrl || item.mediaUrl || index}`}
                     type="button"
                     onClick={() => onSelect(item)}
                     className="group flex flex-col overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] text-left transition-colors hover:border-[var(--panel-accent-border)]"
