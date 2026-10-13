@@ -422,6 +422,80 @@ export async function applyWebCreatePage(
   };
 }
 
+/**
+ * web_fetch_page：本机代拉公开网页摘要（title / description / 正文文本）。
+ * 解决「助手没打开过网址」——用户给链接时先读再答，禁止瞎编站名口号。
+ */
+export async function applyWebFetchPage(call: LocalChatToolCall): Promise<LocalAgentOpResult> {
+  const parsed = parseToolArgs(call.arguments);
+  if (parsed.error) return { op: call.name, ok: false, message: parsed.error };
+  const a = parsed.args;
+  const url = str(a.url) || str(a.linkUrl) || str(a.href);
+  if (!url) {
+    return { op: call.name, ok: false, message: "缺少 url（要读取的公开网页地址）" };
+  }
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return { op: call.name, ok: false, message: "网址格式不正确" };
+  }
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    return { op: call.name, ok: false, message: "仅支持 http/https 公开网址" };
+  }
+
+  try {
+    const { withBasePath } = await import("@/lib/basePath");
+    const api = withBasePath(`/api/local/fetch-page?url=${encodeURIComponent(parsedUrl.toString())}`);
+    const res = await fetch(api, { cache: "no-store" });
+    const body = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      url?: string;
+      title?: string;
+      description?: string;
+      siteName?: string;
+      text?: string;
+      truncated?: boolean;
+      charCount?: number;
+    };
+    if (!res.ok || body.ok === false) {
+      return {
+        op: call.name,
+        ok: false,
+        message: body.error || `拉取网页失败 HTTP ${res.status}`,
+      };
+    }
+
+    const title = str(body.title);
+    const description = str(body.description);
+    const siteName = str(body.siteName);
+    const text = str(body.text);
+    const finalUrl = str(body.url) || parsedUrl.toString();
+    const lines = [
+      `已读取公开网页：${finalUrl}`,
+      title ? `标题：${title}` : "",
+      siteName ? `站点名：${siteName}` : "",
+      description ? `简介：${description}` : "",
+      text
+        ? `正文摘要${body.truncated ? `（已截断，原文约 ${body.charCount || "?"} 字）` : ""}：\n${text}`
+        : "（未能抽出正文文本，可改用 canvas_set_document_link 让用户预览）",
+    ].filter(Boolean);
+
+    return {
+      op: call.name,
+      ok: true,
+      message: lines.join("\n"),
+    };
+  } catch (err) {
+    return {
+      op: call.name,
+      ok: false,
+      message: err instanceof Error ? err.message : "拉取网页失败",
+    };
+  }
+}
+
 /** web_open_preview：打开文档节点预览（网址或 HTML） */
 export async function applyWebOpenPreview(
   call: LocalChatToolCall,

@@ -220,8 +220,17 @@ export function buildCanvasAgentTools(): LocalChatTool[] {
       }
     ),
     tool(
+      "web_fetch_page",
+      "读取公开网页摘要（本机代拉：标题、简介、正文文本）。用户给出网址、问「这是什么站/口号/内容」时必须先调本工具再回答，禁止凭域名瞎猜站名口号。不做整站镜像/仿站部署；内网地址不可用。",
+      {
+        url: { type: "string", description: "http(s) 公开网址（与 linkUrl/href 任填其一）" },
+        linkUrl: { type: "string", description: "同 url" },
+        href: { type: "string", description: "同 url" },
+      }
+    ),
+    tool(
       "web_create_page",
-      "生成单页静态 HTML 并写入文档节点（resourceKind=html），默认打开画布内预览。嵌入画布图片时：img 的 src 写 canvas-node:<节点id>（或 canvas-asset:0 对应 imageNodeIds[0]），并在 imageNodeIds 列出这些节点；系统会把本轮 @ 媒体并入并内联为 data URL。不要用不存在的外链图。仅静态页，不做部署/爬站。",
+      "生成单页静态 HTML 并写入文档节点（resourceKind=html），默认打开画布内预览。嵌入画布图片时：img 的 src 写 canvas-node:<节点id>（或 canvas-asset:0 对应 imageNodeIds[0]），并在 imageNodeIds 列出这些节点；系统会把本轮 @ 媒体并入并内联为 data URL。不要用不存在的外链图。仅静态页；读外站内容用 web_fetch_page，不要承诺部署或整站仿站。",
       {
         html: { type: "string", description: "完整 HTML 或 body 片段；图用 canvas-node:<id> 或 canvas-asset:N" },
         content: { type: "string", description: "同 html" },

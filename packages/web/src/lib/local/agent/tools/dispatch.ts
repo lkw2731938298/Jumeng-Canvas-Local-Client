@@ -16,7 +16,7 @@ import { resolveAgentNodePosition } from "@/lib/canvas/agentPlaceNode";
 import { defaultSourceHandle, resolveNodeRef } from "@/lib/canvas/projectAgentCanvasOps";
 import { REFERENCE_INPUT_ID } from "@/lib/canvas/referencePort";
 import { applyMediaGenerateImage, applyMediaGenerateVideo, applyMediaInspect, applyMediaListModels } from "./media";
-import { applyWebCreatePage, applyWebOpenPreview } from "./web";
+import { applyWebCreatePage, applyWebFetchPage, applyWebOpenPreview } from "./web";
 import { applySkillReadReference } from "./skill";
 import { parseToolArgs } from "./parseToolArgs";
 
@@ -201,6 +201,7 @@ export function toolCallToOps(call: LocalChatToolCall): { ops: CanvasOp[]; error
     case "media_generate_image":
     case "media_generate_video":
     case "skill_read_reference":
+    case "web_fetch_page":
     case "web_create_page":
     case "web_open_preview":
       // 复杂/异步逻辑在 dispatch 里处理
@@ -366,6 +367,11 @@ export async function dispatchAgentToolCalls(opts: {
     }
     if (call.name === "skill_read_reference") {
       const r = await applySkillReadReference(call, { activeSkillSlug });
+      out.push({ ...r, toolCallId: call.id });
+      continue;
+    }
+    if (call.name === "web_fetch_page") {
+      const r = await applyWebFetchPage(call);
       out.push({ ...r, toolCallId: call.id });
       continue;
     }

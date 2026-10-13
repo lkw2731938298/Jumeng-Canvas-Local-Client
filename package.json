@@ -1,6 +1,6 @@
 {
   "name": "jumeng-canvas-monorepo",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "private": true,
   "description": "聚梦无限画布 · 本地桌面版",
   "appId": "com.lieka.jumengcanvas",
