@@ -493,3 +493,107 @@ export function writeDirectorSceneFile(projectId: string, nodeId: string, scene:
   writeJson(directorSceneFile(projectId, nodeId), record);
   return record;
 }
+
+/** 画板草稿（本地版：projects/{projectId}/drawings/{nodeId}.json + .meta.json） */
+export type LocalDrawingDraftRecord = {
+  projectId: string;
+  nodeId: string;
+  document: Record<string, unknown>;
+  revision: number;
+  ossKey: string;
+  updatedAt: string;
+};
+
+function drawingDraftFile(projectId: string, nodeId: string) {
+  return path.join(
+    resolveDataRoot(),
+    "projects",
+    safeName(projectId),
+    "drawings",
+    `${safeName(nodeId)}.json`
+  );
+}
+
+function drawingDraftMetaFile(projectId: string, nodeId: string) {
+  return path.join(
+    resolveDataRoot(),
+    "projects",
+    safeName(projectId),
+    "drawings",
+    `${safeName(nodeId)}.meta.json`
+  );
+}
+
+export function readDrawingDraftFile(
+  projectId: string,
+  nodeId: string
+): LocalDrawingDraftRecord {
+  const meta = readJson<Record<string, unknown> | null>(drawingDraftMetaFile(projectId, nodeId), null);
+  const ossKey = `projects/${safeName(projectId)}/drawings/${safeName(nodeId)}.json`;
+  if (!meta || typeof meta !== "object") {
+    return {
+      projectId,
+      nodeId,
+      document: {},
+      revision: 0,
+      ossKey: "",
+      updatedAt: "",
+    };
+  }
+  const document = readJson<Record<string, unknown>>(drawingDraftFile(projectId, nodeId), {});
+  return {
+    projectId,
+    nodeId,
+    document: document && typeof document === "object" ? document : {},
+    revision: Number(meta.revision) || 0,
+    ossKey: String(meta.ossKey || ossKey),
+    updatedAt: String(meta.updatedAt || ""),
+  };
+}
+
+export function writeDrawingDraftFile(
+  projectId: string,
+  nodeId: string,
+  document: Record<string, unknown>,
+  expectedRevision?: number | null
+): LocalDrawingDraftRecord {
+  const current = readDrawingDraftFile(projectId, nodeId);
+  if (
+    expectedRevision != null &&
+    Number.isFinite(expectedRevision) &&
+    expectedRevision !== current.revision
+  ) {
+    const err = new Error("REVISION_CONFLICT") as Error & { code?: string };
+    err.code = "REVISION_CONFLICT";
+    throw err;
+  }
+  const nextRevision = current.revision + 1;
+  const ossKey = `projects/${safeName(projectId)}/drawings/${safeName(nodeId)}.json`;
+  const updatedAt = nowIso();
+  writeJson(drawingDraftFile(projectId, nodeId), document ?? {});
+  writeJson(drawingDraftMetaFile(projectId, nodeId), {
+    projectId,
+    nodeId,
+    revision: nextRevision,
+    ossKey,
+    updatedAt,
+  });
+  return {
+    projectId,
+    nodeId,
+    document: document ?? {},
+    revision: nextRevision,
+    ossKey,
+    updatedAt,
+  };
+}
+
+export function deleteDrawingDraftFile(projectId: string, nodeId: string): void {
+  for (const fp of [drawingDraftFile(projectId, nodeId), drawingDraftMetaFile(projectId, nodeId)]) {
+    try {
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    } catch {
+      /* ignore */
+    }
+  }
+}

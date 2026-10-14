@@ -3,6 +3,7 @@
  */
 
 import { toast } from "sonner";
+import { resolveCanvasToolPrimaryModel } from "@/lib/api/canvasTools";
 import { getCreditQuote } from "@/lib/api/credits";
 import type { GenerationReference } from "@/lib/api/textGeneration.types";
 import { resolveNodeMediaUrl } from "@/lib/canvas/resolveNodeMediaUrl";
@@ -13,12 +14,13 @@ import type { StoryboardUpstreamMedia } from "@/lib/canvas/resolveUpstreamStoryb
 import { useCanvasStore } from "@/stores/canvasStore";
 import { appendStoryboardVisualStyle } from "@/lib/canvas/storyboardVisualStyle";
 import type { VisualStyleItem } from "@/lib/canvas/renderToolPrompt";
-import { reindexTableRows } from "@/types/storyboard-table";
+import { reindexTableRows, STORYBOARD_TABLE_MODEL } from "@/types/storyboard-table";
 import type { WorkflowNodeData } from "@/types/workflow";
 
 export const STORYBOARD_FROM_IMAGE_TOOL = "storyboard_from_image" as const;
 export const STORYBOARD_FROM_IMAGE_KIND = "storyboard_from_image" as const;
-export const STORYBOARD_FROM_IMAGE_MODEL = "" as const;
+/** 未配置画布工具主模型时的回退（与文本分镜表一致） */
+export const STORYBOARD_FROM_IMAGE_MODEL = STORYBOARD_TABLE_MODEL;
 export const IMAGE_STORYBOARD_PARSE_SOURCE = "image_node_parse" as const;
 
 function patchGridParams(gridNodeId: string, patch: Record<string, unknown>) {
@@ -63,6 +65,8 @@ export async function runImageStoryboardParseIntoGrid(opts: {
   projectId: string;
   gridNodeId: string;
   images: StoryboardUpstreamMedia[];
+  /** 顶栏报价主模型；空则读画布工具配置再回退 STORYBOARD_FROM_IMAGE_MODEL */
+  model?: string;
   onProgress?: (message: string) => void;
   /** 提取分镜与主体时套用的视觉风格 */
   visualStyle?: VisualStyleItem | null;
@@ -73,6 +77,15 @@ export async function runImageStoryboardParseIntoGrid(opts: {
   if (!gridNodeId) throw new Error("分镜表不存在");
   if (!opts.images.length) throw new Error("请先连接图片节点");
 
+  // 本地版曾写死空模型名，提交会报「未找到模型」；须与顶栏报价用同一主模型
+  const model =
+    String(opts.model || "").trim() ||
+    (await resolveCanvasToolPrimaryModel(
+      STORYBOARD_FROM_IMAGE_TOOL,
+      STORYBOARD_FROM_IMAGE_MODEL
+    )) ||
+    STORYBOARD_FROM_IMAGE_MODEL;
+
   opts.onProgress?.("正在解析参考图…");
   const references = await resolveImageReferences(projectId, opts.images);
   if (!references.length) {
@@ -82,7 +95,7 @@ export async function runImageStoryboardParseIntoGrid(opts: {
   let quoteToken: string | undefined;
   try {
     const quote = await getCreditQuote({
-      model: STORYBOARD_FROM_IMAGE_MODEL,
+      model,
       category: "text",
       canvasTool: STORYBOARD_FROM_IMAGE_TOOL,
     });
@@ -107,7 +120,7 @@ export async function runImageStoryboardParseIntoGrid(opts: {
     nodeId: `${gridNodeId}::image-parse`,
     workflowId,
     content,
-    model: STORYBOARD_FROM_IMAGE_MODEL,
+    model,
     textPromptKind: STORYBOARD_FROM_IMAGE_KIND,
     canvasTool: STORYBOARD_FROM_IMAGE_TOOL,
     quoteToken,

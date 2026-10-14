@@ -559,6 +559,7 @@ export function StoryboardGridTopMenuOverlay() {
           videoFileUrl,
           videoParams,
           toastSuccess: false,
+          model: parseVideoQuote.modelName || STORYBOARD_TABLE_MODEL,
         });
         toast.success(`已从视频解析 ${result.shotCount} 行分镜`);
         return;
@@ -570,6 +571,8 @@ export function StoryboardGridTopMenuOverlay() {
           projectId,
           gridNodeId: selectedNodeId,
           images: upstream.images,
+          // 与顶栏算力报价同一主模型，避免提交空 model
+          model: parseImageQuote.modelName || STORYBOARD_TABLE_MODEL,
         });
         toast.success(`已从图片解析 ${result.shotCount} 行分镜`);
         return;
@@ -668,6 +671,10 @@ export function StoryboardGridTopMenuOverlay() {
     creditsEnabled,
     refetchQuote,
     queryClient,
+    parseImageQuote.modelName,
+    parseVideoQuote.modelName,
+    parseTableQuote.modelName,
+    subjectExtractQuote.modelName,
   ]);
 
   const handleAddRow = useCallback(() => {

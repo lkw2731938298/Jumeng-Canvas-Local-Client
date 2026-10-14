@@ -25,11 +25,13 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { reindexTableRows } from "@/types/storyboard-table";
 import type { WorkflowNodeData } from "@/types/workflow";
 import type { ViralRemakeAspect, ViralRemakeClarity } from "@/lib/canvas/viralRemakeSession";
+import { resolveCanvasToolPrimaryModel } from "@/lib/api/canvasTools";
 import {
   STORYBOARD_FROM_VIDEO_KIND,
   STORYBOARD_FROM_VIDEO_MODEL,
   STORYBOARD_FROM_VIDEO_TOOL,
 } from "@/lib/canvas/viralRemakePipeline";
+import { STORYBOARD_TABLE_MODEL } from "@/types/storyboard-table";
 
 /** 分镜表 viralRemakeMeta.source：画布视频解析（不自动弹出爆款向导） */
 export const VIDEO_STORYBOARD_PARSE_SOURCE = "video_node_parse" as const;
@@ -103,11 +105,13 @@ function buildKeyframeReferences(
           return frames[idx]!;
         });
   for (const f of picked) {
+    const url = String(f.fileUrl || f.thumbnailUrl || "").trim();
+    if (!url) continue;
     refs.push({
       nodeId: `video-parse-kf-${f.index}`,
       type: "image",
       label: `镜头${f.index}关键帧`,
-      url: f.fileUrl || f.thumbnailUrl,
+      url,
     });
   }
   return refs;
@@ -168,6 +172,8 @@ export async function runVideoStoryboardParseIntoGrid(opts: {
   videoAssetId: string;
   videoFileUrl: string;
   videoParams?: Record<string, unknown>;
+  /** 顶栏报价主模型；空则读画布工具配置 */
+  model?: string;
   onProgress?: (message: string) => void;
   /** 是否 toast 成功（分镜表按钮自行汇总时可关） */
   toastSuccess?: boolean;
@@ -183,6 +189,13 @@ export async function runVideoStoryboardParseIntoGrid(opts: {
   if (!gridNodeId) throw new Error("分镜表不存在");
   const assetId = String(opts.videoAssetId || "").trim();
   if (!assetId) throw new Error("请先上传视频");
+
+  const modelFallback =
+    String(STORYBOARD_FROM_VIDEO_MODEL || "").trim() || STORYBOARD_TABLE_MODEL;
+  const model =
+    String(opts.model || "").trim() ||
+    (await resolveCanvasToolPrimaryModel(STORYBOARD_FROM_VIDEO_TOOL, modelFallback)) ||
+    modelFallback;
 
   const { aspectRatio, clarity } = resolveAspectClarity(opts.videoParams ?? {});
 
@@ -208,7 +221,7 @@ export async function runVideoStoryboardParseIntoGrid(opts: {
   let quoteToken: string | undefined;
   try {
     const quote = await getCreditQuote({
-      model: STORYBOARD_FROM_VIDEO_MODEL,
+      model,
       category: "text",
       canvasTool: STORYBOARD_FROM_VIDEO_TOOL,
     });
@@ -236,7 +249,7 @@ export async function runVideoStoryboardParseIntoGrid(opts: {
       nodeId: `${gridNodeId}::video-parse`,
       workflowId,
       content,
-      model: STORYBOARD_FROM_VIDEO_MODEL,
+      model,
       textPromptKind: STORYBOARD_FROM_VIDEO_KIND,
       canvasTool: STORYBOARD_FROM_VIDEO_TOOL,
       quoteToken,
@@ -295,6 +308,8 @@ export async function runVideoStoryboardParse(opts: {
   sourceHeight?: number;
   edges: Edge[];
   videoParams?: Record<string, unknown>;
+  /** 画布工具主模型；空则下游再解析 */
+  model?: string;
   onProgress?: (message: string) => void;
 }): Promise<VideoStoryboardParseResult> {
   const projectId = String(opts.projectId || "").trim();
@@ -320,6 +335,7 @@ export async function runVideoStoryboardParse(opts: {
     videoAssetId: assetId,
     videoFileUrl: opts.videoFileUrl,
     videoParams: opts.videoParams,
+    model: opts.model,
     onProgress: opts.onProgress,
   });
 }

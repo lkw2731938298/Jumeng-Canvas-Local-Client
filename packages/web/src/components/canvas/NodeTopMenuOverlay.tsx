@@ -110,8 +110,10 @@ import { navigateToVideoEditor } from "@/lib/canvas/videoEditorNavigation";
 import { cropVideoAsset } from "@/lib/canvas/videoCrop";
 import { splitVideoAvAsset } from "@/lib/canvas/videoAvSplit";
 import { getAudioNodeRef } from "@/lib/canvas/audioNodeRegistry";
+import { resolveCanvasToolPrimaryModel } from "@/lib/api/canvasTools";
 import { runVideoStoryboardParse } from "@/lib/canvas/videoStoryboardParse";
 import { STORYBOARD_FROM_VIDEO_TOOL } from "@/lib/canvas/viralRemakePipeline";
+import { STORYBOARD_TABLE_MODEL } from "@/types/storyboard-table";
 import {
   ensureVideoFrameEditDuration,
   findConnectedReferenceImageUrl,
@@ -2775,6 +2777,10 @@ export function NodeTopMenuOverlay() {
                   try {
                     const assetId = await resolveVideoAssetId();
                     if (!assetId) return;
+                    const parseModel = await resolveCanvasToolPrimaryModel(
+                      STORYBOARD_FROM_VIDEO_TOOL,
+                      STORYBOARD_TABLE_MODEL
+                    );
                     await runVideoStoryboardParse({
                       projectId,
                       videoNodeId: selectedNodeId,
@@ -2785,6 +2791,7 @@ export function NodeTopMenuOverlay() {
                       sourceHeight: node.height,
                       edges,
                       videoParams: params,
+                      model: parseModel || STORYBOARD_TABLE_MODEL,
                       onProgress: setParseVideoProgress,
                     });
                     void invalidateCanvasCreditQueries(queryClient, projectId);

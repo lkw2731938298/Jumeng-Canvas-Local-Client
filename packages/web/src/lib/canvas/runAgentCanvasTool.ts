@@ -790,6 +790,10 @@ export async function runAgentCanvasTool(
         return failResult("请先上传视频");
       }
       try {
+        const videoModel = await resolveCanvasToolPrimaryModel(
+          "storyboard_from_video",
+          STORYBOARD_TABLE_MODEL
+        );
         const result = await runVideoStoryboardParse({
           projectId,
           videoNodeId: nodeId,
@@ -800,6 +804,7 @@ export async function runAgentCanvasTool(
           sourceHeight: sourceNode.height,
           edges: store.edges,
           videoParams: nodeParams,
+          model: videoModel || STORYBOARD_TABLE_MODEL,
         });
         toast.success(`已从视频解析 ${result.shotCount} 行分镜`);
         return okResult([result.gridNodeId]);
@@ -838,6 +843,10 @@ export async function runAgentCanvasTool(
         } catch {
           /* 用节点内 URL */
         }
+        const videoModel = await resolveCanvasToolPrimaryModel(
+          "storyboard_from_video",
+          STORYBOARD_TABLE_MODEL
+        );
         const result = await runVideoStoryboardParseIntoGrid({
           projectId,
           gridNodeId: nodeId,
@@ -846,6 +855,7 @@ export async function runAgentCanvasTool(
           videoFileUrl,
           videoParams,
           toastSuccess: false,
+          model: videoModel || STORYBOARD_TABLE_MODEL,
         });
         toast.success(`已从视频解析 ${result.shotCount} 行分镜`);
         return okResult([result.gridNodeId]);
@@ -854,10 +864,15 @@ export async function runAgentCanvasTool(
         toast.error("请先将参考图连接到分镜表 ref_in");
         return failResult("请先将参考图连接到分镜表 ref_in");
       }
+      const imageModel = await resolveCanvasToolPrimaryModel(
+        "storyboard_from_image",
+        STORYBOARD_TABLE_MODEL
+      );
       const result = await runImageStoryboardParseIntoGrid({
         projectId,
         gridNodeId: nodeId,
         images: upstream.images,
+        model: imageModel || STORYBOARD_TABLE_MODEL,
       });
       toast.success(`已从图片解析 ${result.shotCount} 行分镜`);
       return okResult();

@@ -1,4 +1,6 @@
 import { apiFetch } from "./client";
+import { isLocalDesktop } from "@/lib/localDesktop";
+import { withBasePath } from "@/lib/basePath";
 
 /** 切镜结果：关键帧 + 分段参考视频（单段≤12s，供 SD2.0 r2v） */
 export type ViralRemakeShotFrame = {
@@ -57,6 +59,38 @@ function normalizeResult(task: ViralRemakeExtractTask): ViralRemakeExtractResult
   throw new Error(task.error || task.message || "切镜结果为空");
 }
 
+/** 开源本地：本机 ffmpeg 同步切镜（无云端 Worker） */
+async function extractViralRemakeShotsLocal(params: {
+  projectId: string;
+  videoAssetId: string;
+  stripAudio?: boolean;
+  onProgress?: (message: string) => void;
+}): Promise<ViralRemakeExtractResult> {
+  params.onProgress?.("正在本机切镜…");
+  const res = await fetch(withBasePath("/api/local/viral-remake/extract-shots"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: params.projectId,
+      videoAssetId: params.videoAssetId,
+      ...(params.stripAudio ? { stripAudio: true } : {}),
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    content?: ViralRemakeExtractTask & {
+      result?: ViralRemakeExtractResult;
+      shots?: ViralRemakeShotFrame[];
+    };
+  };
+  if (!res.ok) {
+    throw new Error(body.message || `切镜失败（HTTP ${res.status}）`);
+  }
+  const content = body.content || (body as unknown as ViralRemakeExtractTask);
+  params.onProgress?.(`已切出 ${content.shotCount ?? content.result?.shotCount ?? 0} 镜`);
+  return normalizeResult(content as ViralRemakeExtractTask);
+}
+
 /** 启动切镜（异步优先） */
 export async function startViralRemakeExtract(params: {
   projectId: string;
@@ -64,6 +98,17 @@ export async function startViralRemakeExtract(params: {
   /** 出海：运镜参考去音轨，避免原片对白污染成片语音 */
   stripAudio?: boolean;
 }): Promise<ViralRemakeExtractTask> {
+  if (isLocalDesktop) {
+    const result = await extractViralRemakeShotsLocal(params);
+    return {
+      taskId: "",
+      status: "succeeded",
+      result,
+      shotCount: result.shotCount,
+      shots: result.shots,
+      videoAssetId: result.videoAssetId,
+    };
+  }
   return apiFetch<ViralRemakeExtractTask>("/api/v1/viral-remake/extract-shots", {
     method: "POST",
     body: JSON.stringify({
@@ -80,7 +125,8 @@ export async function getViralRemakeExtractStatus(taskId: string): Promise<Viral
 }
 
 /**
- * 爆款复刻 / 出海：切镜并等待完成（异步轮询；同步降级时一次返回）。
+ * 爆款复刻 / 出海 / 分镜表视频提取：切镜并等待完成。
+ * 本地桌面版走本机 ffmpeg 同步接口。
  */
 export async function extractViralRemakeShots(params: {
   projectId: string;
@@ -90,6 +136,10 @@ export async function extractViralRemakeShots(params: {
   onProgress?: (message: string) => void;
   maxWaitMs?: number;
 }): Promise<ViralRemakeExtractResult> {
+  if (isLocalDesktop) {
+    return extractViralRemakeShotsLocal(params);
+  }
+
   const started = await startViralRemakeExtract({
     projectId: params.projectId,
     videoAssetId: params.videoAssetId,
@@ -104,7 +154,6 @@ export async function extractViralRemakeShots(params: {
 
   const taskId = (started.taskId || "").trim();
   if (!taskId) {
-    // 无 taskId 却非 succeeded：异常响应
     throw new Error(started.message || "切镜任务启动失败");
   }
 

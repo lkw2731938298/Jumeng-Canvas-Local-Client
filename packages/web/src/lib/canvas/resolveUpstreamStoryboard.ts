@@ -93,13 +93,17 @@ export async function resolveStoryboardUpstream(
   const videos: StoryboardUpstreamMedia[] = [];
   const images: StoryboardUpstreamMedia[] = [];
 
+  let sawVideoNode = false;
+  let sawImageNode = false;
   for (const n of sources) {
     if (n.type === "video_input") {
+      sawVideoNode = true;
       const m = mediaFromNode(n);
       if (m) videos.push(m);
       continue;
     }
     if (n.type === "image_input" || n.type === "director_stage") {
+      sawImageNode = true;
       const m = mediaFromNode(n);
       if (m) images.push(m);
     }
@@ -115,7 +119,29 @@ export async function resolveStoryboardUpstream(
     };
   }
 
+  // 已连视频节点但读不到素材：仍标 video，交给下游抛「请先上传视频」
+  if (sawVideoNode) {
+    return {
+      kind: "video",
+      textContent: "",
+      textSourceNodeId: null,
+      videos,
+      images,
+    };
+  }
+
   if (images.length > 0) {
+    return {
+      kind: "image",
+      textContent: "",
+      textSourceNodeId: null,
+      videos,
+      images,
+    };
+  }
+
+  // 已连图片节点但无 assetId/url：仍标 image，避免误走文本路径
+  if (sawImageNode) {
     return {
       kind: "image",
       textContent: "",

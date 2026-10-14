@@ -58,7 +58,8 @@ import { getOverseasMarket } from "@/lib/canvas/overseasMarkets";
 
 export const STORYBOARD_FROM_VIDEO_TOOL = "storyboard_from_video" as const;
 export const STORYBOARD_FROM_VIDEO_KIND = "storyboard_from_video" as const;
-export const STORYBOARD_FROM_VIDEO_MODEL = "" as const;
+/** 未配置画布工具主模型时回退（本地曾写空串导致「未找到模型」） */
+export const STORYBOARD_FROM_VIDEO_MODEL = "doubao_pro" as const;
 
 /** 主体图横向；成片/参考片段纵向列表（对齐 oiioii 式镜头列表） */
 const VIRAL_SUBJECT_COLS = 4;
