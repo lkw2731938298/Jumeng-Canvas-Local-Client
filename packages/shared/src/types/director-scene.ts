@@ -153,7 +153,10 @@ export interface DirectorAnimTrack {
   motionPathId?: string | null;
   motionPathStart?: number;
   motionPathEnd?: number;
-  /** 默认 true：路径管 XZ，关键帧可覆盖 Y */
+  /**
+   * 历史字段：曾表示「路径只管 XZ、Y 跟关键帧」。
+   * 现默认 false；采样始终用路径 XYZ，仅播放头附近 position 关键帧可盖住。
+   */
   pathControlsXZ?: boolean;
   orientToPath?: boolean;
   keyframes: DirectorAnimKeyframe[];

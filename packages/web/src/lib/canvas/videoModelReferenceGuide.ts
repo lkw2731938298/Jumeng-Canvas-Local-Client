@@ -23,6 +23,14 @@ export function getVideoModelReferenceGuide(model: CanvasModel): string | null {
 
   const mode = modelVideoMode(model);
   const caps = modelCapabilities(model);
+  const nameBlob = [model.name, model.displayName, model.description]
+    .map((s) => String(s || "").toLowerCase())
+    .join(" ");
+
+  // 即梦动作模仿：角色图 + 驱动视频缺一不可（上游 field image / video 必填）
+  if (/动作模仿|dreamactor|motion[\s_-]?imitat|mimic/.test(nameBlob)) {
+    return "动作模仿：须同时连接①角色参考图②动作驱动视频（缺图会报 field 'image' is required）。";
+  }
 
   if (mode === "lip_sync" || caps.includes("lip_sync")) {
     return "对口型：需参考视频与音频素材。";

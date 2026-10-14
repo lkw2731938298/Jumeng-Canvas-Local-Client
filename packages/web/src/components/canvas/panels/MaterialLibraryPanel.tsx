@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Film,
@@ -19,6 +19,7 @@ import {
 } from "@/lib/canvas/nodePlacement";
 import { libraryNodeTypeForItem } from "@/lib/canvas/materialLibrary";
 import {
+  isVideoMediaUrl,
   listMaterialLibrary,
   materialLibraryKey,
   type MaterialLibraryCategory,
@@ -32,6 +33,99 @@ import {
   filterLibraryItemsByTag,
   type PromptLibraryFilterId,
 } from "@/components/canvas/PromptLibraryCategoryFilter";
+
+/** 封面停在稍靠后的一帧，避免 mp4 首帧全黑 */
+function coverPosterTime(video: HTMLVideoElement): number {
+  const dur = video.duration;
+  return Number.isFinite(dur) && dur > 0 ? Math.min(0.12, dur * 0.08) : 0.1;
+}
+
+/**
+ * 素材封面。视频默认只显示一帧；鼠标移入才静音播放，移出暂停并回到封面帧。
+ * 不要整页 autoplay，否则会同时拉取并解码全部 mp4。
+ */
+function LibraryItemCard({
+  item,
+  fit,
+  disabled,
+  title,
+  onSelect,
+}: {
+  item: MaterialLibraryItem;
+  fit: string;
+  disabled: boolean;
+  title: string;
+  onSelect: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const src = item.mediaUrl ? ensureHttpsOssUrl(item.mediaUrl) || item.mediaUrl : "";
+  const isVideo = Boolean(src) && (item.mediaType === "video" || isVideoMediaUrl(src));
+
+  const playCover = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    void video.play().catch(() => {
+      /* 未缓冲完或被浏览器拦住时保持静帧 */
+    });
+  };
+
+  const stopCover = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    try {
+      video.currentTime = coverPosterTime(video);
+    } catch {
+      /* 部分源不允许 seek */
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      onMouseEnter={isVideo ? playCover : undefined}
+      onMouseLeave={isVideo ? stopCover : undefined}
+      className="group flex flex-col overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] text-left transition-colors hover:border-purple-400/40 disabled:opacity-50"
+      title={title}
+    >
+      <div className="relative aspect-square overflow-hidden bg-black/30">
+        {isVideo ? (
+          <video
+            ref={videoRef}
+            src={src}
+            className={`h-full w-full ${fit}`}
+            muted
+            playsInline
+            loop
+            preload="metadata"
+            onLoadedData={(e) => {
+              const video = e.currentTarget;
+              // 正在悬停播放时不要把进度拽回封面帧
+              if (!video.paused) return;
+              try {
+                video.currentTime = coverPosterTime(video);
+              } catch {
+                /* 部分源不允许 seek */
+              }
+            }}
+          />
+        ) : src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className={`h-full w-full ${fit}`} draggable={false} />
+        ) : (
+          <div className="flex h-full items-center justify-center text-white/20">
+            <ImageIcon className="h-6 w-6" />
+          </div>
+        )}
+      </div>
+      <div className="truncate px-1.5 py-1.5 text-[11px] text-white/70 group-hover:text-white">
+        {item.title}
+      </div>
+    </button>
+  );
+}
 
 const TABS: {
   key: MaterialLibraryCategory;
@@ -145,15 +239,6 @@ export function MaterialLibraryPanel({
 
   if (!isOpen) return null;
 
-  const hint =
-    tab === "effect"
-      ? "视频特效落视频节点（可连 Seedance 2.0）；GIF/WebP 动图落图节点作参考"
-      : tab === "prompt"
-        ? "选择后落可编辑文本节点（可连图片/视频节点作参考）"
-        : tab === "template"
-          ? "连通官网首页模版库；点击后将工程包合并导入当前画布（视口中心）"
-          : "选择后落图片节点（无上下弹窗，可连图片/视频节点作参考）";
-
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} />
@@ -193,11 +278,6 @@ export function MaterialLibraryPanel({
             ))}
           </div>
 
-          <p className="px-4 pt-2 text-[11px] text-white/35">
-            {hint}
-            · 仅管理员可在后台上传
-          </p>
-
           <div className="flex-1 overflow-y-auto px-4 py-3">
             <MaterialLibraryCategoryFilter
               categories={tagCategories}
@@ -214,51 +294,18 @@ export function MaterialLibraryPanel({
               <div className="grid grid-cols-5 gap-2">
                 {/* 一行 5 个；面板加宽加高后约可同时看到 4 行 */}
                 {visibleItems.map((item, index) => (
-                  <button
+                  <LibraryItemCard
                     key={`${item.id}::${item.packageUrl || item.mediaUrl || index}`}
-                    type="button"
-                    onClick={() => handleSelect(item)}
+                    item={item}
+                    fit={tab === "prompt" ? "object-contain" : "object-cover"}
                     disabled={importingId === item.id}
-                    className="group flex flex-col overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] text-left transition-colors hover:border-purple-400/40 disabled:opacity-50"
                     title={
                       tab === "template"
                         ? `导入模板「${item.title}」到当前画布`
                         : `添加「${item.title}」到画布`
                     }
-                  >
-                    {/* 封面统一 1:1；提示词库横竖图 object-contain 适应 */}
-                    <div className="relative aspect-square overflow-hidden bg-black/30">
-                      {item.mediaType === "video" ? (
-                        <video
-                          src={ensureHttpsOssUrl(item.mediaUrl) || item.mediaUrl}
-                          className={`h-full w-full ${
-                            tab === "prompt" ? "object-contain" : "object-cover"
-                          }`}
-                          muted
-                          playsInline
-                          loop
-                          preload="metadata"
-                        />
-                      ) : item.mediaUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={ensureHttpsOssUrl(item.mediaUrl) || item.mediaUrl}
-                          alt=""
-                          className={`h-full w-full ${
-                            tab === "prompt" ? "object-contain" : "object-cover"
-                          }`}
-                          draggable={false}
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-white/20">
-                          <ImageIcon className="h-6 w-6" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="truncate px-1.5 py-1.5 text-[11px] text-white/70 group-hover:text-white">
-                      {item.title}
-                    </div>
-                  </button>
+                    onSelect={() => handleSelect(item)}
+                  />
                 ))}
               </div>
             )}

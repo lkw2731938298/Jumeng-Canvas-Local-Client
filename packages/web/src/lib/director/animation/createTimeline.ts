@@ -44,7 +44,8 @@ export function createAnimTrack(
     muted: false,
     locked: false,
     interpolation: "linear",
-    pathControlsXZ: true,
+    // false：路径驱动 XYZ，模型跟随轨迹高低；true 为历史兼容字段，采样侧已不再锁 Y
+    pathControlsXZ: false,
     orientToPath: kind !== "prop",
     motionPathId: null,
     motionPathStart: 0,
@@ -96,6 +97,32 @@ export function ensureHostCameraTrack(
 export function openOrCreateAnimation(scene: DirectorSceneState): DirectorAnimationTimeline {
   const base = scene.animation ?? createDefaultAnimationTimeline();
   return ensureHostCameraTrack(base, scene.objects);
+}
+
+/**
+ * 在播放头记下模型落点，并清掉其它位置关键帧。
+ * 旧位置帧会在采样时盖住刚拖到的坐标，表现为松手回到原点、只有轨迹变了。
+ */
+export function upsertSolePositionKeyframe(
+  keyframes: DirectorAnimKeyframe[],
+  time: number,
+  position: [number, number, number]
+): DirectorAnimKeyframe[] {
+  const stripped = keyframes
+    .map((k) => {
+      if (k.position == null) return k;
+      const { position: _drop, ...rest } = k;
+      return rest;
+    })
+    .filter(
+      (k) =>
+        k.rotation != null ||
+        k.scale != null ||
+        k.lookAt != null ||
+        k.fov != null ||
+        k.motion != null
+    );
+  return upsertKeyframe(stripped, createAnimKeyframe(time, { position }));
 }
 
 export function upsertKeyframe(

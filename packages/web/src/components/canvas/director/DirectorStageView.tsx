@@ -47,13 +47,13 @@ import {
   evaluateTimeline,
   exportTimelineVideo,
   invalidateMotionPathCache,
-  moveMotionPathSampleTo,
+  closestPathPointIndex,
   openOrCreateAnimation,
   resolveExportSize,
   syncScenePlacementToTimelineStart,
-  motionPathAlongAtTime,
   TimelineHistoryStack,
   upsertKeyframe,
+  upsertSolePositionKeyframe,
   motionPathToolClosed,
   motionPathDrawToolLabel,
   footPointOnGround,
@@ -298,19 +298,67 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   }, [assets, panoramaUploadUrl, scene?.sceneSettings?.panorama?.assetId]);
   const timelineSample = useMemo(() => {
     if (!scene?.animation || !timelineOpen) return null;
-    return evaluateTimeline(scene, timelinePlayhead, scene.animation);
-  }, [scene, timelineOpen, timelinePlayhead]);
+    // 暂停时不叠加步态起伏，模型脚底与轨迹顶点对齐；播放时才走路
+    return evaluateTimeline(scene, timelinePlayhead, scene.animation, {
+      locomotion: timelinePlaying,
+    });
+  }, [scene, timelineOpen, timelinePlayhead, timelinePlaying]);
 
-  /** 预览用场景：播放头驱动物体位姿，不写回 JSON；主视口相机始终用 live，可自由 Orbit */
+  /**
+   * 刚平移落下的物体：暂停且播放头还在落点时刻时，画面用 objects[].transform.position。
+   * 路径采样停在曲线上，不会跟着被拖动的那一个顶点走，否则松手模型回到原点、只有轨迹变了。
+   */
+  const [heldPlacements, setHeldPlacements] = useState<Record<string, number>>({});
+
+  /**
+   * 预览用场景：播放头驱动物体位姿，不写回 JSON；主视口相机始终用 live。
+   *
+   * 链路（拖模型）：
+   * 1) 时间轴打开 → 默认用路径采样位姿（非 objects[].transform）
+   * 2) 按下 gizmo → viewportInteracting，suspend 冻结 Object3D，只挪「脚下」一个路径顶点
+   * 3) 松手落盘 → 写 objects 位姿 + 单顶点 + 播放头 placeKf
+   * 4) 暂停时被拖过的物体继续显示刚写入的模型坐标，直到播放或拖动播放头
+   */
   const displayScene = useMemo(() => {
     if (!scene) return null;
     if (!timelineSample || !timelineOpen) return scene;
-    // 始终对全体物体采样。拖 gizmo 时靠 suspendTransformSync 冻结被拖物体，
-    // 切勿退回原始 scene（否则其它带动画的模型会弹回底位姿）。
     const applied = applySampleToScene(scene, timelineSample);
-    // 主舞台保持导演自由相机；轨上 directorCamera 只给导出/镜头监视器用
-    return { ...applied, camera: scene.camera };
-  }, [scene, timelineSample, timelineOpen]);
+    const withCam = { ...applied, camera: scene.camera };
+    const pinIds = new Set<string>();
+    if (viewportInteracting && selectedObjectId) pinIds.add(selectedObjectId);
+    if (!timelinePlaying) {
+      for (const [id, at] of Object.entries(heldPlacements)) {
+        if (Math.abs(at - timelinePlayhead) < 1e-3) pinIds.add(id);
+      }
+    }
+    if (pinIds.size === 0) return withCam;
+    return {
+      ...withCam,
+      objects: withCam.objects.map((o) => {
+        if (!pinIds.has(o.id)) return o;
+        const base = scene.objects.find((x) => x.id === o.id);
+        if (!base) return o;
+        return {
+          ...o,
+          transform: {
+            ...o.transform,
+            position: [...base.transform.position] as [number, number, number],
+          },
+          lookAt: base.lookAt ?? o.lookAt,
+          fov: base.fov ?? o.fov,
+        };
+      }),
+    };
+  }, [
+    scene,
+    timelineSample,
+    timelineOpen,
+    viewportInteracting,
+    selectedObjectId,
+    timelinePlaying,
+    timelinePlayhead,
+    heldPlacements,
+  ]);
 
   const activeCamera = useMemo(() => {
     if (!scene) return null;
@@ -361,6 +409,20 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     },
     [scene?.objects]
   );
+
+  /**
+   * 拖模型：按下时锁定「离脚底最近」的那一个轨迹顶点。
+   * 拖动过程只改这一个点，并写成与模型相同的坐标；其余点不动。
+   */
+  const pathDragVertexRef = useRef<{
+    objectId: string;
+    pathId: string;
+    pointIndex: number;
+  } | null>(null);
+  /** 按下瞬间的时间轴快照，供松手时 Undo（live 跟点会先改 animation） */
+  const pathDragAnimBeforeRef = useRef<DirectorSceneState["animation"]>(null);
+  const livePathRafRef = useRef<number | null>(null);
+  const livePathPendingPosRef = useRef<[number, number, number] | null>(null);
 
   useEffect(() => {
     if (!nodeId || !projectId) return;
@@ -471,6 +533,173 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   useEffect(() => {
     sceneRef.current = scene;
   }, [scene]);
+
+  /** 模型当前可视位置：时间轴打开时用播放头采样（不含步态），否则用摆放坐标 */
+  const visualObjectPosition = useCallback(
+    (objectId: string): [number, number, number] | null => {
+      const current = sceneRef.current;
+      if (!current) return null;
+      const obj = current.objects.find((o) => o.id === objectId);
+      if (!obj) return null;
+      const auto = timelineAutoKfRef.current;
+      if (auto.open && current.animation) {
+        const sample = evaluateTimeline(
+          current,
+          auto.playhead,
+          current.animation,
+          { locomotion: false }
+        );
+        const sampled = sample.objects[objectId]?.position;
+        if (sampled) return [sampled[0], sampled[1], sampled[2]];
+      }
+      const p = obj.transform.position;
+      return [p[0], p[1], p[2]];
+    },
+    []
+  );
+
+  /** 按下时锁定离脚底最近的顶点，并立刻把它挪到模型位置（只动这一个点） */
+  const lockPathDragVertex = useCallback((objectId: string) => {
+    const existing = pathDragVertexRef.current;
+    if (existing && existing.objectId === objectId) return existing;
+    const current = sceneRef.current;
+    const anim = current?.animation;
+    if (!current || !anim) return null;
+    const track = anim.tracks.find(
+      (t) => t.targetId === objectId && !t.locked && t.motionPathId
+    );
+    if (!track?.motionPathId) return null;
+    const path = anim.motionPaths.find((p) => p.id === track.motionPathId);
+    if (!path || path.points.length < 1) return null;
+    const foot = visualObjectPosition(objectId);
+    if (!foot) return null;
+    const pointIndex = closestPathPointIndex(path, foot);
+    if (!pathDragAnimBeforeRef.current) {
+      pathDragAnimBeforeRef.current = anim;
+    }
+    const next = { objectId, pathId: path.id, pointIndex };
+    pathDragVertexRef.current = next;
+    const cur = path.points[pointIndex];
+    const already =
+      cur &&
+      Math.hypot(cur[0] - foot[0], cur[1] - foot[1], cur[2] - foot[2]) < 1e-4;
+    if (!already) {
+      invalidateMotionPathCache(path.id);
+      const footPos = [...foot] as [number, number, number];
+      patchScene((prev) => {
+        const prevAnim = prev.animation;
+        if (!prevAnim) return prev;
+        return {
+          ...prev,
+          // 按下时模型坐标与脚下顶点对齐，避免松手用旧的 objects 位姿盖回原点
+          objects: prev.objects.map((obj) =>
+            obj.id !== objectId
+              ? obj
+              : {
+                  ...obj,
+                  transform: { ...obj.transform, position: footPos },
+                }
+          ),
+          animation: {
+            ...prevAnim,
+            motionPaths: prevAnim.motionPaths.map((p) =>
+              p.id !== path.id
+                ? p
+                : {
+                    ...p,
+                    points: p.points.map((pt, i) =>
+                      i === pointIndex ? footPos : pt
+                    ),
+                  }
+            ),
+          },
+        };
+      });
+    }
+    return next;
+  }, [patchScene, visualObjectPosition]);
+
+  /** 只把锁定的那一个顶点写成与模型相同的坐标 */
+  const applyPathVertexFollow = useCallback(
+    (objectId: string, pos: [number, number, number]) => {
+      const lock = pathDragVertexRef.current;
+      if (!lock || lock.objectId !== objectId) return;
+      patchScene((prev) => {
+        const anim = prev.animation;
+        if (!anim) return prev;
+        const path = anim.motionPaths.find((p) => p.id === lock.pathId);
+        if (!path || lock.pointIndex < 0 || lock.pointIndex >= path.points.length) {
+          return prev;
+        }
+        const nextPoint: [number, number, number] = [pos[0], pos[1], pos[2]];
+        const cur = path.points[lock.pointIndex]!;
+        if (
+          Math.hypot(
+            cur[0] - nextPoint[0],
+            cur[1] - nextPoint[1],
+            cur[2] - nextPoint[2]
+          ) < 1e-8
+        ) {
+          return prev;
+        }
+        invalidateMotionPathCache(path.id);
+        // 拖动过程就把模型坐标写成落点。只改轨迹、不改 objects 时，松手采样会把模型打回原点。
+        return {
+          ...prev,
+          objects: prev.objects.map((obj) =>
+            obj.id !== objectId
+              ? obj
+              : {
+                  ...obj,
+                  transform: {
+                    ...obj.transform,
+                    position: nextPoint,
+                  },
+                }
+          ),
+          animation: {
+            ...anim,
+            motionPaths: anim.motionPaths.map((p) =>
+              p.id === path.id
+                ? {
+                    ...p,
+                    points: p.points.map((pt, i) =>
+                      i === lock.pointIndex ? nextPoint : pt
+                    ),
+                  }
+                : p
+            ),
+          },
+        };
+      });
+    },
+    [patchScene]
+  );
+
+  /** 拖拽中实时挪动脚下单个顶点（rAF 合帧）；机位另更新监视器 */
+  const handleObjectLiveTransform = useCallback(
+    (id: string, transform: DirectorObject["transform"]) => {
+      handleCameraLiveTransform(id, transform);
+      if (!pathDragVertexRef.current || pathDragVertexRef.current.objectId !== id) {
+        return;
+      }
+      livePathPendingPosRef.current = [
+        transform.position[0],
+        transform.position[1],
+        transform.position[2],
+      ];
+      if (livePathRafRef.current != null) return;
+      livePathRafRef.current = requestAnimationFrame(() => {
+        livePathRafRef.current = null;
+        const pending = livePathPendingPosRef.current;
+        livePathPendingPosRef.current = null;
+        if (!pending) return;
+        applyPathVertexFollow(id, pending);
+      });
+    },
+    [applyPathVertexFollow, handleCameraLiveTransform]
+  );
+
   const model3dJobs = useDirectorModel3dJobs(projectId, nodeId);
   const model3dJobsRef = useRef(model3dJobs);
   useEffect(() => {
@@ -611,64 +840,67 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               anim = { ...anim, tracks: [...anim.tracks, track] };
             }
             if (!track.locked) {
-              timelineHistoryRef.current.pushBefore(anim);
+              const beforeAnim = pathDragAnimBeforeRef.current ?? anim;
+              timelineHistoryRef.current.pushBefore(beforeAnim);
+              pathDragAnimBeforeRef.current = null;
               setTimelineHistoryTick((n) => n + 1);
               if (mode === "translate") {
-                // 移动：有路径则改播放头对应路径点；无路径写位置关键帧
+                // 有路径：只改脚下那一个顶点，坐标与模型一致；无路径才写位置关键帧
                 const pathId = track.motionPathId;
                 const path = pathId
                   ? anim.motionPaths.find((p) => p.id === pathId)
                   : null;
+                const lock = pathDragVertexRef.current;
                 if (path && path.points.length >= 1) {
-                  const duration = Math.max(0.1, anim.duration);
-                  const along = motionPathAlongAtTime(
-                    track,
-                    auto.playhead,
-                    duration
-                  );
-                  // 整条路径按「目标 − 当前采样」平移，松手位置精确、多拖不弹回
-                  const moved = moveMotionPathSampleTo(
-                    path,
-                    along,
-                    targetPos
-                  );
+                  const idx =
+                    lock && lock.objectId === id && lock.pathId === path.id
+                      ? lock.pointIndex
+                      : closestPathPointIndex(path, targetPos);
+                  const nextPoint: [number, number, number] = [
+                    targetPos[0],
+                    targetPos[1],
+                    targetPos[2],
+                  ];
+                  // 播放头只留这一帧位置，盖住路径；旧位置帧会把模型弹回原点
                   animation = {
                     ...anim,
                     motionPaths: anim.motionPaths.map((p) =>
-                      p.id === path.id ? moved : p
+                      p.id !== path.id
+                        ? p
+                        : {
+                            ...p,
+                            points: p.points.map((pt, i) =>
+                              i === idx ? nextPoint : pt
+                            ),
+                          }
                     ),
-                    tracks: anim.tracks.map((t) => {
-                      if (t.id !== track!.id) return t;
-                      // 清掉会盖住路径的旧 position 关键帧，避免再弹回
-                      return {
-                        ...t,
-                        keyframes: t.keyframes
-                          .map((k) => {
-                            if (k.position == null) return k;
-                            const { position: _p, ...rest } = k;
-                            return rest as typeof k;
-                          })
-                          .filter(
-                            (k) =>
-                              k.position != null ||
-                              k.rotation != null ||
-                              k.scale != null ||
-                              k.lookAt != null ||
-                              k.fov != null ||
-                              k.motion != null
-                          ),
-                      };
-                    }),
+                    tracks: anim.tracks.map((t) =>
+                      t.id === track!.id
+                        ? {
+                            ...t,
+                            keyframes: upsertSolePositionKeyframe(
+                              t.keyframes,
+                              auto.playhead,
+                              nextPoint
+                            ),
+                          }
+                        : t
+                    ),
                   };
+                  invalidateMotionPathCache(path.id);
                 } else {
-                  const kf = createAnimKeyframe(auto.playhead, {
-                    position: targetPos,
-                  });
                   animation = {
                     ...anim,
                     tracks: anim.tracks.map((t) =>
                       t.id === track!.id
-                        ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) }
+                        ? {
+                            ...t,
+                            keyframes: upsertSolePositionKeyframe(
+                              t.keyframes,
+                              auto.playhead,
+                              targetPos
+                            ),
+                          }
                         : t
                     ),
                   };
@@ -679,43 +911,33 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                   obj.kind === "camera"
                     ? ([...(obj.lookAt ?? [0, 1, 0])] as [number, number, number])
                     : undefined;
+                const kf = createAnimKeyframe(auto.playhead, {
+                  rotation: rot,
+                  ...(lookAt ? { lookAt } : {}),
+                });
                 animation = {
                   ...anim,
-                  tracks: anim.tracks.map((t) => {
-                    if (t.id !== track!.id) return t;
-                    const keyframes =
-                      t.keyframes.length === 0
-                        ? [
-                            createAnimKeyframe(auto.playhead, {
-                              rotation: rot,
-                              lookAt,
-                            }),
-                          ]
-                        : t.keyframes.map((k) => ({
-                            ...k,
-                            rotation: [...rot] as [number, number, number],
-                            ...(lookAt
-                              ? { lookAt: [...lookAt] as [number, number, number] }
-                              : {}),
-                          }));
-                    return { ...t, orientToPath: false, keyframes };
-                  }),
+                  tracks: anim.tracks.map((t) =>
+                    t.id === track!.id
+                      ? {
+                          ...t,
+                          // 手转之后不再被路径切线覆盖朝向
+                          orientToPath: false,
+                          keyframes: upsertKeyframe(t.keyframes, kf),
+                        }
+                      : t
+                  ),
                 };
               } else if (mode === "scale") {
                 const scl = [...transform.scale] as [number, number, number];
+                const kf = createAnimKeyframe(auto.playhead, { scale: scl });
                 animation = {
                   ...anim,
-                  tracks: anim.tracks.map((t) => {
-                    if (t.id !== track!.id) return t;
-                    const keyframes =
-                      t.keyframes.length === 0
-                        ? [createAnimKeyframe(auto.playhead, { scale: scl })]
-                        : t.keyframes.map((k) => ({
-                            ...k,
-                            scale: [...scl] as [number, number, number],
-                          }));
-                    return { ...t, keyframes };
-                  }),
+                  tracks: anim.tracks.map((t) =>
+                    t.id === track!.id
+                      ? { ...t, keyframes: upsertKeyframe(t.keyframes, kf) }
+                      : t
+                  ),
                 };
               }
             } else {
@@ -723,36 +945,58 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             }
           }
         } else if (animation && mode === "translate") {
-          // 场景摆放模式：挪模型时把路径首帧（u=start）一起推过去，保持摆放=首帧
+          // 摆放模式：只挪离模型最近的那一个顶点，坐标与模型一致
           const track = animation.tracks.find((t) => t.targetId === id);
           const pathId = track?.motionPathId;
           const path = pathId
             ? animation.motionPaths.find((p) => p.id === pathId)
             : null;
+          const lock = pathDragVertexRef.current;
           if (track && !track.locked && path && path.points.length >= 1) {
-            const along = track.motionPathStart ?? 0;
-            const moved = moveMotionPathSampleTo(path, along, targetPos);
+            const idx =
+              lock && lock.objectId === id && lock.pathId === path.id
+                ? lock.pointIndex
+                : closestPathPointIndex(path, targetPos);
+            const nextPoint: [number, number, number] = [
+              targetPos[0],
+              targetPos[1],
+              targetPos[2],
+            ];
+            invalidateMotionPathCache(path.id);
             animation = {
               ...animation,
               motionPaths: animation.motionPaths.map((p) =>
-                p.id === path.id ? moved : p
+                p.id !== path.id
+                  ? p
+                  : {
+                      ...p,
+                      points: p.points.map((pt, i) =>
+                        i === idx ? nextPoint : pt
+                      ),
+                    }
               ),
             };
           }
         }
 
-        const next: DirectorSceneState = {
+        // 勿在每次 gizmo 落盘后 sync 到 t=0：否则点击/轻触会把模型拽回首帧
+        return {
           ...prev,
           objects,
           ...(animation ? { animation, version: "1.3" as const } : {}),
         };
-        // 摆放位姿与时间轴 t=0 对齐
-        return next.animation
-          ? (syncScenePlacementToTimelineStart(next) as DirectorSceneState)
-          : next;
       });
+      pathDragVertexRef.current = null;
+      pathDragAnimBeforeRef.current = null;
+      livePathPendingPosRef.current = null;
       liveCameraRef.current = null;
       liveCameraTransformRef.current = null;
+      if (mode === "translate") {
+        // 模型坐标已写入 objects；暂停时画面跟这个位置，直到播放或拖动播放头
+        setHeldPlacements((prev) =>
+          prev[id] === auto.playhead ? prev : { ...prev, [id]: auto.playhead }
+        );
+      }
     },
     [patchScene]
   );
@@ -760,13 +1004,19 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
   const selectSceneObject = useCallback((id: string | null) => {
     setSelectedObjectId(id);
     liveCameraRef.current = null;
-      liveCameraTransformRef.current = null;
+    liveCameraTransformRef.current = null;
+    setSelectedPathPointIndex(null);
     if (!id) return;
     const obj = scene?.objects.find((o) => o.id === id);
     if (obj?.kind === "camera") {
       setCameraPropViewMode("thirdPerson");
     }
-  }, [scene?.objects]);
+    // 选中物体时同步到对应动画轨，避免仍停在「无路径的主机位」导致轨迹线不显示
+    const track = scene?.animation?.tracks.find((t) => t.targetId === id);
+    if (track) {
+      setSelectedTrackId(track.id);
+    }
+  }, [scene?.animation?.tracks, scene?.objects]);
 
   const updateSelectedObjectField = useCallback(
     (patch: Partial<DirectorObject>) => {
@@ -1632,6 +1882,8 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           version: "1.3",
           animation: updater(base),
         };
+        // 时间轴开着时画面走播放头采样，不要把物体写回首帧（否则和当前姿势互相覆盖）
+        if (timelineAutoKfRef.current.open) return next;
         return syncScenePlacementToTimelineStart(next) as DirectorSceneState;
       });
     },
@@ -2064,7 +2316,9 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             });
           },
           captureFrameDataUrl: async (t) => {
-            const sample = evaluateTimeline(scene, t, scene.animation);
+            const sample = evaluateTimeline(scene, t, scene.animation, {
+              locomotion: true,
+            });
             let cam: DirectorCameraState;
             if (forceTrack) {
               // 强制用选中摄像机轨采样镜头；物体仍由整表 evaluate 驱动
@@ -2365,13 +2619,14 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       selectedPathPointIndex == null ||
       !timelineOpen ||
       drawingTrackId ||
-      !scene?.animation
+      !scene?.animation ||
+      !selectedObjectId
     ) {
       return null;
     }
-    const track =
-      scene.animation.tracks.find((t) => t.id === selectedTrackId) ??
-      scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
+    const track = scene.animation.tracks.find(
+      (t) => t.targetId === selectedObjectId && t.motionPathId
+    );
     if (!track?.motionPathId) return null;
     const path = scene.animation.motionPaths.find((p) => p.id === track.motionPathId);
     if (!path) return null;
@@ -2387,7 +2642,6 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     timelineOpen,
     drawingTrackId,
     scene?.animation,
-    selectedTrackId,
     selectedObjectId,
   ]);
 
@@ -2919,29 +3173,54 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             panoramaUrl={panoramaPreviewUrl}
             onSelectObject={selectSceneObject}
             onObjectTransform={handleObjectTransform}
-            onCameraLiveTransform={handleCameraLiveTransform}
+            onCameraLiveTransform={handleObjectLiveTransform}
             onEditorCameraChange={handleEditorCameraChange}
             onShotCameraSelect={selectShotCamera}
             suspendTransformObjectId={
-              viewportInteracting ? selectedObjectId : null
+              selectedPathPointIndex != null
+                ? selectedObjectId
+                : viewportInteracting
+                  ? selectedObjectId
+                  : null
             }
             onDragChange={(dragging, source) => {
               // 甩镜不打断播放采样；拖物体才暂停，避免 gizmo 与采样互抢
               if (source === "orbit") return;
-              setViewportInteracting(dragging);
-              if (dragging && timelinePlaying) {
-                setTimelinePlaying(false);
-                toast.message("已暂停预览，便于调整");
+              if (dragging) {
+                // 同步进入 interacting，避免首帧未 suspend 时采样把 Object3D 写回旧位姿
+                flushSync(() => {
+                  setViewportInteracting(true);
+                });
+                // 按下锁定脚下最近顶点，拖拽只挪这一个点
+                pathDragVertexRef.current = null;
+                if (selectedObjectId) lockPathDragVertex(selectedObjectId);
+                if (timelinePlaying) {
+                  setTimelinePlaying(false);
+                  toast.message("已暂停预览，便于调整");
+                }
+                return;
               }
+              // 松手：等落盘后的 scene/placeKf 进 displayScene，再取消 suspend
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  pathDragVertexRef.current = null;
+                  pathDragAnimBeforeRef.current = null;
+                  livePathPendingPosRef.current = null;
+                  flushSync(() => {
+                    setViewportInteracting(false);
+                  });
+                });
+              });
             }}
             motionPathDrawing={
-              // 仅绘制中显示草稿；不在未选中时铺全部轨迹（否则导出/空选也会进画面）
+              // 仅绘制中显示草稿；已有轨迹只画「当前选中模型」那一条
               drawingTrackId && !exporting
                 ? {
                     active: true,
                     tool: drawingTool,
                     draftPoints: draftPathPoints,
-                    onAddPoint: (p) => {
+                    existingPaths: [],
+                    onAddPoint: (p: [number, number, number]) => {
                       setDraftPathPoints((prev) => {
                         const last = prev[prev.length - 1];
                         if (
@@ -2959,18 +3238,19 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                 : null
             }
             motionPathEditing={(() => {
-              // 轨迹线：时间轴打开 + 选中该轨/对应模型；导出中隐藏
+              // 仅选中模型才显示其轨迹线；未选中物体 / 导出 / 绘制中不画
               if (
                 exporting ||
                 !timelineOpen ||
                 drawingTrackId ||
-                !scene?.animation
+                !scene?.animation ||
+                !selectedObjectId
               ) {
                 return null;
               }
-              const track =
-                scene.animation.tracks.find((t) => t.id === selectedTrackId) ??
-                scene.animation.tracks.find((t) => t.targetId === selectedObjectId);
+              const track = scene.animation.tracks.find(
+                (t) => t.targetId === selectedObjectId && t.motionPathId
+              );
               if (!track?.motionPathId || track.locked) return null;
               const path =
                 scene.animation.motionPaths.find((p) => p.id === track.motionPathId) ??
@@ -3063,6 +3343,15 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               onSelectTrack={(id) => {
                 setSelectedTrackId(id);
                 setSelectedPathPointIndex(null);
+                // 点选时间轴轨时同步选中对应模型，轨迹线只跟「当前选中模型」走
+                const track = scene.animation?.tracks.find((t) => t.id === id);
+                if (
+                  track?.targetId &&
+                  track.targetId !== DIRECTOR_CAMERA_TRACK_TARGET &&
+                  scene.objects.some((o) => o.id === track.targetId)
+                ) {
+                  setSelectedObjectId(track.targetId);
+                }
               }}
               onCreateTrack={handleCreateTrack}
               onStartDrawPath={(trackId, tool = "pen") => {

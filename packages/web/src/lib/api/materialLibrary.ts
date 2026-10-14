@@ -147,6 +147,11 @@ function isZipUrl(url: string): boolean {
   return /\.zip(\?|#|$)/i.test(String(url || "").trim());
 }
 
+/** 封面若是视频文件，不能当 img，否则缩略图空白 */
+export function isVideoMediaUrl(url: string): boolean {
+  return /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(String(url || "").trim());
+}
+
 /**
  * 首页广场「模版库」作品 → 画布模板条目。
  * 与 materials 后台 template 分类并行；广场有封面 + zip 即可导入。
@@ -196,7 +201,8 @@ export async function listPlazaTemplateLibrary(): Promise<MaterialLibraryListRes
     const w = works[i];
     if (!w) continue;
     const pack = String(w.packageUrl || w.file || "").trim();
-    const cover = String(w.coverUrl || w.cover || "").trim();
+    // 封面可能是 mp4；没有静图时再用作品视频
+    const cover = String(w.coverUrl || w.cover || w.video || "").trim();
     // 无可导入 zip 的作品跳过（广场「打开工作流」类不进画布模板库）
     if (!pack || !isZipUrl(pack)) continue;
     const catName = String(w.cat || "").trim();
@@ -206,7 +212,7 @@ export async function listPlazaTemplateLibrary(): Promise<MaterialLibraryListRes
       id: rawId ? `plaza-${rawId}-${i}` : `plaza-${i}`,
       category: "template",
       title: String(w.title || "未命名模板").trim() || "未命名模板",
-      mediaType: "image",
+      mediaType: isVideoMediaUrl(cover) ? "video" : "image",
       ossKey: "",
       mediaUrl: cover,
       packageUrl: pack,

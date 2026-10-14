@@ -107,7 +107,9 @@ function evaluateTrack(
   time: number,
   duration: number,
   paths: Map<string, DirectorMotionPath>,
-  base: DirectorTimelineObjectSample
+  base: DirectorTimelineObjectSample,
+  /** 仅播放中注入步态起伏；暂停时模型必须贴在轨迹上，否则脚下顶点对不齐 */
+  locomotion: boolean
 ): DirectorTimelineObjectSample {
   const kfs = [...track.keyframes].sort((a, b) => a.time - b.time);
   let position = pickChannel(kfs, time, (k) => k.position, lerpVec3, base.position);
@@ -120,12 +122,22 @@ function evaluateTrack(
   /** 本段轨迹已走路程（米），用于步态相位 */
   let pathDistance = 0;
   const pathId = track.motionPathId;
-  /** 播放头附近的位置关键帧：盖住路径（P1），其它时刻仍走路径 */
+  /**
+   * 播放头附近取「时间最近」的位置关键帧盖住路径。
+   * 窗口与 upsert 的 0.05s 一致；用最近一帧，避免更早的旧落点把模型弹回。
+   */
   const POSITION_OVERRIDE_EPS = 0.05;
-  const positionOverride = kfs.find(
-    (k) =>
-      k.position != null && Math.abs(k.time - time) <= POSITION_OVERRIDE_EPS
-  );
+  let positionOverride: (typeof kfs)[number] | undefined;
+  let nearestDt = Infinity;
+  for (const k of kfs) {
+    if (k.position == null) continue;
+    const dt = Math.abs(k.time - time);
+    if (dt < nearestDt) {
+      nearestDt = dt;
+      positionOverride = k;
+    }
+  }
+  if (nearestDt > POSITION_OVERRIDE_EPS) positionOverride = undefined;
   if (pathId) {
     const path = paths.get(pathId);
     if (path && path.points.length >= 2) {
@@ -147,18 +159,14 @@ function evaluateTrack(
           ];
           moving = false;
         } else {
-          const pathControlsXZ = track.pathControlsXZ !== false;
-          if (pathControlsXZ) {
-            // 路径管 XZ；无「盖住」关键帧时 Y 可用插值/路径
-            const hasYKey = kfs.some((k) => k.position != null);
-            position = [
-              sample.position[0],
-              hasYKey ? position[1] : sample.position[1],
-              sample.position[2],
-            ];
-          } else {
-            position = sample.position;
-          }
+          // 轨迹驱动完整 XYZ（含路径点纵坐标起伏）。
+          // 旧 pathControlsXZ + 任意 position 关键帧会把 Y 锁在关键帧高度，
+          // 导致路径点抬高后模型仍贴地；仅播放头「盖住」关键帧可覆盖位姿。
+          position = [
+            sample.position[0],
+            sample.position[1],
+            sample.position[2],
+          ];
         }
         if (track.orientToPath && !positionOverride) {
           if (track.kind === "camera") {
@@ -179,9 +187,14 @@ function evaluateTrack(
   const motionKf = [...kfs].filter((k) => k.motion).sort((a, b) => b.time - a.time).find((k) => k.time <= time);
   const motion = motionKf?.motion ?? (moving ? "walk" : "idle");
 
-  // 角色沿轨迹移动时注入步态骨骼 + 轻微起伏（仅预览 sample，不写回持久场景）
+  // 步态骨骼 + 起伏只在播放时叠加；暂停/摆放若加上，脚底会离开轨迹顶点
   let bonePose: DirectorBonePose | undefined;
-  if (track.kind === "character" && moving && (motion === "walk" || motion === "run")) {
+  if (
+    locomotion &&
+    track.kind === "character" &&
+    moving &&
+    (motion === "walk" || motion === "run")
+  ) {
     const phase = locomotionPhaseFromDistance(pathDistance, motion);
     bonePose = sampleLocomotionBonePose(motion, phase, base.bonePose);
     const bobAmp = motion === "run" ? 0.035 : 0.018;
@@ -238,7 +251,8 @@ function baseFromScene(
 export function evaluateTimeline(
   scene: DirectorSceneState,
   timeSec: number,
-  timeline?: DirectorAnimationTimeline | null
+  timeline?: DirectorAnimationTimeline | null,
+  options?: { locomotion?: boolean }
 ): DirectorTimelineSample {
   const anim = timeline ?? scene.animation;
   const sample: DirectorTimelineSample = { time: timeSec, objects: {} };
@@ -247,11 +261,12 @@ export function evaluateTimeline(
   const duration = Math.max(0.1, anim.duration);
   const t = Math.min(duration, Math.max(0, timeSec));
   const paths = new Map(anim.motionPaths.map((p) => [p.id, p]));
+  const locomotion = options?.locomotion === true;
 
   for (const track of anim.tracks) {
     if (track.muted) continue;
     const base = baseFromScene(scene, track);
-    const evaluated = evaluateTrack(track, t, duration, paths, base);
+    const evaluated = evaluateTrack(track, t, duration, paths, base, locomotion);
 
     if (track.targetId === DIRECTOR_CAMERA_TRACK_TARGET) {
       sample.directorCamera = {

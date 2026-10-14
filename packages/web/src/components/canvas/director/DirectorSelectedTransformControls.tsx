@@ -32,6 +32,13 @@ export function DirectorSelectedTransformControls({
   const { getTransformGroup } = useDirectorTransformRegistry();
   const controlsRef = useRef<TransformControlsImpl | null>(null);
   const draggingRef = useRef(false);
+  /** 按下时位姿；几乎未移动则不当作落盘，避免「点选」误写关键帧/跳位 */
+  const dragStartRef = useRef<DirectorObject["transform"] | null>(null);
+  /**
+   * 拖拽过程中最后一次有效坐标。
+   * 松手时 Object3D 可能已被采样/缺省打回原点，落盘必须用这个，不能用被打回的读数。
+   */
+  const lastTranslateRef = useRef<[number, number, number] | null>(null);
   const target = getTransformGroup(object.id);
   const isCamera = object.kind === "camera";
 
@@ -41,21 +48,54 @@ export function DirectorSelectedTransformControls({
     scale: [group.scale.x, group.scale.y, group.scale.z],
   });
 
+  const transformMoved = (
+    a: DirectorObject["transform"],
+    b: DirectorObject["transform"]
+  ) => {
+    const d = (u: number[], v: number[]) =>
+      Math.hypot(u[0]! - v[0]!, u[1]! - v[1]!, u[2]! - v[2]!);
+    return (
+      d(a.position, b.position) > 1e-4 ||
+      d(a.rotation, b.rotation) > 1e-4 ||
+      d(a.scale, b.scale) > 1e-4
+    );
+  };
+
   const emitTransform = () => {
     if (!target) return;
     let next = readTransform(target);
+    // 平移落盘以拖拽中的最后坐标为准，避免松手读到被打回的原点
+    if (transformMode === "translate" && lastTranslateRef.current) {
+      next = {
+        ...next,
+        position: [...lastTranslateRef.current] as [number, number, number],
+      };
+    }
     if (gridSnap) {
       next = snapTransform(next, transformMode);
       target.position.set(...next.position);
       target.rotation.set(...next.rotation);
       target.scale.set(...next.scale);
     }
+    const start = dragStartRef.current;
+    if (start && !transformMoved(start, next)) return;
+    // 先把物体留在落点，避免随后的 React 提交用旧采样盖回去
+    if (transformMode === "translate") {
+      target.position.set(...next.position);
+    }
     onTransform(object.id, next, transformMode);
+    lastTranslateRef.current = null;
   };
 
   const emitLiveTransform = () => {
-    if (!target || !isCamera) return;
-    onLiveTransform?.(object.id, readTransform(target));
+    if (!target || !draggingRef.current) return;
+    // 平移时实时回调（轨迹顶点跟随）；机位另用于监视器 live
+    if (transformMode !== "translate" && !isCamera) return;
+    const next = readTransform(target);
+    if (transformMode === "translate") {
+      lastTranslateRef.current = [...next.position] as [number, number, number];
+    }
+    onLiveTransform?.(object.id, next);
   };
 
   useEffect(() => {
@@ -69,6 +109,8 @@ export function DirectorSelectedTransformControls({
       if (event.value) {
         if (draggingRef.current) return;
         draggingRef.current = true;
+        lastTranslateRef.current = null;
+        dragStartRef.current = readTransform(target);
         onDragChange?.(true);
         return;
       }
@@ -78,6 +120,7 @@ export function DirectorSelectedTransformControls({
       flushSync(() => {
         emitTransform();
       });
+      dragStartRef.current = null;
       requestAnimationFrame(() => {
         onDragChange?.(false);
       });
@@ -96,7 +139,7 @@ export function DirectorSelectedTransformControls({
       mode={transformMode}
       space={isCamera && transformMode === "translate" ? "world" : "local"}
       size={isCamera ? 0.85 : 1}
-      onObjectChange={isCamera ? emitLiveTransform : undefined}
+      onObjectChange={onLiveTransform ? emitLiveTransform : undefined}
       // 落盘只走 dragging-changed(false)，避免 mouseUp 早于 interacting 结束造成弹回
     />
   );

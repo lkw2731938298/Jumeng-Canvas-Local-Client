@@ -62,6 +62,8 @@ export interface DirectorStageCanvasProps {
     active: boolean;
     tool?: import("@/lib/director/animation/motionPathDrawTools").MotionPathDrawTool;
     draftPoints: [number, number, number][];
+    /** 时间轴打开时铺已绑定轨迹（只读预览） */
+    existingPaths?: import("@jumeng-canvas/shared").DirectorMotionPath[];
     onAddPoint: (point: [number, number, number]) => void;
     onSetDraftPoints?: (points: [number, number, number][]) => void;
     onFinish: (points?: [number, number, number][]) => void;

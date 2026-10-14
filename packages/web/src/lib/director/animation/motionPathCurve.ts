@@ -70,8 +70,33 @@ export function invalidateMotionPathCache(pathId?: string) {
 }
 
 /**
+ * 离模型当前位置最近的控制点（XZ 为主，Y 只作平局）。
+ * 「脚下顶点」按模型脚底位置选取，而不是按播放头弧长。
+ */
+export function closestPathPointIndex(
+  path: DirectorMotionPath,
+  position: [number, number, number]
+): number {
+  const pts = path.points;
+  if (pts.length <= 1) return 0;
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]!;
+    const dx = p[0] - position[0];
+    const dz = p[2] - position[2];
+    const dy = (p[1] - position[1]) * 0.15;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
  * 播放头进度 u∈[0,1]（已含 motionPathStart/End）上，离曲线采样点最近的控制点下标。
- * 用于「移动模型 = 改该时刻对应的路径点」。
  */
 export function nearestMotionPathPointIndex(
   path: DirectorMotionPath,

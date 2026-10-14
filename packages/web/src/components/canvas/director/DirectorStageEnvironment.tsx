@@ -59,6 +59,8 @@ export function DirectorStageEnvironment({
     active: boolean;
     tool?: import("@/lib/director/animation/motionPathDrawTools").MotionPathDrawTool;
     draftPoints: [number, number, number][];
+    /** 时间轴打开时铺已绑定轨迹（只读预览） */
+    existingPaths?: import("@jumeng-canvas/shared").DirectorMotionPath[];
     onAddPoint: (point: [number, number, number]) => void;
     onSetDraftPoints?: (points: [number, number, number][]) => void;
     onFinish: (points?: [number, number, number][]) => void;
@@ -176,15 +178,16 @@ export function DirectorStageEnvironment({
       selectedObject &&
       !mannequinPoseEditing &&
       !motionPathDrawing?.active &&
+      // 选中路径顶点时隐藏 gizmo，防止拖顶点被当成拖模型
+      motionPathEditing?.selectedPointIndex == null &&
       (selectedObject.kind !== "camera" || isCameraThirdPerson) ? (
         <DirectorSelectedTransformControls
           object={selectedObject}
           transformMode={transformMode}
           gridSnap={settings.gridSnap}
           onTransform={onObjectTransform ?? (() => {})}
-          onLiveTransform={
-            selectedObject.kind === "camera" ? onCameraLiveTransform : undefined
-          }
+          // 平移时全体物体 live：轨迹顶点跟随；机位另更新监视器
+          onLiveTransform={onCameraLiveTransform}
           onDragChange={onDragChange}
         />
       ) : null}
@@ -194,7 +197,7 @@ export function DirectorStageEnvironment({
         tool={motionPathDrawing?.tool ?? "pen"}
         draftPoints={motionPathDrawing?.draftPoints ?? []}
         groundHeight={groundY}
-        // 已有轨迹只由 MotionPathEditor 在「选中轨」时绘制，此处不铺全场路径
+        // 已有轨迹只由 MotionPathEditor 在「选中模型」时绘制
         existingPaths={[]}
         onAddPoint={motionPathDrawing?.onAddPoint ?? (() => {})}
         onSetDraftPoints={motionPathDrawing?.onSetDraftPoints}

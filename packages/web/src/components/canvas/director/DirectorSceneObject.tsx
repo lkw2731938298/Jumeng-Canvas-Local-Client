@@ -172,15 +172,51 @@ export function DirectorSceneObject({
   }, [object.id, registerTransformGroup]);
 
   useLayoutEffect(() => {
-    if (suspendTransformSync) return;
     const group = groupRef.current;
     if (!group) return;
+    if (suspendTransformSync) {
+      // 拖拽中只放开当前通道；其余仍钉住，避免 R3F 缺省把 rotation/scale 打回默认
+      // （缺省 rotation=0 会使摄像机「视角变正」，松手再写回原姿态）
+      // 平移时不要用 props 里的旧采样覆盖 position：gizmo 正在改它。
+      // 位置仍由 JSX 声明为当前 Object3D 坐标，避免缺省被 fiber 打回 (0,0,0)。
+      if (transformMode === "translate") {
+        group.rotation.set(...transform.rotation);
+        group.scale.set(...transform.scale);
+      } else if (transformMode === "rotate") {
+        group.position.set(...transform.position);
+        group.scale.set(...transform.scale);
+      } else if (transformMode === "scale") {
+        group.position.set(...transform.position);
+        group.rotation.set(...transform.rotation);
+      }
+      group.updateMatrixWorld(true);
+      return;
+    }
     syncGroupTransform(group);
-  }, [transform, suspendTransformSync]);
+  }, [transform, suspendTransformSync, transformMode]);
 
   const bonePose = object.bonePose ?? createDefaultBonePose(object.gender ?? "male");
+  // 平移拖拽中：position 用物体此刻坐标，不能省掉（省掉会被 R3F 重置到原点）
+  const liveDragPosition: [number, number, number] | null =
+    suspendTransformSync && transformMode === "translate" && groupRef.current
+      ? [
+          groupRef.current.position.x,
+          groupRef.current.position.y,
+          groupRef.current.position.z,
+        ]
+      : null;
   const declarativeTransform = suspendTransformSync
-    ? {}
+    ? transformMode === "translate"
+      ? {
+          position: liveDragPosition ?? transform.position,
+          rotation: transform.rotation,
+          scale: transform.scale,
+        }
+      : transformMode === "rotate"
+        ? { position: transform.position, scale: transform.scale }
+        : transformMode === "scale"
+          ? { position: transform.position, rotation: transform.rotation }
+          : { position: transform.position, rotation: transform.rotation, scale: transform.scale }
     : {
         position: transform.position,
         rotation: transform.rotation,
