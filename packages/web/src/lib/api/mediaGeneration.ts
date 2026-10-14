@@ -228,6 +228,7 @@ async function generateFromMediaNodeLocal(
           localGenerateVideo,
           persistLocalVideoResult,
           normalizeApiKey,
+          isJumengSubtitleEraseModel,
         } = await import("@/lib/local/generate");
         const {
           isLikelyAudioMediaUrl,
@@ -236,10 +237,22 @@ async function generateFromMediaNodeLocal(
         } = await import("@/lib/local/upstreamMediaRefs");
         // 顶栏视频工具与节点参考同链路：OSS → 官方 /files/upload → base64
         const { localStore } = await import("@/lib/local/store");
-        const durationRaw =
-          request.generationOptions?.duration ||
-          request.generationOptions?.seconds ||
-          "5";
+        const subtitleErase = isJumengSubtitleEraseModel({
+          canvasTool: request.canvasTool,
+          upstreamModel,
+          name: modelMeta?.name,
+          displayName: modelMeta?.displayName,
+        });
+        // 去字幕：优先用片长计费秒；通用视频仍用 generationOptions.duration
+        const durationRaw = subtitleErase
+          ? request.generationOptions?.inputVideoSeconds ||
+            request.generationOptions?.outputVideoSeconds ||
+            request.generationOptions?.seconds ||
+            request.generationOptions?.duration ||
+            "5"
+          : request.generationOptions?.duration ||
+            request.generationOptions?.seconds ||
+            "5";
         const durationSec =
           Number.parseInt(String(durationRaw).replace(/[^\d]/g, ""), 10) || 5;
         const resolution = pickCanvasClarityFromOptions(request.generationOptions, "2K");
@@ -303,24 +316,45 @@ async function generateFromMediaNodeLocal(
           }
         }
 
+        // 去字幕：只要 1 条源视频（优先 sourceUrl），禁止把同一视频拆成多条 video/audio 参考
+        let dedupedVideoUrls = rawVideoUrls;
+        if (subtitleErase) {
+          const preferred = String(request.sourceUrl || "").trim();
+          const uniq: string[] = [];
+          const seen = new Set<string>();
+          for (const u of preferred ? [preferred, ...rawVideoUrls] : rawVideoUrls) {
+            const key = u.split("?")[0] || u;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            uniq.push(u);
+          }
+          dedupedVideoUrls = uniq.slice(0, 1);
+          if (!dedupedVideoUrls.length) {
+            throw new Error("去字幕需要源视频（请先上传视频）");
+          }
+        }
+
         const prepared = await prepareUpstreamMediaRefs({
           modelId: request.model,
-          imageUrls: rawImageUrls,
-          videoUrls: rawVideoUrls,
-          audioUrls: (request.references ?? [])
-            .filter((r) => isAudioRef(r))
-            .map((r) => String(r.url || "").trim())
-            .filter(Boolean),
+          imageUrls: subtitleErase ? [] : rawImageUrls,
+          videoUrls: dedupedVideoUrls,
+          audioUrls: subtitleErase
+            ? []
+            : (request.references ?? [])
+                .filter((r) => isAudioRef(r))
+                .map((r) => String(r.url || "").trim())
+                .filter(Boolean),
         });
         const imageUrls = prepared.imageUrls;
         const videoUrls = prepared.videoUrls;
         const audioUrls = prepared.audioUrls;
-        if (rawVideoUrls.length > 0 && videoUrls.length === 0) {
+        if (dedupedVideoUrls.length > 0 && videoUrls.length === 0) {
           throw new Error(
             "画布有参考视频，但未能提交给上游。未配 OSS 时请保证单段 ≤20MB，或启用「参考图 OSS」"
           );
         }
         if (
+          !subtitleErase &&
           (request.references ?? []).some((r) => isAudioRef(r)) &&
           audioUrls.length === 0
         ) {
@@ -329,6 +363,7 @@ async function generateFromMediaNodeLocal(
           );
         }
 
+        const opts = request.generationOptions ?? {};
         const raw = await localGenerateVideo({
           modelId: request.model,
           prompt: request.prompt,
@@ -338,6 +373,10 @@ async function generateFromMediaNodeLocal(
           imageUrls,
           videoUrls,
           audioUrls,
+          canvasTool: request.canvasTool,
+          eraseType: opts.eraseType,
+          encodeMode: opts.encodeMode,
+          eraseRatioLocation: opts.eraseRatioLocation,
           onProviderTaskId: noteProviderTaskId,
           onSubmittedRefs: noteSubmittedRefs,
           signal: options?.signal,

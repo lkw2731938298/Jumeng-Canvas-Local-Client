@@ -145,12 +145,12 @@ async function proxyUpstreamMultipart(params: {
 /** 聚梦官方上传凭据；无则退回 OSS / base64 */
 export type JumengUploadCreds = { apiBase: string; apiKey: string };
 
-/** 官方文件上传限额：图片 10MB、视频 100MB、音频 20MB（客户端预检；超出上游亦可能 400） */
+/** 官方文件上传限额：图片 10MB、视频 100MB、音频 20MB（客户端预检） */
 const JUMENG_UPLOAD_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const JUMENG_UPLOAD_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const JUMENG_UPLOAD_MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
-/** 是否为音频 MIME / 扩展名（与视频共用官方 /files/upload，kind=audio） */
+/** 是否为音频 MIME / 扩展名 */
 function isAudioContentTypeOrName(contentType: string, filenameOrUrl = ""): boolean {
   const ct = (contentType || "").toLowerCase();
   if (ct.startsWith("audio/")) return true;
@@ -158,10 +158,15 @@ function isAudioContentTypeOrName(contentType: string, filenameOrUrl = ""): bool
   return /\.(mp3|wav|m4a|aac|ogg|flac|opus)(?:\?|#|$)/i.test(name);
 }
 
+/** 上游仍返回「仅图/视频」时，音频须改走 OSS / data URL（官方通道开关不稳定） */
+function isJumengUploadAudioRejected(detail: string): boolean {
+  return /only image and video files are allowed/i.test(detail || "");
+}
+
 /**
  * 聚梦官方文件上传 API：POST {base}/files/upload，multipart 字段名固定 file。
  * 返回约 1 小时有效的公网直链，专供后续生图 / 生视频当参考素材，免配 OSS。
- * 限制：图片 JPEG/PNG/GIF/WEBP ≤10MB，视频 MP4/MOV/WebM ≤100MB，音频 WAV/MP3 等 ≤20MB（实测 kind=audio 已通），同一密钥每小时 50 个。
+ * 限制：图片 ≤10MB，视频 ≤100MB；音频是否放行以上游为准（拒收时客户端自动降级）。
  */
 async function uploadRefToJumengFiles(params: {
   creds: JumengUploadCreds;
@@ -217,6 +222,12 @@ async function uploadRefToJumengFiles(params: {
     }
     if (status === 429) throw new Error("聚梦文件上传 429：该密钥本小时已传满 50 个文件，请稍后再试");
     if (status === 503) throw new Error("聚梦文件上传 503：上游存储未配置，请稍后再试或改用「参考图 OSS」");
+    // 供调用方识别：音频被官方通道拒收 → 改走 data URL / OSS
+    if (isAudio && isJumengUploadAudioRejected(detail)) {
+      const err = new Error(`JUMENG_AUDIO_UPLOAD_REJECTED:${detail.slice(0, 120)}`);
+      err.name = "JumengAudioUploadRejected";
+      throw err;
+    }
     throw new Error(`聚梦文件上传失败 HTTP ${status}：${detail.slice(0, 200)}`);
   }
 
@@ -2290,28 +2301,55 @@ export async function resolveLocalMediaUrlForUpstream(
     return "mp4";
   };
 
-  // 聚梦官方：未配 OSS 时，图/视频/音频均走官方文件上传拿公网直链
+  // 聚梦官方：未配 OSS 时走官方文件上传。
+  // 注意：音频通道上游曾放行又收回，拒收时降级为 data URL（≤20MB），避免 Seedance 多模态整单失败。
   const jumengCreds = opts?.jumengUpload;
   if (!oss && jumengCreds?.apiBase && jumengCreds?.apiKey) {
     const loaded = await fetchUrlAsDataUrl(raw);
     const contentType = loaded.contentType || "application/octet-stream";
     const ext = guessMediaExt(contentType, raw);
-    // 本机 asset 常无扩展名且 MIME 为 octet-stream：按 URL/扩展名推断音频时补 audio/*
-    const uploadType =
-      isAudioContentTypeOrName(contentType, `${raw}.${ext}`) && !contentType.startsWith("audio/")
-        ? ext === "wav"
-          ? "audio/wav"
-          : ext === "m4a"
-            ? "audio/mp4"
-            : "audio/mpeg"
-        : contentType;
-    const uploaded = await uploadRefToJumengFiles({
-      creds: jumengCreds,
-      base64OrDataUrl: loaded.dataUrl,
-      contentType: uploadType,
-      filename: `ref-${Date.now()}.${ext}`,
-    });
-    return markUpstreamReadyRef(uploaded);
+    const looksAudio = isAudioContentTypeOrName(contentType, `${raw}.${ext}`);
+    // 本机 asset 常无扩展名且 MIME 为 octet-stream：补齐视频/音频 MIME，避免上游按 octet 拒收
+    let uploadType = contentType;
+    if (looksAudio && !contentType.startsWith("audio/")) {
+      uploadType =
+        ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg";
+    } else if (
+      !contentType.startsWith("image/") &&
+      !contentType.startsWith("video/") &&
+      !contentType.startsWith("audio/")
+    ) {
+      // octet-stream：有音频扩展名已在上面处理；其余按视频扩展名补 video/*
+      if (ext === "webm") uploadType = "video/webm";
+      else if (ext === "mov") uploadType = "video/quicktime";
+      else if (ext === "mp4" || !looksAudio) uploadType = "video/mp4";
+    }
+    try {
+      const uploaded = await uploadRefToJumengFiles({
+        creds: jumengCreds,
+        base64OrDataUrl: loaded.dataUrl,
+        contentType: uploadType,
+        filename: `ref-${Date.now()}.${ext}`,
+      });
+      return markUpstreamReadyRef(uploaded);
+    } catch (err) {
+      const rejected =
+        err instanceof Error &&
+        (err.name === "JumengAudioUploadRejected" ||
+          String(err.message || "").startsWith("JUMENG_AUDIO_UPLOAD_REJECTED"));
+      if (!rejected || !looksAudio) throw err;
+      const dataUrl = loaded.dataUrl.startsWith("data:")
+        ? loaded.dataUrl
+        : `data:${uploadType.startsWith("audio/") ? uploadType : "audio/mpeg"};base64,${loaded.dataUrl}`;
+      const bytes = dataUrlApproxBytes(dataUrl);
+      if (bytes > REF_VIDEO_MAX_BYTES_WITHOUT_OSS) {
+        throw new Error(
+          `参考音频约 ${(bytes / (1024 * 1024)).toFixed(1)}MB：官方文件通道当前不支持音频，` +
+            `且超过免 OSS 的 data URL 上限 20MB。请压缩音频，或到「本地设置 → 参考图 OSS」配置公共读后重试`
+        );
+      }
+      return dataUrl;
+    }
   }
   if (oss) {
     const loaded = await fetchUrlAsDataUrl(raw);
@@ -2547,7 +2585,645 @@ function mapVideoPollState(body: unknown): {
 /**
  * 本地视频：POST /v1/video/generations → 轮询 GET …/video/generations/{task_id}
  * （对齐 https://doc.jumengai.com/api/base-url 与 /api/video）
+ *
+ * 火山字幕擦除 / 即梦动作模仿 / Wan3.0：走文档 POST /v1/videos
+ * （见 localGenerateSubtitleErase / localGenerateMotionImitate / localGenerateWan30Video）
  */
+
+/** 是否为聚梦「火山字幕擦除」类模型 / 画布去字幕工具 */
+export function isJumengSubtitleEraseModel(input: {
+  canvasTool?: string | null;
+  upstreamModel?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+}): boolean {
+  const tool = String(input.canvasTool || "").toLowerCase();
+  if (tool.includes("subtitle") && tool.includes("erase")) return true;
+  const blob = `${input.upstreamModel || ""} ${input.name || ""} ${input.displayName || ""}`;
+  return /字幕擦除|subtitle[_\s-]?erase|volc[_\s-]?subtitle/i.test(blob);
+}
+
+/** 是否为聚梦「即梦/动作模仿」类模型（文档动作捕捉与迁移） */
+export function isJumengMotionImitateModel(input: {
+  upstreamModel?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+}): boolean {
+  const blob = `${input.upstreamModel || ""} ${input.name || ""} ${input.displayName || ""}`;
+  return /动作模仿|动作捕捉|dreamactor|motion[\s_-]?imitat|motion[\s_-]?capture|mimic/i.test(
+    blob
+  );
+}
+
+/** 是否为聚梦文档「wan3.0-video」全能视频（文生/图生，POST /v1/videos） */
+export function isJumengWan30VideoModel(input: {
+  upstreamModel?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+}): boolean {
+  const blob = `${input.upstreamModel || ""} ${input.name || ""} ${input.displayName || ""}`;
+  // 仅视频 wan3.0，避免误伤 wanx / wan2.x 图片模型
+  if (/wanx|wan2\.|万相\s*图/i.test(blob) && !/wan3/i.test(blob)) return false;
+  return /wan3[._]?0[-_\s]?video|万相\s*3\.0.*视频/i.test(blob);
+}
+
+/**
+ * 文档 /v1/videos 的 size：480P / 720P / 1080P（默认 720P）。
+ * 画布清晰度档映射到该枚举，避免把 16:9 / 2K 原样塞进 size。
+ */
+export function normalizeJumengVideosDocSize(raw?: string): "480P" | "720P" | "1080P" {
+  const t = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (!t) return "720P";
+  if (/^480p?$/.test(t) || t === "480") return "480P";
+  if (/^720p?$/.test(t) || t === "720" || /^768p?$/.test(t)) return "720P";
+  if (/^1080p?$/.test(t) || t === "1080" || t === "1k" || t === "2k" || t === "4k") return "1080P";
+  if (t.includes("480")) return "480P";
+  if (t.includes("1080") || t.includes("1k") || t.includes("2k") || t.includes("4k")) return "1080P";
+  if (t.includes("720") || t.includes("768")) return "720P";
+  return "720P";
+}
+
+/** @deprecated 使用 normalizeJumengVideosDocSize */
+export function normalizeSubtitleEraseSize(raw?: string): "480P" | "720P" | "1080P" {
+  return normalizeJumengVideosDocSize(raw);
+}
+
+/** 解析框选 eraseRatioLocation（字符串 JSON 或数组） */
+function parseEraseRatioLocation(raw: unknown): Array<Record<string, number>> {
+  if (raw == null || raw === "") return [];
+  let items: unknown = raw;
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    if (!text) return [];
+    try {
+      items = JSON.parse(text);
+    } catch {
+      return [];
+    }
+  }
+  if (items && typeof items === "object" && !Array.isArray(items)) items = [items];
+  if (!Array.isArray(items)) return [];
+  const out: Array<Record<string, number>> = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (
+      "topLeftX" in row &&
+      "topLeftY" in row &&
+      "bottomRightX" in row &&
+      "bottomRightY" in row
+    ) {
+      const tlx = Math.max(0, Math.min(1, Number(row.topLeftX) || 0));
+      const tly = Math.max(0, Math.min(1, Number(row.topLeftY) || 0));
+      const brx = Math.max(0, Math.min(1, Number(row.bottomRightX) || 0));
+      const bry = Math.max(0, Math.min(1, Number(row.bottomRightY) || 0));
+      if (brx > tlx && bry > tly) {
+        out.push({
+          topLeftX: Number(tlx.toFixed(6)),
+          topLeftY: Number(tly.toFixed(6)),
+          bottomRightX: Number(brx.toFixed(6)),
+          bottomRightY: Number(bry.toFixed(6)),
+        });
+      }
+      continue;
+    }
+    if ("x" in row && "y" in row && "w" in row && "h" in row) {
+      const x = Math.max(0, Math.min(1, Number(row.x) || 0));
+      const y = Math.max(0, Math.min(1, Number(row.y) || 0));
+      const w = Math.max(0, Math.min(1 - x, Number(row.w) || 0));
+      const h = Math.max(0, Math.min(1 - y, Number(row.h) || 0));
+      if (w > 0 && h > 0) {
+        out.push({
+          topLeftX: Number(x.toFixed(6)),
+          topLeftY: Number(y.toFixed(6)),
+          bottomRightX: Number((x + w).toFixed(6)),
+          bottomRightY: Number((y + h).toFixed(6)),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * 智能去字幕 / 框选擦除：对齐文档与商业 jumengai_subtitle_erase
+ * POST {base}/videos ，字段 model / prompt / seconds / size / image（+ videoUrl 等透传）
+ */
+export async function localGenerateSubtitleErase(params: {
+  modelId: string;
+  prompt?: string;
+  /** 源视频公网 URL（仅 1 条） */
+  videoUrl: string;
+  durationSec?: number;
+  /** 画布清晰度或文档 size：映射为 480P/720P/1080P */
+  resolution?: string;
+  eraseType?: string;
+  encodeMode?: string;
+  eraseRatioLocation?: unknown;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  signal?: AbortSignal;
+}): Promise<{
+  url: string;
+  providerTaskId?: string;
+  submittedReferenceCount?: number;
+  submittedRefHostPreview?: string;
+  submittedRefUrls?: string[];
+}> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  }
+
+  const configuredModel = (model.upstreamModel || model.name || "").trim();
+  const jumeng = isJumengaiUpstream(model.upstreamModel, model.name, apiBase);
+  const upstreamModel = jumeng
+    ? normalizeJumengOpenAiModelId(configuredModel)
+    : configuredModel;
+
+  const rawVideo = String(params.videoUrl || "").trim();
+  if (!rawVideo) {
+    throw new Error("去字幕需要源视频（请先上传或连接视频节点）");
+  }
+
+  // 源视频：OSS → 官方 files/upload → 公网直链（与商业 videoUrl 一致，只传 1 条）
+  let publicVideo = rawVideo;
+  if (jumeng) {
+    const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
+    const resolved = await resolveLocalMediaUrlForUpstream(rawVideo, {
+      jumengUpload: uploadCreds,
+    });
+    if (!resolved) {
+      throw new Error(
+        `源视频未能提交（${rawVideo.slice(0, 60)}）。聚梦官方上传上限 100MB，更大请压缩或配置「参考图 OSS」`
+      );
+    }
+    publicVideo = resolved;
+  } else if (!isPublicFetchableUrl(rawVideo) && !rawVideo.startsWith("data:")) {
+    throw new Error("去字幕需要可公网访问的源视频 URL（请配置参考图 OSS 或官方通道）");
+  }
+
+  const seconds = Math.max(1, Math.min(60, Math.round(Number(params.durationSec) || 5)));
+  const size = normalizeJumengVideosDocSize(params.resolution);
+  let eraseType = String(params.eraseType || "subtitle").trim().toLowerCase();
+  if (!["subtitle", "watermark", "all"].includes(eraseType)) eraseType = "subtitle";
+  let encodeMode = String(params.encodeMode || "size").trim().toLowerCase();
+  if (!["size", "quality"].includes(encodeMode)) encodeMode = "size";
+  const boxes = parseEraseRatioLocation(params.eraseRatioLocation);
+  const promptText =
+    (params.prompt || "").trim().slice(0, 20000) || "擦除视频字幕";
+
+  // 文档必填：model / prompt / seconds / size / image；另透传 videoUrl 等以免网关只认其一
+  const meta: Record<string, unknown> = {
+    videoUrl: publicVideo,
+    video_url: publicVideo,
+    eraseType,
+    encodeMode,
+  };
+  if (boxes.length) meta.eraseRatioLocation = boxes;
+
+  const body: Record<string, unknown> = {
+    model: upstreamModel || "火山字幕擦除-视频字幕擦除（精准版）",
+    prompt: promptText,
+    seconds: String(seconds),
+    size,
+    image: publicVideo,
+    video: publicVideo,
+    videoUrl: publicVideo,
+    videos: [publicVideo],
+    metadata: JSON.stringify(meta),
+    eraseType,
+    encodeMode,
+  };
+  if (boxes.length) body.eraseRatioLocation = boxes;
+
+  const submittedMeta = describeSubmittedRefs([publicVideo]);
+  await params.onSubmittedRefs?.({
+    count: submittedMeta.submittedReferenceCount,
+    hostPreview: submittedMeta.submittedRefHostPreview,
+    urls: submittedMeta.submittedRefUrls,
+  });
+
+  // 文档：POST https://www.jumengai.com/v1/videos
+  const submitUrl = joinApiUrl(apiBase, "/videos");
+  const videoReqBody = JSON.stringify(body);
+  console.info(
+    "[localGenerateSubtitleErase] url=%s model=%s size=%s seconds=%s eraseType=%s boxes=%s",
+    submitUrl,
+    upstreamModel,
+    size,
+    seconds,
+    eraseType,
+    boxes.length
+  );
+
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: videoReqBody,
+    timeoutMs: videoReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
+  }).catch((err) => {
+    throw enrichUpstreamFailure(err, {
+      endpoint: submitUrl,
+      payloadBytes: videoReqBody.length,
+      refPreview: submittedMeta.submittedRefHostPreview,
+      refCount: submittedMeta.submittedReferenceCount,
+    });
+  });
+
+  if ((submit.status ?? 500) >= 400) {
+    const detail = upstreamErrorDetail(submit);
+    throw new Error(`去字幕提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
+  }
+
+  const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const immediate = extractVideoUrl(submitPayload);
+  const taskId = extractUpstreamTaskId(submitPayload);
+  if (immediate && !taskId) return { url: immediate, ...submittedMeta };
+  if (!taskId) {
+    throw new Error(
+      `上游未返回视频 task_id（${submitUrl}）。请确认模型走 POST /v1/videos。响应：${JSON.stringify(submitPayload).slice(0, 300)}`
+    );
+  }
+  try {
+    await params.onProviderTaskId?.(taskId);
+  } catch {
+    /* ignore */
+  }
+
+  const polledUrl = await pollLocalVideoTaskOnceLoop({
+    apiBase,
+    apiKey,
+    taskId,
+    timeoutMs: LOCAL_VIDEO_POLL_TIMEOUT_MS,
+    signal: params.signal,
+  });
+  return { url: polledUrl, providerTaskId: taskId, ...submittedMeta };
+}
+
+/**
+ * 即梦动作模仿 2.0（动作捕捉与迁移）：对齐文档 POST {base}/videos
+ * 字段 model / prompt / seconds / size / image；另透传驱动视频 video / videoUrl
+ */
+export async function localGenerateMotionImitate(params: {
+  modelId: string;
+  prompt: string;
+  /** 角色参考图公网 URL（文档 image，必填） */
+  imageUrl: string;
+  /** 动作驱动视频公网 URL */
+  videoUrl: string;
+  durationSec?: number;
+  resolution?: string;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  signal?: AbortSignal;
+}): Promise<{
+  url: string;
+  providerTaskId?: string;
+  submittedReferenceCount?: number;
+  submittedRefHostPreview?: string;
+  submittedRefUrls?: string[];
+}> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  }
+
+  const configuredModel = (model.upstreamModel || model.name || "").trim();
+  const jumeng = isJumengaiUpstream(model.upstreamModel, model.name, apiBase);
+  const upstreamModel = jumeng
+    ? normalizeJumengOpenAiModelId(configuredModel)
+    : configuredModel;
+
+  const rawImage = String(params.imageUrl || "").trim();
+  const rawVideo = String(params.videoUrl || "").trim();
+  if (!rawImage) {
+    throw new Error(
+      "动作模仿需要角色参考图（请连接图片节点或 @ 图片；上游报 field 'image' is required）"
+    );
+  }
+  if (!rawVideo) {
+    throw new Error("动作模仿需要动作驱动视频（请连接视频节点或 @ 视频）");
+  }
+
+  let publicImage = rawImage;
+  let publicVideo = rawVideo;
+  if (jumeng) {
+    const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
+    publicImage = await resolveJumengImageRef(rawImage, uploadCreds);
+    const resolvedVid = await resolveLocalMediaUrlForUpstream(rawVideo, {
+      jumengUpload: uploadCreds,
+    });
+    if (!resolvedVid) {
+      throw new Error(
+        `驱动视频未能提交（${rawVideo.slice(0, 60)}）。聚梦官方上传上限 100MB，更大请压缩或配置「参考图 OSS」`
+      );
+    }
+    publicVideo = resolvedVid;
+  } else {
+    if (!isPublicFetchableUrl(rawImage) && !rawImage.startsWith("data:image")) {
+      throw new Error("动作模仿需要可公网访问的角色参考图 URL");
+    }
+    if (!isPublicFetchableUrl(rawVideo) && !rawVideo.startsWith("data:")) {
+      throw new Error("动作模仿需要可公网访问的驱动视频 URL");
+    }
+  }
+
+  const seconds = Math.max(1, Math.min(60, Math.round(Number(params.durationSec) || 5)));
+  const size = normalizeJumengVideosDocSize(params.resolution);
+  const promptText =
+    (params.prompt || "").trim().slice(0, 20000) || "动作模仿生成视频";
+
+  // 文档：model / prompt / seconds / size / image；驱动视频透传 video / videoUrl
+  const body: Record<string, unknown> = {
+    model: upstreamModel || "即梦/动作模仿2.0",
+    prompt: promptText,
+    seconds: String(seconds),
+    size,
+    image: publicImage,
+    images: [publicImage],
+    image_urls: [publicImage],
+    video: publicVideo,
+    videoUrl: publicVideo,
+    video_url: publicVideo,
+    videos: [publicVideo],
+    video_urls: [publicVideo],
+    metadata: JSON.stringify({
+      image: publicImage,
+      videoUrl: publicVideo,
+      video_url: publicVideo,
+      kind: "motion_imitate",
+    }),
+  };
+
+  const submittedMeta = describeSubmittedRefs([publicImage, publicVideo]);
+  await params.onSubmittedRefs?.({
+    count: submittedMeta.submittedReferenceCount,
+    hostPreview: submittedMeta.submittedRefHostPreview,
+    urls: submittedMeta.submittedRefUrls,
+  });
+
+  const submitUrl = joinApiUrl(apiBase, "/videos");
+  const videoReqBody = JSON.stringify(body);
+  console.info(
+    "[localGenerateMotionImitate] url=%s model=%s size=%s seconds=%s",
+    submitUrl,
+    upstreamModel,
+    size,
+    seconds
+  );
+
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: videoReqBody,
+    timeoutMs: videoReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
+  }).catch((err) => {
+    throw enrichUpstreamFailure(err, {
+      endpoint: submitUrl,
+      payloadBytes: videoReqBody.length,
+      refPreview: submittedMeta.submittedRefHostPreview,
+      refCount: submittedMeta.submittedReferenceCount,
+    });
+  });
+
+  if ((submit.status ?? 500) >= 400) {
+    const detail = upstreamErrorDetail(submit);
+    throw new Error(`动作模仿提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
+  }
+
+  const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const immediate = extractVideoUrl(submitPayload);
+  const taskId = extractUpstreamTaskId(submitPayload);
+  if (immediate && !taskId) return { url: immediate, ...submittedMeta };
+  if (!taskId) {
+    throw new Error(
+      `上游未返回视频 task_id（${submitUrl}）。请确认模型走 POST /v1/videos。响应：${JSON.stringify(submitPayload).slice(0, 300)}`
+    );
+  }
+  try {
+    await params.onProviderTaskId?.(taskId);
+  } catch {
+    /* ignore */
+  }
+
+  const polledUrl = await pollLocalVideoTaskOnceLoop({
+    apiBase,
+    apiKey,
+    taskId,
+    timeoutMs: LOCAL_VIDEO_POLL_TIMEOUT_MS,
+    signal: params.signal,
+  });
+  return { url: polledUrl, providerTaskId: taskId, ...submittedMeta };
+}
+
+/**
+ * Wan3.0 Video：对齐文档 POST {base}/videos
+ * 字段 model / prompt / seconds / size / image（图生可选）；有驱动/编辑视频时透传 video
+ */
+export async function localGenerateWan30Video(params: {
+  modelId: string;
+  prompt: string;
+  imageUrls?: string[];
+  videoUrls?: string[];
+  durationSec?: number;
+  resolution?: string;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  signal?: AbortSignal;
+}): Promise<{
+  url: string;
+  providerTaskId?: string;
+  submittedReferenceCount?: number;
+  submittedRefHostPreview?: string;
+  submittedRefUrls?: string[];
+}> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  }
+
+  const configuredModel = (model.upstreamModel || model.name || "").trim();
+  const jumeng = isJumengaiUpstream(model.upstreamModel, model.name, apiBase);
+  const upstreamModel = jumeng
+    ? normalizeJumengOpenAiModelId(configuredModel)
+    : configuredModel;
+
+  const promptText = (params.prompt || "").trim().slice(0, 20000);
+  if (!promptText) {
+    throw new Error("Wan3.0 提示词不能为空（文档 prompt 必填）");
+  }
+
+  const requestedImg = (params.imageUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
+  const requestedVid = (params.videoUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
+
+  let publicImgs: string[] = [];
+  let publicVids: string[] = [];
+  if (jumeng) {
+    const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
+    for (const u of requestedImg.slice(0, 3)) {
+      publicImgs.push(await resolveJumengImageRef(u, uploadCreds));
+    }
+    for (const u of requestedVid.slice(0, 2)) {
+      const v = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
+      if (!v) {
+        throw new Error(
+          `参考视频未能提交（${u.slice(0, 60)}）。聚梦官方上传上限 100MB，更大请压缩或配置「参考图 OSS」`
+        );
+      }
+      publicVids.push(v);
+    }
+  } else {
+    publicImgs = requestedImg
+      .filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:image"))
+      .slice(0, 3);
+    publicVids = requestedVid.filter((u) => isPublicFetchableUrl(u)).slice(0, 2);
+  }
+
+  const seconds = Math.max(1, Math.min(60, Math.round(Number(params.durationSec) || 5)));
+  const size = normalizeJumengVideosDocSize(params.resolution);
+
+  // 文档：model / prompt / seconds / size / image
+  const body: Record<string, unknown> = {
+    model: upstreamModel || "wan3.0-video",
+    prompt: promptText,
+    seconds: String(seconds),
+    size,
+  };
+  if (publicImgs.length) {
+    body.image = publicImgs[0];
+    body.images = publicImgs;
+    body.image_urls = publicImgs;
+  }
+  // 编辑/演绎/驱动等能力：有参考视频时透传（文档表未列，与网关兼容字段对齐）
+  if (publicVids.length) {
+    body.video = publicVids[0];
+    body.videoUrl = publicVids[0];
+    body.video_url = publicVids[0];
+    body.videos = publicVids;
+    body.video_urls = publicVids;
+  }
+  if (publicImgs.length || publicVids.length) {
+    body.metadata = JSON.stringify({
+      kind: "wan30_video",
+      ...(publicImgs[0] ? { image: publicImgs[0] } : {}),
+      ...(publicVids[0] ? { videoUrl: publicVids[0] } : {}),
+    });
+  }
+
+  const submittedMeta = describeSubmittedRefs([...publicImgs, ...publicVids]);
+  await params.onSubmittedRefs?.({
+    count: submittedMeta.submittedReferenceCount,
+    hostPreview: submittedMeta.submittedRefHostPreview,
+    urls: submittedMeta.submittedRefUrls,
+  });
+
+  const submitUrl = joinApiUrl(apiBase, "/videos");
+  const videoReqBody = JSON.stringify(body);
+  console.info(
+    "[localGenerateWan30Video] url=%s model=%s size=%s seconds=%s imgs=%s vids=%s",
+    submitUrl,
+    upstreamModel,
+    size,
+    seconds,
+    publicImgs.length,
+    publicVids.length
+  );
+
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: videoReqBody,
+    timeoutMs: videoReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
+  }).catch((err) => {
+    throw enrichUpstreamFailure(err, {
+      endpoint: submitUrl,
+      payloadBytes: videoReqBody.length,
+      refPreview: submittedMeta.submittedRefHostPreview,
+      refCount: submittedMeta.submittedReferenceCount,
+    });
+  });
+
+  if ((submit.status ?? 500) >= 400) {
+    const detail = upstreamErrorDetail(submit);
+    throw new Error(`Wan3.0 提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
+  }
+
+  const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const immediate = extractVideoUrl(submitPayload);
+  const taskId = extractUpstreamTaskId(submitPayload);
+  if (immediate && !taskId) return { url: immediate, ...submittedMeta };
+  if (!taskId) {
+    throw new Error(
+      `上游未返回视频 task_id（${submitUrl}）。请确认模型走 POST /v1/videos。响应：${JSON.stringify(submitPayload).slice(0, 300)}`
+    );
+  }
+  try {
+    await params.onProviderTaskId?.(taskId);
+  } catch {
+    /* ignore */
+  }
+
+  const polledUrl = await pollLocalVideoTaskOnceLoop({
+    apiBase,
+    apiKey,
+    taskId,
+    timeoutMs: LOCAL_VIDEO_POLL_TIMEOUT_MS,
+    signal: params.signal,
+  });
+  return { url: polledUrl, providerTaskId: taskId, ...submittedMeta };
+}
 
 /**
  * 聚梦视频分辨率：画布七档 480p/720p/768p/1080p/1K/2K/4K，默认原样提交。
@@ -2627,6 +3303,12 @@ export async function localGenerateVideo(params: {
   videoUrls?: string[];
   /** 参考音频公网 URL / data URL（Seedance 多模态 reference_audio） */
   audioUrls?: string[];
+  /** 画布工具 id（去字幕时分流到 /v1/videos） */
+  canvasTool?: string;
+  /** 去字幕：eraseType / encodeMode / 框选区域 */
+  eraseType?: string;
+  encodeMode?: string;
+  eraseRatioLocation?: unknown;
   /** 拿到上游 task_id 时回调（写入本机任务列表） */
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
@@ -2648,6 +3330,82 @@ export async function localGenerateVideo(params: {
   if (model.enabled === false) {
     throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
   }
+
+  // 火山字幕擦除：文档 POST /v1/videos，勿走通用 video/generations 多模态体
+  if (
+    isJumengSubtitleEraseModel({
+      canvasTool: params.canvasTool,
+      upstreamModel: model.upstreamModel,
+      name: model.name,
+      displayName: model.displayName,
+    })
+  ) {
+    const source =
+      (params.videoUrls || []).map((u) => String(u || "").trim()).find(Boolean) || "";
+    if (!source) {
+      throw new Error("去字幕需要源视频（请先上传或连接视频节点）");
+    }
+    return localGenerateSubtitleErase({
+      modelId: params.modelId,
+      prompt: params.prompt,
+      videoUrl: source,
+      durationSec: params.durationSec,
+      resolution: params.resolution || params.size,
+      eraseType: params.eraseType,
+      encodeMode: params.encodeMode,
+      eraseRatioLocation: params.eraseRatioLocation,
+      onProviderTaskId: params.onProviderTaskId,
+      onSubmittedRefs: params.onSubmittedRefs,
+      signal: params.signal,
+    });
+  }
+
+  // 即梦动作模仿：文档 POST /v1/videos（角色图 image + 驱动视频）
+  if (
+    isJumengMotionImitateModel({
+      upstreamModel: model.upstreamModel,
+      name: model.name,
+      displayName: model.displayName,
+    })
+  ) {
+    const imageUrl =
+      (params.imageUrls || []).map((u) => String(u || "").trim()).find(Boolean) || "";
+    const videoUrl =
+      (params.videoUrls || []).map((u) => String(u || "").trim()).find(Boolean) || "";
+    return localGenerateMotionImitate({
+      modelId: params.modelId,
+      prompt: params.prompt,
+      imageUrl,
+      videoUrl,
+      durationSec: params.durationSec,
+      resolution: params.resolution || params.size,
+      onProviderTaskId: params.onProviderTaskId,
+      onSubmittedRefs: params.onSubmittedRefs,
+      signal: params.signal,
+    });
+  }
+
+  // Wan3.0 Video：文档 POST /v1/videos（文生/图生；size=480P|720P|1080P）
+  if (
+    isJumengWan30VideoModel({
+      upstreamModel: model.upstreamModel,
+      name: model.name,
+      displayName: model.displayName,
+    })
+  ) {
+    return localGenerateWan30Video({
+      modelId: params.modelId,
+      prompt: params.prompt,
+      imageUrls: params.imageUrls,
+      videoUrls: params.videoUrls,
+      durationSec: params.durationSec,
+      resolution: params.resolution || params.size,
+      onProviderTaskId: params.onProviderTaskId,
+      onSubmittedRefs: params.onSubmittedRefs,
+      signal: params.signal,
+    });
+  }
+
   const providers = await localStore().listProviders();
   const { apiBase, apiKey, provider } = resolveCreds(model, providers);
   assertApiKeyReady(apiKey, model, provider);
@@ -2713,7 +3471,7 @@ export async function localGenerateVideo(params: {
       const a = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
       if (!a) {
         throw new Error(
-          `参考音频未能提交（${u.slice(0, 60)}）。请确认可播放；未配 OSS 时官方上传上限约 20MB，更大请配置「参考图 OSS」`
+          `参考音频未能提交（${u.slice(0, 60)}）。官方通道若拒收音频会改走 data URL（≤20MB）；更大请配置「参考图 OSS」`
         );
       }
       publicAudios.push(a);

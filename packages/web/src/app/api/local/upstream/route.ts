@@ -56,6 +56,9 @@ export async function POST(req: Request) {
       }
     }
 
+    const outboundBody =
+      method === "GET" || method === "HEAD" ? undefined : payload.body ?? undefined;
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let upstream: Response;
@@ -63,7 +66,7 @@ export async function POST(req: Request) {
       upstream = await fetch(target.toString(), {
         method,
         headers,
-        body: method === "GET" || method === "HEAD" ? undefined : payload.body ?? undefined,
+        body: outboundBody,
         signal: controller.signal,
       });
     } catch (err) {
