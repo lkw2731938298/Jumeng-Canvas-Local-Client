@@ -51,7 +51,14 @@ function resolveIds(
 ): string[] {
   const out: string[] = [];
   for (const id of ids) {
-    const nid = resolveNodeRef(id || undefined, undefined, tempMap);
+    const raw = str(id);
+    if (!raw) continue;
+    // 助手「上传图片」附件不是画布节点，resolveNodeRef 会丢掉；必须原样保留
+    if (raw.startsWith("upload:")) {
+      out.push(raw);
+      continue;
+    }
+    const nid = resolveNodeRef(raw || undefined, undefined, tempMap);
     if (nid) out.push(nid);
   }
   for (const name of names) {
@@ -84,35 +91,47 @@ async function resolveRefUrls(
   return { urls, missing };
 }
 
-/** media_inspect_images：把节点图交给文模看 */
+/** media_inspect_images：把节点图 / 上传附件交给文模看 */
 export async function applyMediaInspect(
   call: LocalChatToolCall,
-  opts: { projectId: string; textModelId: string; tempMap?: Map<string, string>; signal?: AbortSignal }
+  opts: {
+    projectId: string;
+    textModelId: string;
+    tempMap?: Map<string, string>;
+    /** 用户本轮 @ / 上传的参考；模型未传 nodeIds 时自动看这些 */
+    preferReferenceNodeIds?: string[];
+    preferReferenceUrls?: Map<string, string>;
+    signal?: AbortSignal;
+  }
 ): Promise<LocalAgentOpResult> {
   const parsed = parseToolArgs(call.arguments);
   if (parsed.error) return { op: call.name, ok: false, message: parsed.error };
   const a = parsed.args;
   const tempMap = opts.tempMap || new Map<string, string>();
-  const nodeIds = resolveIds(
+  const fromArgs = resolveIds(
     asStringList(a.nodeIds ?? a.nodeId),
     asStringList(a.nodeNames ?? a.nodeName),
     tempMap
   );
+  // 模型漏传 id 时，用本轮上传/@ 的图，避免「缺少 nodeId / nodeIds」
+  const nodeIds = mergeReferenceIds(fromArgs, opts.preferReferenceNodeIds);
   if (!nodeIds.length) {
-    return { op: call.name, ok: false, message: "缺少 nodeId / nodeIds" };
+    return {
+      op: call.name,
+      ok: false,
+      message: "缺少可看的图片：请先点回形针上传，或 @ 画布图片节点后再试",
+    };
   }
-  const urls: string[] = [];
-  const missing: string[] = [];
-  for (const id of nodeIds) {
-    const u = await resolveNodeImageUrlAsync(opts.projectId, id);
-    if (u) urls.push(u);
-    else missing.push(id);
-  }
+  const { urls, missing } = await resolveRefUrls(
+    opts.projectId,
+    nodeIds,
+    opts.preferReferenceUrls
+  );
   if (!urls.length) {
     return {
       op: call.name,
       ok: false,
-      message: `节点没有可用图片：${nodeIds.join(", ")}。请确认图片节点已有图（或 @ 引用后再问）`,
+      message: `节点没有可用图片：${nodeIds.join(", ")}。请确认图片节点已有图（或重新上传附件后再问）`,
       nodeId: nodeIds[0],
     };
   }
@@ -279,13 +298,16 @@ export async function applyMediaGenerateImage(
   try {
     const jumengCreds = await resolveJumengUploadCreds(model.id || model.name);
     const jumengOfficial = jumengCreds !== null;
-    const imageUrls = rawRefs.length
-      ? await resolveLocalImageUrlsForUpstream(rawRefs, {
-          preferPublicHttps: jumengOfficial,
-          requirePublicHttps: !jumengOfficial,
-          jumengUpload: jumengCreds,
-        })
-      : [];
+    // 聚梦官方：本机/助手上传原址交给 localGenerateImage，统一走 /files/upload
+    //（勿在此先解析成用户 OSS——上游常拉不到，报 File processing failed）
+    const imageUrls = jumengOfficial
+      ? rawRefs
+      : rawRefs.length
+        ? await resolveLocalImageUrlsForUpstream(rawRefs, {
+            requirePublicHttps: true,
+            jumengUpload: null,
+          })
+        : [];
 
     const aspectRatio = str(a.aspectRatio) || str(a.size) || "1:1";
     const resolution = str(a.resolution) || "2K";
@@ -429,13 +451,15 @@ export async function applyMediaGenerateVideo(
   try {
     const jumengCreds = await resolveJumengUploadCreds(model.id || model.name);
     const jumengOfficial = jumengCreds !== null;
-    const imageUrls = rawRefs.length
-      ? await resolveLocalImageUrlsForUpstream(rawRefs, {
-          preferPublicHttps: jumengOfficial,
-          requirePublicHttps: !jumengOfficial,
-          jumengUpload: jumengCreds,
-        })
-      : [];
+    // 与生图相同：聚梦官方把原址交给 localGenerateVideo，统一走 /files/upload
+    const imageUrls = jumengOfficial
+      ? rawRefs
+      : rawRefs.length
+        ? await resolveLocalImageUrlsForUpstream(rawRefs, {
+            requirePublicHttps: true,
+            jumengUpload: null,
+          })
+        : [];
 
     const durationSec = Number(a.durationSec || a.duration || 5) || 5;
     const resolution = str(a.resolution) || "768p";

@@ -332,7 +332,15 @@ export async function dispatchAgentToolCalls(opts: {
         });
         continue;
       }
-      const r = await applyMediaInspect(call, { projectId, textModelId, tempMap, signal });
+      const r = await applyMediaInspect(call, {
+        projectId,
+        textModelId,
+        tempMap,
+        // 上传附件是 upload:…，须带 URL 映射，否则看图读不到
+        preferReferenceNodeIds: preferIds,
+        preferReferenceUrls,
+        signal,
+      });
       out.push({ ...r, toolCallId: call.id });
       continue;
     }

@@ -2016,10 +2016,13 @@ function isUpstreamUsableRef(url: string): boolean {
 
 /**
  * 聚梦官方参考图解析，优先级：
- * 1. 已是干净公网直链 → 原样
- * 2. 已配「参考图 OSS」→ 上传成永久直链（顺带省掉官方每小时 50 个的配额）
- * 3. 官方文件上传 API（POST {base}/files/upload）→ 约 1 小时有效的公网直链，**免配 OSS**
+ * 1. 已是干净公网直链 / 本轮刚上传的官方临时链 → 原样
+ * 2. 官方文件上传 API（POST {base}/files/upload）→ 约 1 小时有效、上游必能拉（助手上传/本机图首选）
+ * 3. 已配「参考图 OSS」→ 永久直链（官方上传失败时的备选）
  * 4. 以上都不可用 → base64 兜底（仅部分通道收）
+ *
+ * 注意：勿把用户 OSS 放在官方上传之前。部分 Bucket「看起来像公网」但上游拉不到，
+ * 会报 File processing failed / 文件处理失败；助手参考图必须能稳定走官方文件通道。
  */
 async function resolveJumengImageRef(
   url: string,
@@ -2041,26 +2044,7 @@ async function resolveJumengImageRef(
     dataUrl = await toJpegDataUrlForUpstream(raw);
   }
 
-  const oss = await loadReadyUserOss();
-  if (oss) {
-    try {
-      const uploaded = await uploadLocalBytesToUserOss({
-        base64OrDataUrl: dataUrl,
-        contentType: "image/jpeg",
-        filename: "ref.jpg",
-      });
-      if (isCleanPublicHttpsUrl(uploaded)) {
-        lastRefUploadIssue = "";
-        return markUpstreamReadyRef(uploaded);
-      }
-      // 上传成功但拿到的不是干净公网直链（多为 Bucket 非公共读 / 自定义域名没配好）
-      lastRefUploadIssue = `OSS 已上传但返回的不是公共读直链：${String(uploaded).slice(0, 120)}`;
-    } catch (err) {
-      lastRefUploadIssue = `OSS 上传失败：${err instanceof Error ? err.message : String(err)}`.slice(0, 200);
-    }
-  }
-
-  // 官方文件上传：免 OSS 拿到公网直链，约 1 小时有效，提交即用
+  // 本机 / 助手上传附件：优先官方 /files/upload，保证上游能下载
   if (creds?.apiBase && creds?.apiKey) {
     try {
       const uploaded = await uploadRefToJumengFiles({
@@ -2075,8 +2059,30 @@ async function resolveJumengImageRef(
       lastRefUploadIssue =
         `聚梦文件上传失败：${err instanceof Error ? err.message : String(err)}`.slice(0, 220);
     }
-  } else if (!oss) {
-    lastRefUploadIssue = "未拿到聚梦接口凭据，无法调用官方文件上传，已改用 base64 提交";
+  } else {
+    lastRefUploadIssue = "未拿到聚梦接口凭据，无法调用官方文件上传";
+  }
+
+  // 官方上传失败时再试用户 OSS
+  const oss = await loadReadyUserOss();
+  if (oss) {
+    try {
+      const uploaded = await uploadLocalBytesToUserOss({
+        base64OrDataUrl: dataUrl,
+        contentType: "image/jpeg",
+        filename: "ref.jpg",
+      });
+      if (isCleanPublicHttpsUrl(uploaded)) {
+        lastRefUploadIssue = "";
+        return markUpstreamReadyRef(uploaded);
+      }
+      lastRefUploadIssue = `OSS 已上传但返回的不是公共读直链：${String(uploaded).slice(0, 120)}`;
+    } catch (err) {
+      const ossErr = `OSS 上传失败：${err instanceof Error ? err.message : String(err)}`.slice(0, 200);
+      lastRefUploadIssue = lastRefUploadIssue ? `${lastRefUploadIssue}；${ossErr}` : ossErr;
+    }
+  } else if (!creds?.apiBase || !creds?.apiKey) {
+    lastRefUploadIssue = `${lastRefUploadIssue}，且未配置参考图 OSS，已改用 base64 提交`;
   }
 
   // 最后兜底 base64，失败原因留给上游报错时一并提示
@@ -2130,7 +2136,7 @@ async function toJpegDataUrlForUpstream(url: string): Promise<string> {
 /**
  * 把本机参考图转成上游可吃的地址：
  * - requirePublicHttps：第三方 OpenAI 兼容网关 — 必须公网直链，须用户自配 OSS
- * - preferPublicHttps：聚梦官方对齐技能/插件 — 有 OSS 则 https，否则 data URL（不必配 OSS）
+ * - preferPublicHttps：聚梦官方 — /files/upload → OSS → base64（不必配 OSS）
  * - preferDataUrl：JPEG data URL
  * - 默认：有 OSS 则上传 https，否则 data URL
  */
@@ -2140,7 +2146,7 @@ export async function resolveLocalImageUrlForUpstream(
     preferDataUrl?: boolean;
     preferPublicHttps?: boolean;
     requirePublicHttps?: boolean;
-    /** 聚梦官方凭据：无 OSS 时走 /v1/files/upload */
+    /** 聚梦官方凭据：优先走 /v1/files/upload */
     jumengUpload?: JumengUploadCreds | null;
   }
 ): Promise<string | null> {
@@ -2173,7 +2179,7 @@ export async function resolveLocalImageUrlForUpstream(
   }
 
   if (opts?.preferPublicHttps) {
-    // 名称为历史兼容；实际走聚梦参考解析（OSS → 官方 files/upload → base64）
+    // 名称为历史兼容；实际走聚梦参考解析（官方 files/upload → OSS → base64）
     return resolveJumengImageRef(raw, opts.jumengUpload);
   }
 

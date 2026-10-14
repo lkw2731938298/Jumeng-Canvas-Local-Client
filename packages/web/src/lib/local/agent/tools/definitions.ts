@@ -143,13 +143,16 @@ export function buildCanvasAgentTools(): LocalChatTool[] {
     ),
     tool(
       "media_inspect_images",
-      "用当前对话文本模型看图（vision）：读取画布图片节点素材并回答问题。审图、写生图提示词前应先调用。用户 @ 了图片时可一次传入全部相关 nodeIds（无上限）。",
+      "用当前对话文本模型看图（vision）：读取画布图片节点或用户上传的参考图并回答问题。审图、写生图提示词前应先调用。用户 @ / 上传了图片时，把对应 id（含 upload:…）全部传入 nodeIds；若未传，系统会自动使用本轮参考图。",
       {
-        nodeId: { type: "string", description: "单个节点 id" },
+        nodeId: {
+          type: "string",
+          description: "单个节点 id；上传附件用 upload:… 形式",
+        },
         nodeIds: {
           type: "array",
           items: { type: "string" },
-          description: "多个节点 id（可全部传入，无上限）",
+          description: "多个节点 id（可含 upload:…；可全部传入，无上限）",
         },
         nodeName: { type: "string" },
         question: { type: "string", description: "要模型回答的问题；默认做创作向描述" },

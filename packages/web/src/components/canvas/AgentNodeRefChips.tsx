@@ -54,7 +54,11 @@ export function AgentNodeRefChip({
         border,
         onFocus && "cursor-pointer hover:opacity-90"
       )}
-      title={`${refItem.label} · ${typeLabelForNode(refItem.nodeType)} · 点击定位`}
+      title={
+        refItem.nodeId.startsWith("upload:") || refItem.nodeType === "upload"
+          ? `${refItem.label} · 上传参考图`
+          : `${refItem.label} · ${typeLabelForNode(refItem.nodeType)} · 点击定位`
+      }
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
