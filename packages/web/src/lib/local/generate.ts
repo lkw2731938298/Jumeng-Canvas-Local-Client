@@ -145,14 +145,23 @@ async function proxyUpstreamMultipart(params: {
 /** 聚梦官方上传凭据；无则退回 OSS / base64 */
 export type JumengUploadCreds = { apiBase: string; apiKey: string };
 
-/** 官方文件上传限额：图片 10MB、视频 100MB（超出直接 400） */
+/** 官方文件上传限额：图片 10MB、视频 100MB、音频 20MB（客户端预检；超出上游亦可能 400） */
 const JUMENG_UPLOAD_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const JUMENG_UPLOAD_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const JUMENG_UPLOAD_MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+
+/** 是否为音频 MIME / 扩展名（与视频共用官方 /files/upload，kind=audio） */
+function isAudioContentTypeOrName(contentType: string, filenameOrUrl = ""): boolean {
+  const ct = (contentType || "").toLowerCase();
+  if (ct.startsWith("audio/")) return true;
+  const name = (filenameOrUrl || "").toLowerCase();
+  return /\.(mp3|wav|m4a|aac|ogg|flac|opus)(?:\?|#|$)/i.test(name);
+}
 
 /**
  * 聚梦官方文件上传 API：POST {base}/files/upload，multipart 字段名固定 file。
  * 返回约 1 小时有效的公网直链，专供后续生图 / 生视频当参考素材，免配 OSS。
- * 限制：图片 JPEG/PNG/GIF/WEBP ≤10MB，视频 MP4/MOV/WebM ≤100MB，同一密钥每小时 50 个。
+ * 限制：图片 JPEG/PNG/GIF/WEBP ≤10MB，视频 MP4/MOV/WebM ≤100MB，音频 WAV/MP3 等 ≤20MB（实测 kind=audio 已通），同一密钥每小时 50 个。
  */
 async function uploadRefToJumengFiles(params: {
   creds: JumengUploadCreds;
@@ -165,11 +174,17 @@ async function uploadRefToJumengFiles(params: {
   if (!apiBase || !apiKey) throw new Error("缺少聚梦接口地址或密钥，无法上传参考素材");
 
   const isVideo = /^video\//i.test(params.contentType);
+  const isAudio = isAudioContentTypeOrName(params.contentType, params.filename);
   const bytes = dataUrlApproxBytes(params.base64OrDataUrl);
-  const limit = isVideo ? JUMENG_UPLOAD_MAX_VIDEO_BYTES : JUMENG_UPLOAD_MAX_IMAGE_BYTES;
+  const limit = isVideo
+    ? JUMENG_UPLOAD_MAX_VIDEO_BYTES
+    : isAudio
+      ? JUMENG_UPLOAD_MAX_AUDIO_BYTES
+      : JUMENG_UPLOAD_MAX_IMAGE_BYTES;
+  const kindLabel = isVideo ? "视频" : isAudio ? "音频" : "图";
   if (bytes > limit) {
     throw new Error(
-      `参考${isVideo ? "视频" : "图"}约 ${(bytes / (1024 * 1024)).toFixed(1)}MB，` +
+      `参考${kindLabel}约 ${(bytes / (1024 * 1024)).toFixed(1)}MB，` +
         `超过聚梦文件上传上限 ${Math.round(limit / (1024 * 1024))}MB。请压缩后重试，或配置「参考图 OSS」`
     );
   }
@@ -186,7 +201,7 @@ async function uploadRefToJumengFiles(params: {
         base64: params.base64OrDataUrl,
       },
     ],
-    timeoutMs: isVideo ? 300_000 : 120_000,
+    timeoutMs: isVideo || isAudio ? 300_000 : 120_000,
   });
 
   const status = res.status ?? 500;
@@ -2238,7 +2253,7 @@ export async function resolveLocalImageUrlForUpstream(
  * 本机视频/音频参考 → 上游可用地址。
  * - 已有干净公网 https：原样
  * - 已配 OSS：上传公共读直链（永久，大文件更稳）
- * - 聚梦官方接口未配 OSS：走官方文件上传（MP4/MOV/WebM ≤100MB，约 1 小时有效）
+ * - 聚梦官方接口未配 OSS：走官方文件上传（视频 ≤100MB / 音频 ≤20MB，约 1 小时有效直链）
  * - 第三方接口：必须配 OSS
  */
 export async function resolveLocalMediaUrlForUpstream(
@@ -2253,7 +2268,7 @@ export async function resolveLocalMediaUrlForUpstream(
   const oss = await loadReadyUserOss();
   if (!oss && opts?.requirePublicHttps) {
     throw new Error(
-      "第三方接口的参考视频必须是公网 http(s) 直链。请到「本地设置 → 参考图 OSS」配置后重试（聚梦官方接口无需配置）"
+      "第三方接口的参考视频/音频必须是公网 http(s) 直链。请到「本地设置 → 参考图 OSS」配置后重试（聚梦官方接口可不配 OSS）"
     );
   }
 
@@ -2261,13 +2276,13 @@ export async function resolveLocalMediaUrlForUpstream(
   const guessMediaExt = (contentType: string, sourceUrl: string): string => {
     const ct = (contentType || "").toLowerCase();
     const fromUrl =
-      sourceUrl.match(/\.(mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov)(?:\?|$)/i)?.[1] ||
-      sourceUrl.match(/file=[^&]*\.(mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov)/i)?.[1];
+      sourceUrl.match(/\.(mp3|wav|m4a|aac|ogg|flac|opus|mp4|webm|mov)(?:\?|$)/i)?.[1] ||
+      sourceUrl.match(/file=[^&]*\.(mp3|wav|m4a|aac|ogg|flac|opus|mp4|webm|mov)/i)?.[1];
     if (fromUrl) return fromUrl.toLowerCase();
     if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
     if (ct.includes("wav")) return "wav";
     if (ct.includes("aac")) return "aac";
-    if (ct.includes("ogg")) return "ogg";
+    if (ct.includes("ogg") || ct.includes("opus")) return "ogg";
     if (ct.includes("flac")) return "flac";
     if (ct.startsWith("audio/")) return "m4a";
     if (ct.includes("webm")) return "webm";
@@ -2275,16 +2290,25 @@ export async function resolveLocalMediaUrlForUpstream(
     return "mp4";
   };
 
-  // 聚梦官方：未配 OSS 时用官方文件上传拿公网直链，上限 100MB
+  // 聚梦官方：未配 OSS 时，图/视频/音频均走官方文件上传拿公网直链
   const jumengCreds = opts?.jumengUpload;
   if (!oss && jumengCreds?.apiBase && jumengCreds?.apiKey) {
     const loaded = await fetchUrlAsDataUrl(raw);
     const contentType = loaded.contentType || "application/octet-stream";
     const ext = guessMediaExt(contentType, raw);
+    // 本机 asset 常无扩展名且 MIME 为 octet-stream：按 URL/扩展名推断音频时补 audio/*
+    const uploadType =
+      isAudioContentTypeOrName(contentType, `${raw}.${ext}`) && !contentType.startsWith("audio/")
+        ? ext === "wav"
+          ? "audio/wav"
+          : ext === "m4a"
+            ? "audio/mp4"
+            : "audio/mpeg"
+        : contentType;
     const uploaded = await uploadRefToJumengFiles({
       creds: jumengCreds,
       base64OrDataUrl: loaded.dataUrl,
-      contentType,
+      contentType: uploadType,
       filename: `ref-${Date.now()}.${ext}`,
     });
     return markUpstreamReadyRef(uploaded);
@@ -2689,7 +2713,7 @@ export async function localGenerateVideo(params: {
       const a = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
       if (!a) {
         throw new Error(
-          `参考音频未能提交（${u.slice(0, 60)}）。请确认音频可播放，或配置「参考图 OSS」`
+          `参考音频未能提交（${u.slice(0, 60)}）。请确认可播放；未配 OSS 时官方上传上限约 20MB，更大请配置「参考图 OSS」`
         );
       }
       publicAudios.push(a);

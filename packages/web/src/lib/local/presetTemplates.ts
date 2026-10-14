@@ -3,7 +3,7 @@
  * - 比例仅 16:9 / 9:16 / 1:1（部分生图另含 4:3/3:4）
  * - 清晰度：480p / 720p / 768p / 1080p / 1K / 2K / 4K（点选即原样提交）
  * - 生图清晰度：以 1K / 2K / 4K 为主
- * - 视频时长默认 5–15 秒；具体模型可再收窄（如 H3 仅 5s）
+ * - 视频时长默认 4–30 秒；具体模型可再收窄（如 H3 仅 5s）
  */
 import type { GenerationPresetsConfig, GenerationPresetGroup } from "@/types/generationPresets";
 import {
@@ -24,8 +24,8 @@ export type CanvasAspectRatio = (typeof CANVAS_ASPECT_RATIOS)[number];
 export const CANVAS_CLARITY_TIERS = VIDEO_CLARITY_TIERS;
 export type CanvasClarityTier = CapsClarityTier;
 
-export const CANVAS_VIDEO_DURATION_MIN = 5;
-export const CANVAS_VIDEO_DURATION_MAX = 15;
+export const CANVAS_VIDEO_DURATION_MIN = 4;
+export const CANVAS_VIDEO_DURATION_MAX = 30;
 
 function imageRatioItems(ratios?: readonly string[]) {
   const list =

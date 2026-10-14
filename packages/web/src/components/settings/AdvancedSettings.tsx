@@ -10,7 +10,12 @@ import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import type { LocalModel, LocalProvider } from "@/lib/local/types";
 import type { LocalCanvasToolDef, LocalToolModelsMap } from "@/lib/local/canvasToolDefs";
 import { applyEndpointDefaults, JUMENGAI_SDK_API_BASE } from "@/lib/local/endpointHelpers";
-import { imageAspectPresets, videoDurationPresets } from "@/lib/local/presetTemplates";
+import {
+  CANVAS_VIDEO_DURATION_MAX,
+  CANVAS_VIDEO_DURATION_MIN,
+  imageAspectPresets,
+  videoDurationPresets,
+} from "@/lib/local/presetTemplates";
 import {
   CLARITY_TIER_ORDER,
   buildExplicitCanvasCaps,
@@ -871,7 +876,10 @@ function ModelCanvasCapsEditor(props: {
         <div>
           <div className={labelCls}>时长（秒）</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {Array.from({ length: 11 }, (_, i) => i + 5).map((sec) => {
+            {Array.from(
+              { length: CANVAS_VIDEO_DURATION_MAX - CANVAS_VIDEO_DURATION_MIN + 1 },
+              (_, i) => CANVAS_VIDEO_DURATION_MIN + i
+            ).map((sec) => {
               const on = resolved.durationSec.includes(sec);
               return (
                 <button

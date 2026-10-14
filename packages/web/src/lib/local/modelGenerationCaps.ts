@@ -133,7 +133,7 @@ export const MODEL_CAPS_RULES: CapsRule[] = [
     id: "seedance",
     match: /seedance/i,
     category: "video",
-    caps: { durationSec: durationRange(5, 15) },
+    caps: { durationSec: durationRange(4, 30) },
   },
   {
     id: "minimax-h3-fixed5",
@@ -145,19 +145,19 @@ export const MODEL_CAPS_RULES: CapsRule[] = [
     id: "minimax-family",
     match: /minimax|hailuo|(^|[^a-z0-9])h3([^a-z0-9]|$)/i,
     category: "video",
-    caps: { durationSec: durationRange(5, 15) },
+    caps: { durationSec: durationRange(4, 30) },
   },
   {
     id: "kling",
     match: /kling|可灵/i,
     category: "video",
-    caps: { durationSec: durationRange(5, 15) },
+    caps: { durationSec: durationRange(4, 30) },
   },
   {
     id: "wan-video",
     match: /wan2|wan3|万相|wan\//i,
     category: "video",
-    caps: { durationSec: durationRange(5, 15) },
+    caps: { durationSec: durationRange(4, 30) },
   },
   {
     id: "image-star",
@@ -216,7 +216,7 @@ function safeDefault(category?: ModelCapsInput["category"]): ResolvedModelCanvas
   return {
     clarity: [...VIDEO_CLARITY_TIERS],
     clarityMap: identityClarityMap(),
-    durationSec: durationRange(5, 15),
+    durationSec: durationRange(4, 30),
     ratios: [...DEFAULT_RATIOS],
     imageSizeMode: "pixel",
     // 聚梦视频网关把 size 校验成画幅比；清晰度走 resolution + metadata

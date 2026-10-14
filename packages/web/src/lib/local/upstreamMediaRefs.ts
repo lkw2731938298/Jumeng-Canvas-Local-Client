@@ -101,7 +101,7 @@ export async function prepareUpstreamMediaRefs(opts: {
     });
     if (!resolved) {
       throw new Error(
-        `参考音频未能提交（${raw.slice(0, 80)}）。请确认音频可播放，或启用「参考图 OSS」`
+        `参考音频未能提交（${raw.slice(0, 80)}）。请确认可播放；未配 OSS 时官方上传上限约 20MB，更大请启用「参考图 OSS」`
       );
     }
     audioUrls.push(resolved);
