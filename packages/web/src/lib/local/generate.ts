@@ -3858,13 +3858,9 @@ export async function localGenerateVideo(params: {
       role: "reference_video",
     });
   }
-  for (const u of publicAudios) {
-    content.push({
-      type: "audio_url",
-      audio_url: { url: u },
-      role: "reference_audio",
-    });
-  }
+  // 参考音频：不要写入 content[].audio_url。
+  // 网关/RH 转换常把 content 音频抽成顶层 `audio`=URL，而 `audio` 在校验里是格式枚举（mp3/wav），
+  // 会报「audio format 参数不合法」。RH/聚梦官方参考音频字段是 audioUrls。
   const metadata: Record<string, unknown> = {
     resolution,
     ratio,
@@ -3892,13 +3888,9 @@ export async function localGenerateVideo(params: {
       metadata.referenceVideos = publicVideos;
     }
   }
-  if (publicAudios.length) {
-    metadata.audio_url = publicAudios[0];
-    if (!audRefsAreDataUrls) {
-      metadata.audio_urls = publicAudios;
-      metadata.audioUrls = publicAudios;
-      metadata.referenceAudio = publicAudios;
-    }
+  if (publicAudios.length && !audRefsAreDataUrls) {
+    metadata.audioUrls = publicAudios;
+    metadata.referenceAudio = publicAudios;
   }
 
   const body: Record<string, unknown> = {
@@ -3935,10 +3927,9 @@ export async function localGenerateVideo(params: {
     }
   }
   if (publicAudios.length && !audRefsAreDataUrls) {
-    // 参考音频只走 audioUrls / audio_urls / content.role=reference_audio。
-    // 禁止写顶层 body.audio=URL：网关会把 `audio` 当成「音频格式」枚举（mp3/wav），
-    // URL 会触发「audio format 参数不合法」。
-    body.audio_url = publicAudios[0];
+    // 只传官方 audioUrls（及兼容 audio_urls）。禁止：
+    // - body.audio（格式枚举）
+    // - body.audio_url / content audio_url（易被网关再写成 body.audio=URL）
     body.audio_urls = publicAudios;
     body.audioUrls = publicAudios;
   }
