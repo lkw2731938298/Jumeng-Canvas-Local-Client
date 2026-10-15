@@ -36,7 +36,7 @@ const IMAGE_TAB_RULES: TabRule[] = [
 /** 视频超分 / 增强类 */
 function isVideoUpscaleModel(m: CanvasModel): boolean {
   const blob = `${m.name} ${m.displayName || ""}`.toLowerCase();
-  return /upscale|seedvr|topaz|enhance|video_sr|video_hd|hd_video|超分|高清增强|视频高清|视频超分/.test(
+  return /upscale|seedvr|topaz|volc[_-]?enhance|enhance|video_sr|video_hd|hd_video|超分|画质增强|高清增强|视频高清|视频超分/.test(
     blob
   );
 }

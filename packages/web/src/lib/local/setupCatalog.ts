@@ -9,6 +9,11 @@ import {
 import { isJumengaiApiBase, joinApiUrl } from "./endpointHelpers";
 import { imageAspectPresets, videoDurationPresetsForUpstream } from "./presetTemplates";
 import type { LocalModel, LocalModelCategory, LocalProvider } from "./types";
+import {
+  detectVolcEnhanceVariant,
+  volcEnhanceGenerationPresets,
+  VOLC_ENHANCE_STANDARD_PRO_MODEL,
+} from "./volcVideoEnhance";
 
 export type CatalogSource = "account" | "builtin" | "manual";
 
@@ -68,8 +73,9 @@ export function catalogSourceLabel(source: CatalogSource): string {
 /** 视频超分 / 增强类 id（无 video 字样时也须归视频，避免落成 text） */
 export function isVideoUpscaleModelId(modelId: string): boolean {
   const s = (modelId || "").toLowerCase();
-  // 不用裸 enhance，避免图片增强被误判成视频
-  return /upscale|seedvr|topaz|video[_-]?sr|video[_-]?hd|hd[_-]?video|超分|高清增强|视频高清|视频超分|(video[^a-z0-9]*enhance|enhance[^a-z0-9]*video)/.test(
+  // 不用裸 enhance，避免图片增强被误判成视频；
+  // 须覆盖「火山画质增强-大模型版」与上游 id volc-enhance-*
+  return /upscale|seedvr|topaz|volc[_-]?enhance|video[_-]?sr|video[_-]?hd|hd[_-]?video|超分|画质增强|高清增强|视频高清|视频超分|(video[^a-z0-9]*enhance|enhance[^a-z0-9]*video)/.test(
     s
   );
 }
@@ -220,7 +226,9 @@ function readUpstreamEntry(row: Record<string, unknown>): UpstreamModelEntry | n
   const idRaw = row.id ?? row.model ?? row.model_name ?? row.modelId;
   if (typeof idRaw !== "string" || !idRaw.trim()) return null;
   const id = idRaw.trim();
-  if (id.length > 180 || /\s/.test(id)) return null;
+  if (id.length > 180) return null;
+  // 英文 id 禁止空格；中文展示名 id（如「火山画质增强-标准专业版」）允许
+  if (/\s/.test(id) && !/[\u4e00-\u9fff]/.test(id)) return null;
   if (["list", "model", "models", "object", "data"].includes(id.toLowerCase())) return null;
 
   const endpointTypes = asStringArray(
@@ -342,8 +350,11 @@ export function resolveModelCategory(
   modelId: string,
   meta?: Partial<UpstreamModelEntry> | null
 ): LocalModelCategory {
-  // 3D 模型 id 明确时不看元数据（网关把 Tripo 标成 openai-video）
+  const nameBlob = `${modelId || ""} ${meta?.displayName || ""} ${meta?.description || ""}`;
+  // 3D / 画质增强：id 明确时不看元数据（网关常把它们标成 openai Chat，会被 mediaOnly 滤掉）
   if (isModel3dId(modelId)) return "model3d";
+  if (isVideoUpscaleModelId(modelId) || isVideoUpscaleModelId(nameBlob)) return "video";
+
   const fromMeta = meta
     ? inferCategoryFromUpstreamMeta({
         endpointTypes: meta.endpointTypes || [],
@@ -352,6 +363,10 @@ export function resolveModelCategory(
         ownedBy: meta.ownedBy,
       })
     : null;
+  // Chat-only 元数据不要盖过「火山画质增强」等中文视频工具名
+  if (fromMeta === "text" && /画质增强|视频超分|字幕擦除|volc[_-]?enhance/i.test(nameBlob)) {
+    return "video";
+  }
   if (fromMeta) return fromMeta;
   return inferModelCategory(modelId);
 }
@@ -562,11 +577,18 @@ export function buildModelFromPick(
     upstreamModel: pick.id,
     displayName: pick.displayName,
   };
+  // 火山画质增强：按三模型各自档次写预设（高级设置「更多」同步）
+  const enhanceVariant = detectVolcEnhanceVariant({
+    upstreamModel: pick.id,
+    displayName: pick.displayName,
+  });
   const presets =
     pick.category === "image"
       ? imageAspectPresets(capsInput)
       : pick.category === "video"
-        ? videoDurationPresetsForUpstream(capsInput)
+        ? enhanceVariant
+          ? volcEnhanceGenerationPresets(enhanceVariant)
+          : videoDurationPresetsForUpstream(capsInput)
         : undefined;
   const description = pick.description || existing?.description;
   if (existing) {
@@ -640,6 +662,21 @@ export function bindToolsByFirstSelected(
     next[d.toolId] = {
       primary: name,
       secondary: next[d.toolId]?.secondary || "",
+    };
+  }
+  // 视频「画质增强」工具固定绑「火山画质增强-标准专业版」（有则覆盖）
+  const enhancePro = models.find(
+    (m) =>
+      m.enabled !== false &&
+      m.category === "video" &&
+      (m.upstreamModel === VOLC_ENHANCE_STANDARD_PRO_MODEL ||
+        m.displayName === VOLC_ENHANCE_STANDARD_PRO_MODEL ||
+        /火山画质增强-标准专业版/.test(`${m.upstreamModel || ""} ${m.displayName || ""}`))
+  );
+  if (enhancePro) {
+    next.hd_upscale_video = {
+      primary: enhancePro.name,
+      secondary: next.hd_upscale_video?.secondary || "",
     };
   }
   return next;

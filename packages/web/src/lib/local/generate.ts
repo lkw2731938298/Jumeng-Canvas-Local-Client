@@ -26,6 +26,13 @@ import {
   type ModelCapsInput,
   type VideoSizeMode,
 } from "./modelGenerationCaps";
+import {
+  buildVolcEnhanceRequestFields,
+  detectVolcEnhanceVariant,
+  isVolcVideoEnhanceModel,
+  normalizeVolcEnhanceOptions,
+  VOLC_ENHANCE_STANDARD_PRO_MODEL,
+} from "./volcVideoEnhance";
 
 type UpstreamProxyResult = {
   ok?: boolean;
@@ -2592,8 +2599,8 @@ function mapVideoPollState(body: unknown): {
  * 本地视频：POST /v1/video/generations → 轮询 GET …/video/generations/{task_id}
  * （对齐 https://doc.jumengai.com/api/base-url 与 /api/video）
  *
- * 火山字幕擦除 / 即梦动作模仿 / Wan3.0：走文档 POST /v1/videos
- * （见 localGenerateSubtitleErase / localGenerateMotionImitate / localGenerateWan30Video）
+ * 火山字幕擦除 / 画质增强 / 即梦动作模仿 / Wan3.0：走文档 POST /v1/videos
+ * （见 localGenerateSubtitleErase / localGenerateVolcVideoEnhance / …）
  */
 
 /** 是否为聚梦「火山字幕擦除」类模型 / 画布去字幕工具 */
@@ -2859,6 +2866,159 @@ export async function localGenerateSubtitleErase(params: {
   if ((submit.status ?? 500) >= 400) {
     const detail = upstreamErrorDetail(submit);
     throw new Error(`去字幕提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
+  }
+
+  const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const immediate = extractVideoUrl(submitPayload);
+  const taskId = extractUpstreamTaskId(submitPayload);
+  if (immediate && !taskId) return { url: immediate, ...submittedMeta };
+  if (!taskId) {
+    throw new Error(
+      `上游未返回视频 task_id（${submitUrl}）。请确认模型走 POST /v1/videos。响应：${JSON.stringify(submitPayload).slice(0, 300)}`
+    );
+  }
+  try {
+    await params.onProviderTaskId?.(taskId);
+  } catch {
+    /* ignore */
+  }
+
+  const polledUrl = await pollLocalVideoTaskOnceLoop({
+    apiBase,
+    apiKey,
+    taskId,
+    timeoutMs: LOCAL_VIDEO_POLL_TIMEOUT_MS,
+    signal: params.signal,
+  });
+  return { url: polledUrl, providerTaskId: taskId, ...submittedMeta };
+}
+
+/**
+ * 火山画质增强（大模型 / 极速 / 标准专业版）：POST {base}/videos
+ * 字段对齐 RunningHub videoUrl + mode/resolution/fps 等，经聚梦网关异步任务。
+ */
+export async function localGenerateVolcVideoEnhance(params: {
+  modelId: string;
+  prompt?: string;
+  videoUrl: string;
+  durationSec?: number;
+  /** 画布 generationOptions / 节点参数 */
+  enhanceOptions?: Record<string, unknown>;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  onSubmittedRefs?: (note: SubmittedRefsNote) => void | Promise<void>;
+  signal?: AbortSignal;
+}): Promise<{
+  url: string;
+  providerTaskId?: string;
+  submittedReferenceCount?: number;
+  submittedRefHostPreview?: string;
+  submittedRefUrls?: string[];
+}> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  }
+
+  const configuredModel = (model.upstreamModel || model.name || "").trim();
+  const jumeng = isJumengaiUpstream(model.upstreamModel, model.name, apiBase);
+  const upstreamModel = jumeng
+    ? normalizeJumengOpenAiModelId(configuredModel)
+    : configuredModel;
+
+  const variant =
+    detectVolcEnhanceVariant({
+      upstreamModel,
+      name: model.name,
+      displayName: model.displayName,
+    }) || "standard_pro";
+
+  const rawVideo = String(params.videoUrl || "").trim();
+  if (!rawVideo) {
+    throw new Error("画质增强需要源视频（请先上传或连接视频节点）");
+  }
+
+  let publicVideo = rawVideo;
+  if (jumeng) {
+    const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
+    const resolved = await resolveLocalMediaUrlForUpstream(rawVideo, {
+      jumengUpload: uploadCreds,
+    });
+    if (!resolved) {
+      throw new Error(
+        `源视频未能提交（${rawVideo.slice(0, 60)}）。聚梦官方上传上限 100MB，更大请压缩或配置「参考图 OSS」`
+      );
+    }
+    publicVideo = resolved;
+  } else if (!isPublicFetchableUrl(rawVideo) && !rawVideo.startsWith("data:")) {
+    throw new Error("画质增强需要可公网访问的源视频 URL（请配置参考图 OSS 或官方通道）");
+  }
+
+  const seconds = Math.max(1, Math.min(600, Math.round(Number(params.durationSec) || 5)));
+  const enhanceOpts = normalizeVolcEnhanceOptions(variant, params.enhanceOptions);
+  const promptText =
+    (params.prompt || "").trim().slice(0, 20000) || "视频画质增强";
+
+  const body: Record<string, unknown> = {
+    model: upstreamModel || VOLC_ENHANCE_STANDARD_PRO_MODEL,
+    prompt: promptText,
+    seconds: String(seconds),
+    // 文档 size 对增强类非画幅；用分辨率档占位，避免网关缺字段
+    size: String(enhanceOpts.resolution || "1080p").toUpperCase().replace("K", "K"),
+    ...buildVolcEnhanceRequestFields(variant, publicVideo, enhanceOpts),
+  };
+
+  const submittedMeta = describeSubmittedRefs([publicVideo]);
+  await params.onSubmittedRefs?.({
+    count: submittedMeta.submittedReferenceCount,
+    hostPreview: submittedMeta.submittedRefHostPreview,
+    urls: submittedMeta.submittedRefUrls,
+  });
+
+  const submitUrl = joinApiUrl(apiBase, "/videos");
+  const videoReqBody = JSON.stringify(body);
+  console.info(
+    "[localGenerateVolcVideoEnhance] url=%s model=%s variant=%s resolution=%s mode=%s fps=%s",
+    submitUrl,
+    upstreamModel,
+    variant,
+    enhanceOpts.resolution,
+    enhanceOpts.mode || "-",
+    enhanceOpts.fps ?? "keep"
+  );
+
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: videoReqBody,
+    timeoutMs: videoReqBody.length > 1_000_000 ? 300_000 : 180_000,
+    signal: params.signal,
+  }).catch((err) => {
+    throw enrichUpstreamFailure(err, {
+      endpoint: submitUrl,
+      payloadBytes: videoReqBody.length,
+      refPreview: submittedMeta.submittedRefHostPreview,
+      refCount: submittedMeta.submittedReferenceCount,
+    });
+  });
+
+  if ((submit.status ?? 500) >= 400) {
+    const detail = upstreamErrorDetail(submit);
+    throw new Error(`画质增强提交失败 HTTP ${submit.status}（${submitUrl}）: ${detail}`);
   }
 
   const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
@@ -3315,6 +3475,8 @@ export async function localGenerateVideo(params: {
   eraseType?: string;
   encodeMode?: string;
   eraseRatioLocation?: unknown;
+  /** 火山画质增强：档次 / 分辨率 / 帧率等 */
+  enhanceOptions?: Record<string, unknown>;
   /** 拿到上游 task_id 时回调（写入本机任务列表） */
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
@@ -3335,6 +3497,35 @@ export async function localGenerateVideo(params: {
   if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
   if (model.enabled === false) {
     throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+
+  // 火山画质增强：POST /v1/videos（videoUrl + mode/resolution/fps…）
+  if (
+    isVolcVideoEnhanceModel({
+      canvasTool: params.canvasTool,
+      upstreamModel: model.upstreamModel,
+      name: model.name,
+      displayName: model.displayName,
+    })
+  ) {
+    const source =
+      (params.videoUrls || []).map((u) => String(u || "").trim()).find(Boolean) || "";
+    if (!source) {
+      throw new Error("画质增强需要源视频（请先上传或连接视频节点）");
+    }
+    return localGenerateVolcVideoEnhance({
+      modelId: params.modelId,
+      prompt: params.prompt,
+      videoUrl: source,
+      durationSec: params.durationSec,
+      enhanceOptions: {
+        ...(params.enhanceOptions || {}),
+        resolution: params.resolution || (params.enhanceOptions as { resolution?: string })?.resolution,
+      },
+      onProviderTaskId: params.onProviderTaskId,
+      onSubmittedRefs: params.onSubmittedRefs,
+      signal: params.signal,
+    });
   }
 
   // 火山字幕擦除：文档 POST /v1/videos，勿走通用 video/generations 多模态体

@@ -14,7 +14,7 @@ import {
   CANVAS_VIDEO_DURATION_MAX,
   CANVAS_VIDEO_DURATION_MIN,
   imageAspectPresets,
-  videoDurationPresets,
+  videoDurationPresetsForUpstream,
 } from "@/lib/local/presetTemplates";
 import {
   CLARITY_TIER_ORDER,
@@ -628,7 +628,7 @@ function ModelCard(props: {
                       patch({
                         ...m,
                         canvasCaps: undefined,
-                        generationPresets: videoDurationPresets({
+                        generationPresets: videoDurationPresetsForUpstream({
                           category: "video",
                           upstreamModel: m.upstreamModel,
                           name: m.name,
@@ -637,7 +637,7 @@ function ModelCard(props: {
                       })
                     }
                   >
-                    恢复自动识别（清晰度 / 时长）
+                    恢复自动识别（清晰度 / 时长 / 画质增强档）
                   </button>
                 )}
               </div>
@@ -744,7 +744,7 @@ function ModelCanvasCapsEditor(props: {
       canvasCaps: nextCaps,
       generationPresets:
         m.category === "video"
-          ? videoDurationPresets(capsInput)
+          ? videoDurationPresetsForUpstream(capsInput)
           : imageAspectPresets(capsInput),
     });
   };

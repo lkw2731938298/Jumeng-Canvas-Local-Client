@@ -40,7 +40,7 @@ export const LOCAL_CANVAS_TOOL_DEFS: LocalCanvasToolDef[] = [
   { toolId: "storyboard_sketch", category: "image", label: "分镜草图", group: "分镜" },
   // 分镜表「准备资产」页角色/场景/道具出图
   { toolId: "storyboard_subject_image", category: "image", label: "准备资产 · 主体生图", group: "分镜" },
-  { toolId: "hd_upscale_video", category: "video", label: "视频高清", group: "视频工具" },
+  { toolId: "hd_upscale_video", category: "video", label: "画质增强", group: "视频工具" },
   { toolId: "video_smart_matting", category: "video", label: "智能抠像", group: "视频工具" },
   { toolId: "video_subject_remove", category: "video", label: "主体消除", group: "视频工具" },
   { toolId: "video_subject_edit", category: "video", label: "主体修改", group: "视频工具" },

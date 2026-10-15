@@ -827,11 +827,36 @@ export function NodeEditorOverlay() {
   }, [audioParamsOpen]);
 
   const handleHdUpscaleChange = useCallback(
-    (patch: { hdProvider?: string; hdModel?: string; hdScale?: number }) => {
+    (patch: {
+      hdProvider?: string;
+      hdModel?: string;
+      hdScale?: number;
+      enhanceMode?: string;
+      enhanceResolution?: string;
+      enhanceFps?: string;
+      enhanceScene?: string;
+      enhanceStyle?: string;
+      enhanceBitrateLevel?: string;
+      enhanceBitDepth?: string;
+    }) => {
       if (!selectedNodeId) return;
       if (patch.hdProvider != null) updateNodeParam(selectedNodeId, "hdProvider", patch.hdProvider);
       if (patch.hdModel != null) updateNodeParam(selectedNodeId, "hdModel", patch.hdModel);
       if (patch.hdScale != null) updateNodeParam(selectedNodeId, "hdScale", patch.hdScale);
+      if (patch.enhanceMode != null)
+        updateNodeParam(selectedNodeId, "enhanceMode", patch.enhanceMode);
+      if (patch.enhanceResolution != null)
+        updateNodeParam(selectedNodeId, "enhanceResolution", patch.enhanceResolution);
+      if (patch.enhanceFps != null)
+        updateNodeParam(selectedNodeId, "enhanceFps", patch.enhanceFps);
+      if (patch.enhanceScene != null)
+        updateNodeParam(selectedNodeId, "enhanceScene", patch.enhanceScene);
+      if (patch.enhanceStyle != null)
+        updateNodeParam(selectedNodeId, "enhanceStyle", patch.enhanceStyle);
+      if (patch.enhanceBitrateLevel != null)
+        updateNodeParam(selectedNodeId, "enhanceBitrateLevel", patch.enhanceBitrateLevel);
+      if (patch.enhanceBitDepth != null)
+        updateNodeParam(selectedNodeId, "enhanceBitDepth", patch.enhanceBitDepth);
     },
     [selectedNodeId, updateNodeParam]
   );
@@ -1483,10 +1508,22 @@ export function NodeEditorOverlay() {
   const panelWidth = Math.round(basePanelWidth * popupScale);
   const promptMinHeight = Math.round(110 * popupScale);
 
+  // 视频画质增强面板自带视觉底，外壳透明以免双层玻璃叠色
+  const isVideoEnhancePanel = isHdUpscaleNode && hdMediaKind === "video";
   const overlayStyle = buildCanvasOverlayStyle(anchorX, anchorY, viewportZoom, "below", {
-    width: panelWidth,
-    ...CANVAS_MIST_GLASS_STYLE,
-    boxShadow: "0 18px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)",
+    width: isVideoEnhancePanel ? Math.max(panelWidth, 360) : panelWidth,
+    ...(isVideoEnhancePanel
+      ? {
+          background: "transparent",
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+          border: "none",
+          boxShadow: "0 22px 56px rgba(0,0,0,0.58)",
+        }
+      : {
+          ...CANVAS_MIST_GLASS_STYLE,
+          boxShadow: "0 18px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)",
+        }),
     // 参数面板向上展开时抬高层级，避免被顶栏「编辑」下拉遮挡
     zIndex: generationOptionsExpanded ? CANVAS_OVERLAY_Z_EDITOR_EXPANDED : CANVAS_OVERLAY_Z_EDITOR,
   });
@@ -1514,6 +1551,15 @@ export function NodeEditorOverlay() {
               hdProvider: String(nodeParamsForMode.hdProvider ?? "topazlabs"),
               hdModel: String(nodeParamsForMode.hdModel ?? "general"),
               hdScale: Number(nodeParamsForMode.hdScale) || 2,
+              enhanceMode: String(nodeParamsForMode.enhanceMode ?? "standard"),
+              enhanceResolution: String(nodeParamsForMode.enhanceResolution ?? "1080p"),
+              enhanceFps: String(nodeParamsForMode.enhanceFps ?? ""),
+              enhanceScene: String(nodeParamsForMode.enhanceScene ?? "common"),
+              enhanceStyle: String(nodeParamsForMode.enhanceStyle ?? "hd"),
+              enhanceBitrateLevel: String(
+                nodeParamsForMode.enhanceBitrateLevel ?? "medium"
+              ),
+              enhanceBitDepth: String(nodeParamsForMode.enhanceBitDepth ?? "8"),
             }}
             onChange={handleHdUpscaleChange}
           />

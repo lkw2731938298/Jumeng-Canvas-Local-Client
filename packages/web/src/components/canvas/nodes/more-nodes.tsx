@@ -702,7 +702,7 @@ export const VideoInputNode = memo(function VideoInputNode(props: NodeProps) {
         ) : (
           <div className="flex h-full min-h-[120px] items-center justify-center px-3 text-center text-[11px] text-white/35">
             {data.params?.toolMode === "hd_upscale"
-              ? "配置参数生成高清视频"
+              ? "配置档次与画质后开始增强"
               : "选中节点后，在上方菜单点击「上传视频」"}
           </div>
         )}

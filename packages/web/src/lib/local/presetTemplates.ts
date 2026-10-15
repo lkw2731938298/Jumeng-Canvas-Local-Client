@@ -15,6 +15,10 @@ import {
   type CanvasClarityTier as CapsClarityTier,
   type ModelCapsInput,
 } from "./modelGenerationCaps";
+import {
+  detectVolcEnhanceVariant,
+  volcEnhanceGenerationPresets,
+} from "./volcVideoEnhance";
 
 /** 五个通用画幅，生图生视频对所有模型统一提供 */
 export const CANVAS_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
@@ -362,5 +366,16 @@ export function videoDurationPresetsForUpstream(
   upstreamModel: string | ModelCapsInput,
   displayName?: string
 ): GenerationPresetsConfig {
+  // 火山画质增强：走专用档次预设，勿套用时长/画幅模板
+  const input =
+    typeof upstreamModel === "string"
+      ? { upstreamModel, displayName }
+      : {
+          upstreamModel: upstreamModel.upstreamModel,
+          displayName: upstreamModel.displayName || displayName,
+          name: upstreamModel.name,
+        };
+  const variant = detectVolcEnhanceVariant(input);
+  if (variant) return volcEnhanceGenerationPresets(variant);
   return videoDurationPresets(upstreamModel, displayName);
 }

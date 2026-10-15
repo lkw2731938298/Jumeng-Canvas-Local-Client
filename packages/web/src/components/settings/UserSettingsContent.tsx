@@ -266,7 +266,8 @@ export function UserSettingsContent({
     <div
       className={cn(
         "st-wrap",
-        variant === "dialog" && "st-wrap--dialog",
+        // 弹窗内须可收缩，否则右侧长内容把面板撑高、jm-scroll 无法出现滚动条
+        variant === "dialog" && "st-wrap--dialog min-h-0 flex-1",
         className
       )}
     >

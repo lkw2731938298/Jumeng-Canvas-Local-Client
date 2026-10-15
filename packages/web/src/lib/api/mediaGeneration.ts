@@ -235,6 +235,7 @@ async function generateFromMediaNodeLocal(
           isLikelyVideoMediaUrl,
           prepareUpstreamMediaRefs,
         } = await import("@/lib/local/upstreamMediaRefs");
+        const { isVolcVideoEnhanceModel } = await import("@/lib/local/volcVideoEnhance");
         // 顶栏视频工具与节点参考同链路：OSS → 官方 /files/upload → base64
         const { localStore } = await import("@/lib/local/store");
         const subtitleErase = isJumengSubtitleEraseModel({
@@ -243,8 +244,15 @@ async function generateFromMediaNodeLocal(
           name: modelMeta?.name,
           displayName: modelMeta?.displayName,
         });
-        // 去字幕：优先用片长计费秒；通用视频仍用 generationOptions.duration
-        const durationRaw = subtitleErase
+        const volcEnhance = isVolcVideoEnhanceModel({
+          canvasTool: request.canvasTool,
+          upstreamModel,
+          name: modelMeta?.name,
+          displayName: modelMeta?.displayName,
+        });
+        const singleSourceVideo = subtitleErase || volcEnhance;
+        // 去字幕 / 画质增强：优先用片长计费秒；通用视频仍用 generationOptions.duration
+        const durationRaw = singleSourceVideo
           ? request.generationOptions?.inputVideoSeconds ||
             request.generationOptions?.outputVideoSeconds ||
             request.generationOptions?.seconds ||
@@ -255,7 +263,13 @@ async function generateFromMediaNodeLocal(
             "5";
         const durationSec =
           Number.parseInt(String(durationRaw).replace(/[^\d]/g, ""), 10) || 5;
-        const resolution = pickCanvasClarityFromOptions(request.generationOptions, "2K");
+        const resolution = volcEnhance
+          ? String(
+              request.generationOptions?.enhanceResolution ||
+                request.generationOptions?.resolution ||
+                "1080p"
+            )
+          : pickCanvasClarityFromOptions(request.generationOptions, "2K");
         const ratio = pickCanvasAspectFromOptions(request.generationOptions, "16:9");
         const isAudioRef = (r: { type?: string; url?: string }) =>
           isLikelyAudioMediaUrl(String(r.url || ""), { type: r.type, category: "audio" });
@@ -316,9 +330,9 @@ async function generateFromMediaNodeLocal(
           }
         }
 
-        // 去字幕：只要 1 条源视频（优先 sourceUrl），禁止把同一视频拆成多条 video/audio 参考
+        // 去字幕 / 画质增强：只要 1 条源视频（优先 sourceUrl）
         let dedupedVideoUrls = rawVideoUrls;
-        if (subtitleErase) {
+        if (singleSourceVideo) {
           const preferred = String(request.sourceUrl || "").trim();
           const uniq: string[] = [];
           const seen = new Set<string>();
@@ -330,15 +344,19 @@ async function generateFromMediaNodeLocal(
           }
           dedupedVideoUrls = uniq.slice(0, 1);
           if (!dedupedVideoUrls.length) {
-            throw new Error("去字幕需要源视频（请先上传视频）");
+            throw new Error(
+              volcEnhance
+                ? "画质增强需要源视频（请先上传视频）"
+                : "去字幕需要源视频（请先上传视频）"
+            );
           }
         }
 
         const prepared = await prepareUpstreamMediaRefs({
           modelId: request.model,
-          imageUrls: subtitleErase ? [] : rawImageUrls,
+          imageUrls: singleSourceVideo ? [] : rawImageUrls,
           videoUrls: dedupedVideoUrls,
-          audioUrls: subtitleErase
+          audioUrls: singleSourceVideo
             ? []
             : (request.references ?? [])
                 .filter((r) => isAudioRef(r))
@@ -354,7 +372,7 @@ async function generateFromMediaNodeLocal(
           );
         }
         if (
-          !subtitleErase &&
+          !singleSourceVideo &&
           (request.references ?? []).some((r) => isAudioRef(r)) &&
           audioUrls.length === 0
         ) {
@@ -368,7 +386,7 @@ async function generateFromMediaNodeLocal(
           modelId: request.model,
           prompt: request.prompt,
           durationSec,
-          resolution: String(resolution),
+          resolution: String(opts.enhanceResolution || opts.resolution || resolution),
           ratio: String(ratio),
           imageUrls,
           videoUrls,
@@ -377,6 +395,7 @@ async function generateFromMediaNodeLocal(
           eraseType: opts.eraseType,
           encodeMode: opts.encodeMode,
           eraseRatioLocation: opts.eraseRatioLocation,
+          enhanceOptions: opts,
           onProviderTaskId: noteProviderTaskId,
           onSubmittedRefs: noteSubmittedRefs,
           signal: options?.signal,

@@ -44,6 +44,18 @@ export function useCanvasToolConfiguredModel(
   });
 
   const primaryName = useMemo(() => {
+    // 视频画质增强：固定「火山画质增强-标准专业版」，勿用工具绑到的第一个视频模型（常是字幕擦除）
+    if (toolId === "hd_upscale_video" && category === "video") {
+      const enhance = (catalogModels ?? []).find((m) => {
+        if (m.isAvailable === false) return false;
+        const upstream = String(
+          (m.parameters as { upstreamModel?: string } | undefined)?.upstreamModel || ""
+        );
+        const blob = `${upstream} ${m.displayName || ""} ${m.name || ""}`;
+        return /火山画质增强[-_]?标准专业/.test(blob);
+      });
+      if (enhance?.name) return enhance.name;
+    }
     // 须走 canvasToolModelPrimary：tools 字典 key 可能已被转成驼峰
     const fromAdmin = canvasToolModelPrimary(toolModels?.tools, toolId);
     if (fromAdmin) return fromAdmin;

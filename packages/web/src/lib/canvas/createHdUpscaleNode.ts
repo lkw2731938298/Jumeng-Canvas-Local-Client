@@ -44,7 +44,8 @@ export function hdModelPromptHint(hdModel: string): string {
 }
 
 /**
- * 从源图片/视频节点右侧新建「高清」节点（复制源素材）、连线并选中。
+ * 从源图片/视频节点右侧新建工具节点（复制源素材）、连线并选中。
+ * 图片 →「高清」；视频 →「画质增强」（火山标准专业版）。
  * 返回新节点 id；失败返回 null。
  */
 export function createHdUpscaleNode(opts: {
@@ -54,12 +55,13 @@ export function createHdUpscaleNode(opts: {
   sourceHeight?: number;
   sourceAsset?: { id: string; fileUrl: string; title?: string };
   edges: Edge[];
-  /** 默认 image；视频顶栏「高清」传 video */
+  /** 默认 image；视频顶栏「画质增强」传 video */
   mediaKind?: HdUpscaleMediaKind;
 }): string | null {
   const mediaKind: HdUpscaleMediaKind = opts.mediaKind ?? "image";
   const nodeType = mediaKind === "video" ? "video_input" : "image_input";
   const sourceHandle = mediaKind === "video" ? "video" : "image";
+  const nodeLabel = mediaKind === "video" ? "画质增强" : "高清";
 
   const store = useCanvasStore.getState();
   const beforeIds = new Set(store.nodes.map((n) => n.id));
@@ -72,14 +74,14 @@ export function createHdUpscaleNode(opts: {
     y: opts.sourcePosition.y + siblingOffset,
   };
 
-  // 有源素材则复制到新节点，便于底部面板直接超分
+  // 有源素材则复制到新节点，便于底部面板直接超分 / 增强
   if (opts.sourceAsset?.id && opts.sourceAsset.fileUrl) {
     store.addNodeFromAsset(
       {
         id: opts.sourceAsset.id,
         category: mediaKind,
         fileUrl: opts.sourceAsset.fileUrl,
-        title: "高清",
+        title: nodeLabel,
       },
       pos
     );
@@ -92,14 +94,21 @@ export function createHdUpscaleNode(opts: {
     .nodes.find((n) => !beforeIds.has(n.id) && n.type === nodeType);
   if (!newNode) return null;
 
-  store.updateNodeData(newNode.id, { label: "高清" });
+  store.updateNodeData(newNode.id, { label: nodeLabel });
   store.updateNodeParam(newNode.id, "toolMode", HD_UPSCALE_TOOL_MODE);
   store.updateNodeParam(newNode.id, "hdProvider", "topazlabs");
   store.updateNodeParam(newNode.id, "hdModel", "general");
   store.updateNodeParam(newNode.id, "hdScale", 2);
 
-  // 视频高清按时长计费：从源节点复制 durationSec / 裁剪区间
+  // 视频画质增强：默认标准版 + 1080p；从源节点复制时长 / 裁剪
   if (mediaKind === "video") {
+    store.updateNodeParam(newNode.id, "enhanceMode", "standard");
+    store.updateNodeParam(newNode.id, "enhanceResolution", "1080p");
+    store.updateNodeParam(newNode.id, "enhanceFps", "");
+    store.updateNodeParam(newNode.id, "enhanceScene", "common");
+    store.updateNodeParam(newNode.id, "enhanceStyle", "hd");
+    store.updateNodeParam(newNode.id, "enhanceBitrateLevel", "medium");
+    store.updateNodeParam(newNode.id, "enhanceBitDepth", "8");
     const source = store.nodes.find((n) => n.id === opts.sourceNodeId);
     const sp = (source?.data?.params ?? {}) as Record<string, unknown>;
     if (sp.durationSec != null) {

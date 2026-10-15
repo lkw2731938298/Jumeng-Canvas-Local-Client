@@ -12,8 +12,12 @@
 .st-wrap--dialog {
   position: relative;
   inset: auto;
+  display: flex;
+  flex-direction: column;
   height: min(880px, calc(92vh - 24px));
   max-height: inherit;
+  min-height: 0;
+  overflow: hidden;
   padding: 16px;
 }
 
@@ -23,6 +27,7 @@
   min-height: 0;
   height: 100%;
   flex: 1;
+  overflow: hidden;
 }
 
 .st-panel {
@@ -93,9 +98,12 @@
 }
 
 /* ---------- 右侧内容 ---------- */
+/* min-height:0 才能在 flex 列里真正滚动；否则会被长内容撑高到无法 overflow */
 .st-content {
   min-width: 0;
+  min-height: 0;
   flex: 1;
+  overflow: auto;
   padding: 2px 8px 8px 2px;
 }
 
