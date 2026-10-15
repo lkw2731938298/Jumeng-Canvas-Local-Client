@@ -2355,6 +2355,59 @@ export function NodeTopMenuOverlay() {
   const anchorX = world.x + width / 2;
   const anchorY = world.y - CANVAS_TOP_MENU_NODE_GAP;
 
+  // 全屏预览挂 body；画质增强等 early-return 分支也必须带上，否则点「全屏查看」只改 state、不出层
+  const mediaPreviewPortal =
+    mediaPreviewUrl && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-[#0e0e0e]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="媒体预览"
+            onClick={() => setMediaPreviewUrl(null)}
+          >
+            <button
+              type="button"
+              className="absolute right-4 top-4 z-[301] flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+              aria-label="关闭预览"
+              title="关闭"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMediaPreviewUrl(null);
+              }}
+            >
+              <X className="size-5" strokeWidth={2} />
+            </button>
+            {isVideoNode ? (
+              <video
+                src={mediaPreviewUrl}
+                controls
+                autoPlay
+                className="max-h-[100vh] max-w-[100vw] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : isAudioNode ? (
+              <audio
+                src={mediaPreviewUrl}
+                controls
+                autoPlay
+                className="w-[min(520px,90vw)]"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mediaPreviewUrl}
+                alt="预览"
+                className="max-h-[100vh] max-w-[100vw] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
+          </div>,
+          document.body
+        )
+      : null;
+
   // 高清 / 画质增强节点：底部仍用参数面板；顶栏只留下载与全屏（增强结果可落盘）
   if ((isImageNode || isVideoNode) && isHdUpscaleToolMode(params.toolMode)) {
     const mediaUrl = isVideoNode ? videoUrl : imageUrl;
@@ -2364,44 +2417,47 @@ export function NodeTopMenuOverlay() {
       zIndex: CANVAS_OVERLAY_Z_TOP_MENU,
     });
     return (
-      <EdgeLabelRenderer>
-        <div
-          className="canvas-node-overlay nodrag nopan pointer-events-auto flex flex-nowrap items-center gap-0.5 rounded-xl px-1.5 py-1 shadow-2xl"
-          style={slimStyle}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            disabled={!mediaReady}
-            onClick={() =>
-              void (isVideoNode ? handleDownloadVideo() : handleDownloadImage())
-            }
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[12px] text-white/75 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-            title={
-              !mediaReady
-                ? isVideoNode
-                  ? "请先完成画质增强"
-                  : "请先完成高清生成"
-                : "下载"
-            }
-            aria-label="下载"
+      <>
+        <EdgeLabelRenderer>
+          <div
+            className="canvas-node-overlay nodrag nopan pointer-events-auto flex flex-nowrap items-center gap-0.5 rounded-xl px-1.5 py-1 shadow-2xl"
+            style={slimStyle}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            <Download className="h-4 w-4 shrink-0" />
-            下载
-          </button>
-          <button
-            type="button"
-            disabled={!mediaReady}
-            onClick={handleOpenMediaPreview}
-            className="inline-flex items-center rounded-md p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-            title={!mediaReady ? "请先生成结果" : "全屏查看"}
-            aria-label="全屏查看"
-          >
-            <Maximize2 className="h-4 w-4 shrink-0" />
-          </button>
-        </div>
-      </EdgeLabelRenderer>
+            <button
+              type="button"
+              disabled={!mediaReady}
+              onClick={() =>
+                void (isVideoNode ? handleDownloadVideo() : handleDownloadImage())
+              }
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[12px] text-white/75 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+              title={
+                !mediaReady
+                  ? isVideoNode
+                    ? "请先完成画质增强"
+                    : "请先完成高清生成"
+                  : "下载"
+              }
+              aria-label="下载"
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              下载
+            </button>
+            <button
+              type="button"
+              disabled={!mediaReady}
+              onClick={handleOpenMediaPreview}
+              className="inline-flex items-center rounded-md p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+              title={!mediaReady ? "请先生成结果" : "全屏查看"}
+              aria-label="全屏查看"
+            >
+              <Maximize2 className="h-4 w-4 shrink-0" />
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+        {mediaPreviewPortal}
+      </>
     );
   }
 
@@ -3718,56 +3774,7 @@ export function NodeTopMenuOverlay() {
         ) : null}
       </div>
     </EdgeLabelRenderer>
-    {mediaPreviewUrl && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            className="fixed inset-0 z-[300] flex items-center justify-center bg-[#0e0e0e]"
-            role="dialog"
-            aria-modal="true"
-            aria-label="媒体预览"
-            onClick={() => setMediaPreviewUrl(null)}
-          >
-            <button
-              type="button"
-              className="absolute right-4 top-4 z-[301] flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-              aria-label="关闭预览"
-              title="关闭"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMediaPreviewUrl(null);
-              }}
-            >
-              <X className="size-5" strokeWidth={2} />
-            </button>
-            {isVideoNode ? (
-              <video
-                src={mediaPreviewUrl}
-                controls
-                autoPlay
-                className="max-h-[100vh] max-w-[100vw] object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : isAudioNode ? (
-              <audio
-                src={mediaPreviewUrl}
-                controls
-                autoPlay
-                className="w-[min(520px,90vw)]"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={mediaPreviewUrl}
-                alt="预览"
-                className="max-h-[100vh] max-w-[100vw] object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-            )}
-          </div>,
-          document.body
-        )
-      : null}
+    {mediaPreviewPortal}
     </>
   );
 }

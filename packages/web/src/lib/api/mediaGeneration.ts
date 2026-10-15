@@ -271,8 +271,10 @@ async function generateFromMediaNodeLocal(
             )
           : pickCanvasClarityFromOptions(request.generationOptions, "2K");
         const ratio = pickCanvasAspectFromOptions(request.generationOptions, "16:9");
+        // 勿写死 category:"audio"：isLikelyAudioMediaUrl 会把任意 URL 都判成音频，
+        // 导致图片节点进 referenceAudio / audio_urls（如 .jpg 与 .wav 混在一起）。
         const isAudioRef = (r: { type?: string; url?: string }) =>
-          isLikelyAudioMediaUrl(String(r.url || ""), { type: r.type, category: "audio" });
+          isLikelyAudioMediaUrl(String(r.url || ""), { type: r.type });
 
         // 本机 /api/local/asset 常无扩展名：按 ref.type 区分；sourceUrl 在视频任务中强制当视频
         const rawImageUrls = (request.references ?? [])
