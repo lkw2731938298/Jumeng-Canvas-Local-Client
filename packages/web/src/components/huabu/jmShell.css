@@ -211,7 +211,8 @@ html[data-app-glow="off"] .jm-glow {
   background: var(--jm-line-strong);
 }
 
-/* 顶栏「检查更新」：透明无边框，悬停浮现浅底；有新版本时右上角小红点 */
+/* 顶栏「问题反馈」/「检查更新」：透明无边框，悬停浮现浅底 */
+.jm-top-feedback,
 .jm-top-update {
   position: relative;
   display: inline-flex;
@@ -226,6 +227,7 @@ html[data-app-glow="off"] .jm-glow {
   transition: background 0.15s, color 0.15s;
 }
 
+.jm-top-feedback:hover,
 .jm-top-update:hover:not(:disabled) {
   background: var(--jm-chip-hover);
   color: var(--jm-text);
@@ -245,6 +247,96 @@ html[data-app-glow="off"] .jm-glow {
   border-radius: 999px;
   background: var(--jm-danger, #f7506a);
   box-shadow: 0 0 0 2px var(--jm-bg);
+}
+
+/* 问题反馈弹窗：并排展示两个交流群二维码 */
+.jm-feedback-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 10, 16, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.jm-feedback-dialog {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(92vh, 880px);
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid var(--jm-line-strong, rgba(255, 255, 255, 0.12));
+  background: var(--jm-panel-solid, #0d0a1e);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  padding: 22px 22px 20px;
+}
+
+.jm-feedback-head {
+  padding: 0 36px 14px 2px;
+}
+
+.jm-feedback-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--jm-text, #f4f6fb);
+  letter-spacing: 0.02em;
+}
+
+.jm-feedback-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--jm-text-2, rgba(244, 246, 251, 0.62));
+}
+
+.jm-feedback-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--jm-text-2, rgba(244, 246, 251, 0.62));
+  transition: background 0.15s, color 0.15s;
+}
+
+.jm-feedback-close:hover {
+  background: var(--jm-chip, rgba(255, 255, 255, 0.08));
+  color: var(--jm-text, #f4f6fb);
+}
+
+.jm-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.jm-feedback-card {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.jm-feedback-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .jm-feedback-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .jm-top-user {

@@ -40,19 +40,19 @@ export const TEXT_PROMPT_TOOL_FALLBACKS: Record<
 export const STORYBOARD_TABLE_PROMPT_FALLBACK = {
   label: "分镜表提示词",
   systemPrompt:
-    "你是专业影视分镜表生成助手。根据用户提供的剧本正文，逐句/逐动作拆分为分镜表结构化结果。只输出 JSON 对象，顶层仅含 shotRows 数组；每行含镜头号、时长、画面描述、景别、光影氛围、对话、音效。不要输出运镜提示词、视频提示词或草图提示词；不要 Markdown 或解释。",
+    "你是面向 AI 短剧/漫剧的分镜表助手。根据剧本逐句/逐动作拆镜，只输出含 shotRows 的 JSON；每行含镜头号、时长(建议2-5s)、画面描述、景别、光影氛围、对话、音效。不要运镜/视频/草图词；不要 Markdown。",
 };
 
 export const STORYBOARD_CAMERA_PROMPT_FALLBACK = {
   label: "分镜运镜提示词",
   systemPrompt:
-    "你是影视运镜提示词助手。根据用户提供的单镜头分镜信息，输出精炼的中文运镜提示词（推拉摇移、景别变化、节奏）。只输出提示词正文，不要 Markdown 或解释。",
+    "你是面向 AI 短剧/漫剧的运镜提示词助手。根据单镜头分镜信息，输出精炼中文运镜词：机位高低、推拉摇移、景别变化、运动节奏与落幅。只写运镜本身，不要重述完整剧情，不要 Markdown。",
 };
 
 export const STORYBOARD_VIDEO_PROMPT_FALLBACK = {
   label: "分镜视频提示词",
   systemPrompt:
-    "你是 AI 视频生成提示词助手。根据用户提供的单镜头分镜信息与运镜描述，输出完整的中文视频提示词，包含画面、运镜与节奏感。只输出提示词正文，不要 Markdown 或解释。",
+    "你是面向 AI 短剧/漫剧的视频提示词助手。根据单镜头分镜与运镜，输出可直接投喂视频模型的完整中文提示词：画面主体用 @正式名 标注（与准备资产名称一致）、动作、景别、光影、运镜与节奏；保持角色造型与场景连续。只输出提示词正文，不要 Markdown。",
 };
 
 export const PROMPT_TOOL_CATEGORIES = [

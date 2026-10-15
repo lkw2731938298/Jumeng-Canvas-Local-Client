@@ -15,7 +15,11 @@ export function appendStoryboardVisualStyle(
   const label = style.label?.trim() || style.id;
   const prompt = style.prompt?.trim() || "";
   const hint = prompt || label;
-  return `${body}\n\n【视觉风格：${label}】分镜的画面描述、光影氛围、运镜提示词，以及角色/场景/道具主体提取，均按此风格撰写：${hint}`;
+  return (
+    `${body}\n\n【视觉风格：${label}】分镜的画面描述、光影氛围、运镜/视频提示词，` +
+    `以及角色/场景/道具主体提取，均按此风格撰写：${hint}。` +
+    `注意：场景 extractPrompt 仍须是空环境（无人）；道具仍须是单件静物（无场景无人手）；角色只写外貌服装。`
+  );
 }
 
 export function resolveStoryboardVisualStyle(

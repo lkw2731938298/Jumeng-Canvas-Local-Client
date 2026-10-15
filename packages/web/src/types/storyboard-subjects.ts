@@ -22,22 +22,51 @@ const SUBJECT_KIND_LABELS: Record<StoryboardSubjectKind, string> = {
   prop: "道具",
 };
 
-const SUBJECT_IMAGE_STYLE_ANCHOR =
-  "高清影视资产参考图，主体清晰突出，构图完整，干净背景，无文字水印，high quality character/scene reference";
+/**
+ * 准备资产生图锚点（按类型拆开）：
+ * - 角色：设定表三视图，供后续短剧/漫剧参考一致性
+ * - 场景：纯环境空镜，禁止人物/道具抢戏，便于当视频场景底板
+ * - 道具：单件静物 + 干净空背景，便于当参考物
+ */
+const ROLE_IMAGE_STYLE_ANCHOR =
+  "高质量角色设定参考图，五官清晰、服装细节可读，统一光源，无文字无水印无logo，suitable as AI short-drama / comic-drama character bible";
+
+const SCENE_IMAGE_STYLE_ANCHOR =
+  "高质量空场景环境参考图，广角完整交代空间结构与光影氛围，无文字无水印，empty establishing environment plate for AI video background";
+
+const PROP_IMAGE_STYLE_ANCHOR =
+  "高质量单件道具产品参考图，主体居中、材质纹理清晰，无文字无水印，isolated prop product shot for AI reference";
 
 /**
- * 角色主体图布局：在同一张图片中生成「面部特写 + 全身三视图」。
- * 最左侧为面部特写（头部完整），右侧依次并排全身正面图、侧面图、后视图，
- * 四个视图为同一角色、同一造型，仅用于角色（role），场景/道具不适用。
+ * 角色主体图布局：同一张图「面部特写 + 全身正/侧/背」四联排。
+ * 仅用于 role；场景/道具不适用。
  */
 const ROLE_REFERENCE_SHEET_LAYOUT =
-  "在同一张图片中从左到右横向排列展示同一角色的面部特写与全身三视图，四个视图为同一人物、同一造型，脸型五官、发型、服装与配色严格保持一致：" +
-  "最左侧是该角色的面部特写（正脸，头部与五官完整清晰、不裁切）；" +
-  "其右侧依次并排放置该角色的全身正面图、全身侧面图、全身后视图，三张全身图均为完整站姿、从头到脚不裁切、比例与身高一致；" +
-  "纯色干净背景，各视图之间留白分隔，无文字、无水印、无分格线，character turnaround reference sheet with face close-up";
+  "严格输出一张横向角色设定表（character turnaround sheet）：从左到右四格同一人物、同一发型服装配色、脸型五官完全一致——" +
+  "第1格：面部特写正脸（头顶到下巴完整，双眼对视镜头，五官清晰）；" +
+  "第2格：全身正面站姿（从头顶到鞋底完整入画，双臂自然下垂，不裁切）；" +
+  "第3格：全身左侧立面站姿（同样全身完整）；" +
+  "第4格：全身背面站姿（同样全身完整）；" +
+  "四格等大对齐，浅灰或纯白无缝背景，格间仅留白、不要边框线与标注文字；" +
+  "禁止第二个人物、禁止场景道具抢戏、禁止动态动作姿态、禁止抠图残影";
 
-/** 角色主体图提示词版本：布局升级后并入幂等键，使历史角色图按新的三视图布局重绘 */
-const ROLE_IMAGE_PROMPT_VERSION = "role-turnaround-v1";
+/** 场景：只要环境，不要人/车/杂物特写，避免后期当视频场景时串戏 */
+const SCENE_REFERENCE_CONSTRAINTS =
+  "只画空场景环境本身：建筑、室内陈设结构、自然地貌与固定光影；" +
+  "画面中禁止出现任何人物、人脸、剪影人、手部；" +
+  "禁止突出可移动道具特写、禁止海报字幕UI、禁止分屏拼贴；" +
+  "构图当作可直接用作 AI 短剧/漫剧的空镜场景底板，空间纵深清楚";
+
+/** 道具：单件 + 干净空背景，便于当视频参考物 */
+const PROP_REFERENCE_CONSTRAINTS =
+  "只画这一件道具：居中完整展示，可略带透视以看清形体；" +
+  "背景必须是干净纯色或浅灰渐变空背景，禁止桌面杂物、禁止室内外场景、禁止手持/人物；" +
+  "不要包装文案、条码、水印、品牌假logo；一件一图，边缘清晰";
+
+/** 布局/约束升级后并入幂等键，使历史主体图按新规则重绘 */
+const ROLE_IMAGE_PROMPT_VERSION = "role-turnaround-v2-drama";
+const SCENE_IMAGE_PROMPT_VERSION = "scene-empty-v2-drama";
+const PROP_IMAGE_PROMPT_VERSION = "prop-isolated-v2-drama";
 
 export type StoryboardGenStatus = "idle" | "pending" | "running" | "succeeded" | "failed";
 
@@ -139,8 +168,10 @@ export function computeSubjectImageSourceHash(
   kind: StoryboardSubjectKind
 ): string {
   const parts = [kind, item.name, item.extractPrompt];
-  // 角色额外附带布局版本号：三视图布局升级后，历史角色图会被判定为需重绘并按新布局生成
+  // 布局/约束升级后并入版本号，历史图会被判定为需重绘
   if (kind === "role") parts.push(ROLE_IMAGE_PROMPT_VERSION);
+  else if (kind === "scene") parts.push(SCENE_IMAGE_PROMPT_VERSION);
+  else parts.push(PROP_IMAGE_PROMPT_VERSION);
   const payload = parts.join("|");
   let hash = 0;
   for (let i = 0; i < payload.length; i += 1) {
@@ -150,15 +181,32 @@ export function computeSubjectImageSourceHash(
   return String(hash);
 }
 
+/** 准备资产生图 prompt：角色三视图 / 纯场景 / 干净道具，面向 AI 短剧·漫剧复用 */
 export function buildSubjectImagePrompt(item: StoryboardSubjectItem, kind: StoryboardSubjectKind): string {
   const kindLabel = SUBJECT_KIND_LABELS[kind];
   const core = item.extractPrompt.trim() || item.name.trim();
-  const base = `${kindLabel}：${item.name}。${core}。${SUBJECT_IMAGE_STYLE_ANCHOR}`;
-  // 角色主体图额外生成「面部特写 + 全身三视图」：面部特写在最左，右侧为全身正/侧/后视图
   if (kind === "role") {
-    return `${base}。${ROLE_REFERENCE_SHEET_LAYOUT}`;
+    return [
+      `${kindLabel}设定名：${item.name}`,
+      `外形描述：${core}`,
+      ROLE_IMAGE_STYLE_ANCHOR,
+      ROLE_REFERENCE_SHEET_LAYOUT,
+    ].join("。");
   }
-  return base;
+  if (kind === "scene") {
+    return [
+      `${kindLabel}名：${item.name}`,
+      `环境描述：${core}`,
+      SCENE_IMAGE_STYLE_ANCHOR,
+      SCENE_REFERENCE_CONSTRAINTS,
+    ].join("。");
+  }
+  return [
+    `${kindLabel}名：${item.name}`,
+    `外形描述：${core}`,
+    PROP_IMAGE_STYLE_ANCHOR,
+    PROP_REFERENCE_CONSTRAINTS,
+  ].join("。");
 }
 
 export function needsSubjectImageGeneration(

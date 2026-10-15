@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { JmBrandMark } from "@/components/brand/JmBrandMark";
 import { CheckUpdateButton } from "./CheckUpdateButton";
+import { FeedbackButton } from "./FeedbackButton";
 import { UserAccountMenu } from "@/components/user/UserAccountMenu";
 import { createProject } from "@/lib/api/projects";
 import { useAuthStore } from "@/stores/authStore";
@@ -84,6 +85,8 @@ export function HuabuPublicShell({ children, sidebar = false, page }: HuabuPubli
             <CircleHelp size={17} strokeWidth={1.8} />
           </button>
           <span className="jm-top-divider" aria-hidden="true" />
+          {/* 问题反馈在「检查更新」左侧 */}
+          <FeedbackButton />
           <CheckUpdateButton />
           <UserAccountMenu
             displayName={displayName}
