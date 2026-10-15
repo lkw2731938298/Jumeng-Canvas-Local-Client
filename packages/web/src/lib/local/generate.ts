@@ -1829,6 +1829,86 @@ function rewriteJumengMultimodalPromptRefs(
   return text;
 }
 
+/** RH sparkvideo / Seedance 2.0·2.5：官方 OpenAPI 用 @Image 1 / @Video 1 / @Audio 1 */
+function isRhSparkvideoSeedanceModel(upstreamModel: string, name?: string): boolean {
+  const blob = `${upstreamModel || ""} ${name || ""}`.toLowerCase();
+  return (
+    /rh_seedance_/i.test(blob) ||
+    /sparkvideo/i.test(blob) ||
+    /seedance[-_\s]?2\.[05]/i.test(blob)
+  );
+}
+
+/**
+ * RH OpenAPI 多模态：@节点名 → @Image N / @Video N / @Audio N（与官方 curl 一致）。
+ * 同时把历史 [Image N] 写法归一成 @Image N，避免双轨。
+ */
+function rewriteRhSparkvideoPromptRefs(
+  prompt: string,
+  opts: {
+    imageLabels?: string[];
+    videoLabels?: string[];
+    audioLabels?: string[];
+    imageCount: number;
+    videoCount: number;
+    audioCount: number;
+  }
+): string {
+  let text = String(prompt || "").trim();
+  const apply = (labels: string[] | undefined, kind: "Image" | "Video" | "Audio") => {
+    const cleaned = (labels || []).map((l) => String(l || "").trim()).filter(Boolean);
+    if (!cleaned.length) return;
+    for (const label of [...cleaned].sort((a, b) => b.length - a.length)) {
+      const slot = cleaned.indexOf(label) + 1;
+      if (slot <= 0) continue;
+      text = text.split(`@${label}`).join(`@${kind} ${slot}`);
+    }
+  };
+  apply(opts.audioLabels, "Audio");
+  apply(opts.videoLabels, "Video");
+  apply(opts.imageLabels, "Image");
+  // 历史方括号 → RH @ 引用
+  text = text
+    .replace(/\[Image\s+(\d+)\]/gi, "@Image $1")
+    .replace(/\[Video\s+(\d+)\]/gi, "@Video $1")
+    .replace(/\[Audio\s+(\d+)\]/gi, "@Audio $1");
+  const ensure = (count: number, kind: "Image" | "Video" | "Audio", prefix: string) => {
+    if (count <= 0) return;
+    const missing: number[] = [];
+    for (let i = 1; i <= count; i++) {
+      const re = new RegExp(`@${kind}\\s*${i}\\b`, "i");
+      if (!re.test(text)) missing.push(i);
+    }
+    if (!missing.length) return;
+    const tags = missing.map((n) => `@${kind} ${n}`).join("、");
+    text = `${prefix}${tags}。${text}`;
+  };
+  ensure(opts.imageCount, "Image", "须严格参考");
+  ensure(opts.videoCount, "Video", "须参考");
+  ensure(opts.audioCount, "Audio", "须参考");
+  return text.slice(0, 20480);
+}
+
+/** RH OpenAPI resolution：480p/720p/1080p/2k/4k（小写 p） */
+function normalizeRhSparkvideoResolution(raw: string): string {
+  const t = String(raw || "720p").trim().toLowerCase().replace(/\s+/g, "");
+  if (t === "1k" || t === "768p" || t === "768") return "720p";
+  if (["480p", "720p", "1080p", "2k", "4k"].includes(t)) return t;
+  const n = Number.parseInt(t.replace(/\D/g, ""), 10);
+  if (n <= 540) return "480p";
+  if (n <= 900) return "720p";
+  if (n <= 1440) return "1080p";
+  if (n <= 2500) return "2k";
+  return "4k";
+}
+
+/** RH OpenAPI duration：字符串枚举，2.0 Mini 为 4–15（或 -1） */
+function normalizeRhSparkvideoDuration(sec: number, maxSec = 15): string {
+  const n = Math.round(Number(sec) || 5);
+  if (n === -1) return "-1";
+  return String(Math.max(4, Math.min(maxSec, n)));
+}
+
 /** 读取用户自配 OSS；未启用或未填全则返回 null */
 async function loadReadyUserOss() {
   try {
@@ -3683,12 +3763,17 @@ export async function localGenerateVideo(params: {
   const requestedImg = (params.imageUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
   const requestedVid = (params.videoUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
   const requestedAud = (params.audioUrls || []).map((u) => String(u || "").trim()).filter(Boolean);
+  // RH sparkvideo OpenAPI：图最多 9、视频/音频各最多 3；其它聚梦视频保持原上限
+  const rhSpark = isRhSparkvideoSeedanceModel(upstreamModel, model.name);
+  const imgCap = rhSpark ? 9 : 3;
+  const vidCap = rhSpark ? 3 : 2;
+  const audCap = 3;
   if (jumeng) {
     const uploadCreds: JumengUploadCreds = { apiBase, apiKey };
-    for (const u of requestedImg.slice(0, 3)) {
+    for (const u of requestedImg.slice(0, imgCap)) {
       publicImgs.push(await resolveJumengImageRef(u, uploadCreds));
     }
-    for (const u of requestedVid.slice(0, 2)) {
+    for (const u of requestedVid.slice(0, vidCap)) {
       const v = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
       if (!v) {
         throw new Error(
@@ -3697,7 +3782,7 @@ export async function localGenerateVideo(params: {
       }
       publicVideos.push(v);
     }
-    for (const u of requestedAud.slice(0, 3)) {
+    for (const u of requestedAud.slice(0, audCap)) {
       const a = await resolveLocalMediaUrlForUpstream(u, { jumengUpload: uploadCreds });
       if (!a) {
         throw new Error(
@@ -3709,11 +3794,11 @@ export async function localGenerateVideo(params: {
   } else {
     publicImgs = requestedImg
       .filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:image"))
-      .slice(0, 3);
-    publicVideos = requestedVid.filter((u) => isPublicFetchableUrl(u)).slice(0, 2);
+      .slice(0, imgCap);
+    publicVideos = requestedVid.filter((u) => isPublicFetchableUrl(u)).slice(0, vidCap);
     publicAudios = requestedAud
       .filter((u) => isPublicFetchableUrl(u) || u.startsWith("data:audio"))
-      .slice(0, 3);
+      .slice(0, audCap);
   }
 
   // 聚梦 minimax-h3 等通道：上游报「最多支持 0 个参考视频」
@@ -3760,58 +3845,70 @@ export async function localGenerateVideo(params: {
     );
   }
   if (jumeng) {
-    // 按图/视频/音频标签分别改写；勿再用「全部 @ → Image」（会把 @音频 改成 [Image 1]）
-    const hasTypedLabels =
-      (params.imageLabels?.length || 0) +
-        (params.videoLabels?.length || 0) +
-        (params.audioLabels?.length || 0) >
-      0;
-    if (hasTypedLabels) {
-      promptText = rewriteJumengMultimodalPromptRefs(promptText, {
+    // RH sparkvideo：官方 curl 用 @Image 1 / @Audio 1；其它聚梦模型仍用 [Image N]
+    if (rhSpark) {
+      promptText = rewriteRhSparkvideoPromptRefs(promptText, {
         imageLabels: params.imageLabels,
         videoLabels: params.videoLabels,
         audioLabels: params.audioLabels,
+        imageCount: publicImgs.length,
+        videoCount: publicVideos.length,
+        audioCount: publicAudios.length,
       });
-    } else if (publicImgs.length > 0 && publicVideos.length === 0 && publicAudios.length === 0) {
-      // 仅图参考时保留旧逻辑
-      promptText = rewriteJumengImagePromptRefs(promptText, publicImgs.length);
-    }
-    // 缺显式 token 时补前缀（与官方 imageUrls/videoUrls/audioUrls 下标对齐）
-    if (publicImgs.length > 0) {
-      const missing: number[] = [];
-      for (let i = 1; i <= publicImgs.length; i++) {
-        if (!promptText.includes(`[Image ${i}]`)) missing.push(i);
+    } else {
+      // 按图/视频/音频标签分别改写；勿再用「全部 @ → Image」（会把 @音频 改成 [Image 1]）
+      const hasTypedLabels =
+        (params.imageLabels?.length || 0) +
+          (params.videoLabels?.length || 0) +
+          (params.audioLabels?.length || 0) >
+        0;
+      if (hasTypedLabels) {
+        promptText = rewriteJumengMultimodalPromptRefs(promptText, {
+          imageLabels: params.imageLabels,
+          videoLabels: params.videoLabels,
+          audioLabels: params.audioLabels,
+        });
+      } else if (publicImgs.length > 0 && publicVideos.length === 0 && publicAudios.length === 0) {
+        // 仅图参考时保留旧逻辑
+        promptText = rewriteJumengImagePromptRefs(promptText, publicImgs.length);
       }
-      if (missing.length) {
-        const imgs = missing.map((n) => `[Image ${n}]`).join("、");
-        promptText = `须严格参考${imgs}中的主体外貌、服装、场景与画面风格。${promptText}`.slice(
-          0,
-          20000
-        );
+      // 缺显式 token 时补前缀（与官方 imageUrls/videoUrls/audioUrls 下标对齐）
+      if (publicImgs.length > 0) {
+        const missing: number[] = [];
+        for (let i = 1; i <= publicImgs.length; i++) {
+          if (!promptText.includes(`[Image ${i}]`)) missing.push(i);
+        }
+        if (missing.length) {
+          const imgs = missing.map((n) => `[Image ${n}]`).join("、");
+          promptText = `须严格参考${imgs}中的主体外貌、服装、场景与画面风格。${promptText}`.slice(
+            0,
+            20000
+          );
+        }
       }
-    }
-    if (publicVideos.length > 0) {
-      const missing: number[] = [];
-      for (let i = 1; i <= publicVideos.length; i++) {
-        if (!promptText.includes(`[Video ${i}]`)) missing.push(i);
+      if (publicVideos.length > 0) {
+        const missing: number[] = [];
+        for (let i = 1; i <= publicVideos.length; i++) {
+          if (!promptText.includes(`[Video ${i}]`)) missing.push(i);
+        }
+        if (missing.length) {
+          const vids = missing.map((n) => `[Video ${n}]`).join("、");
+          promptText = `须参考${vids}中的动作、镜头与画面内容。${promptText}`.slice(0, 20000);
+        }
       }
-      if (missing.length) {
-        const vids = missing.map((n) => `[Video ${n}]`).join("、");
-        promptText = `须参考${vids}中的动作、镜头与画面内容。${promptText}`.slice(0, 20000);
-      }
-    }
-    if (publicAudios.length > 0) {
-      const missing: number[] = [];
-      for (let i = 1; i <= publicAudios.length; i++) {
-        if (!promptText.includes(`[Audio ${i}]`)) missing.push(i);
-      }
-      if (missing.length) {
-        const auds = missing.map((n) => `[Audio ${n}]`).join("、");
-        promptText = `须参考${auds}中的人声/配乐节奏与情绪。${promptText}`.slice(0, 20000);
+      if (publicAudios.length > 0) {
+        const missing: number[] = [];
+        for (let i = 1; i <= publicAudios.length; i++) {
+          if (!promptText.includes(`[Audio ${i}]`)) missing.push(i);
+        }
+        if (missing.length) {
+          const auds = missing.map((n) => `[Audio ${n}]`).join("、");
+          promptText = `须参考${auds}中的人声/配乐节奏与情绪。${promptText}`.slice(0, 20000);
+        }
       }
     }
   }
-  promptText = promptText.slice(0, 20000);
+  promptText = promptText.slice(0, rhSpark ? 20480 : 20000);
 
   const submittedUrls = [...publicImgs, ...publicVideos, ...publicAudios];
   const submittedMeta = describeSubmittedRefs(submittedUrls);
@@ -3939,6 +4036,7 @@ export async function localGenerateVideo(params: {
   // base64 仅图、无视频/音频时：对齐 jumeng-media 精简体；有音视频参考时保留 content/role
   if (
     jumeng &&
+    !rhSpark &&
     imgRefsAreDataUrls &&
     publicVideos.length === 0 &&
     publicAudios.length === 0
@@ -3955,6 +4053,54 @@ export async function localGenerateVideo(params: {
     };
     for (const key of Object.keys(body)) delete body[key];
     Object.assign(body, minimal);
+  }
+
+  // RH sparkvideo-2.0-mini 等：严格按官方 multimodal-video 字段提交。
+  // 禁止 content / metadata / audio_url / generate_audio / size / seconds ——
+  // 网关常把 content 音频或 audio_urls 抽成顶层 audio=URL，触发「audio format 不合法」。
+  if (jumeng && rhSpark) {
+    const rhRes = normalizeRhSparkvideoResolution(resolution);
+    const maxDur = /rh_seedance_25|seedance[-_\s]?2\.5/i.test(upstreamModel) ? 30 : 15;
+    const rhDur = normalizeRhSparkvideoDuration(duration, maxDur);
+    const allowedRatio = new Set([
+      "adaptive",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16",
+      "21:9",
+    ]);
+    const rhRatio = allowedRatio.has(ratio) ? ratio : "adaptive";
+    // 参考素材须可被 RH 拉取：优先 http(s)；data URI 官方亦支持，一并保留
+    const toRhUrls = (urls: string[]) =>
+      urls.filter((u) => /^https?:\/\//i.test(u) || /^data:(image|video|audio)\//i.test(u));
+    const lean: Record<string, unknown> = {
+      model: upstreamModel,
+      prompt: promptText,
+      resolution: rhRes,
+      duration: rhDur,
+      imageUrls: toRhUrls(publicImgs),
+      videoUrls: toRhUrls(publicVideos),
+      audioUrls: toRhUrls(publicAudios),
+      generateAudio: true,
+      ratio: rhRatio,
+      realPersonMode: true,
+      conversionSlots: ["all"],
+      returnLastFrame: false,
+      seed: -1,
+    };
+    for (const key of Object.keys(body)) delete body[key];
+    Object.assign(body, lean);
+    console.info(
+      "[localGenerateVideo] RH sparkvideo lean body keys=%s resolution=%s duration=%s imgs=%s vids=%s auds=%s",
+      Object.keys(lean).join(","),
+      rhRes,
+      rhDur,
+      (lean.imageUrls as string[]).length,
+      (lean.videoUrls as string[]).length,
+      (lean.audioUrls as string[]).length
+    );
   }
 
   const videoReqBody = JSON.stringify(body);
