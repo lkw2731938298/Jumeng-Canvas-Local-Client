@@ -3934,15 +3934,13 @@ export async function localGenerateVideo(params: {
       body.videoUrls = publicVideos;
     }
   }
-  if (publicAudios.length) {
-    body.audio = publicAudios[0];
+  if (publicAudios.length && !audRefsAreDataUrls) {
+    // 参考音频只走 audioUrls / audio_urls / content.role=reference_audio。
+    // 禁止写顶层 body.audio=URL：网关会把 `audio` 当成「音频格式」枚举（mp3/wav），
+    // URL 会触发「audio format 参数不合法」。
     body.audio_url = publicAudios[0];
-    if (!audRefsAreDataUrls) {
-      body.audios = publicAudios;
-      body.audio_urls = publicAudios;
-      // RH 官方字段名 audioUrls；仅 audio_urls/referenceAudio 时上游常忽略音频
-      body.audioUrls = publicAudios;
-    }
+    body.audio_urls = publicAudios;
+    body.audioUrls = publicAudios;
   }
   // RH OpenAPI 用 generateAudio；与 generate_audio 双写
   body.generateAudio = true;
