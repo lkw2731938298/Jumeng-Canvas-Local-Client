@@ -8,8 +8,8 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** 单个代拉上限：覆盖参考视频与模板工程包（≤200MB） */
-const MAX_BYTES = 200 * 1024 * 1024;
+/** 单个代拉上限：覆盖参考视频与大型模板工程包（≤1GB；整包进内存，再高易 OOM） */
+const MAX_BYTES = 1024 * 1024 * 1024;
 
 /** 内网 / 回环地址：禁止代拉，避免把本机服务当跳板（SSRF） */
 function isPrivateOrLocalHostname(host: string): boolean {

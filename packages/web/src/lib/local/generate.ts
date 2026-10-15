@@ -1800,6 +1800,35 @@ function rewriteJumengImagePromptRefs(prompt: string, imageCount: number): strin
   return text.slice(0, 20000);
 }
 
+/**
+ * 多模态视频：按参考类型把 @标签改成 [Image N]/[Video N]/[Audio N]。
+ * 禁止把音频/视频 @ 一律改成 [Image N]（否则旁白会指到图上，音频等于没参考）。
+ */
+function rewriteJumengMultimodalPromptRefs(
+  prompt: string,
+  opts: {
+    imageLabels?: string[];
+    videoLabels?: string[];
+    audioLabels?: string[];
+  }
+): string {
+  let text = String(prompt || "").trim();
+  const apply = (labels: string[] | undefined, kind: "Image" | "Video" | "Audio") => {
+    const cleaned = (labels || []).map((l) => String(l || "").trim()).filter(Boolean);
+    if (!cleaned.length) return;
+    for (const label of [...cleaned].sort((a, b) => b.length - a.length)) {
+      const slot = cleaned.indexOf(label) + 1;
+      if (slot <= 0) continue;
+      text = text.split(`@${label}`).join(`[${kind} ${slot}]`);
+    }
+  };
+  // 先音频/视频再图片，避免短标签误伤
+  apply(opts.audioLabels, "Audio");
+  apply(opts.videoLabels, "Video");
+  apply(opts.imageLabels, "Image");
+  return text;
+}
+
 /** 读取用户自配 OSS；未启用或未填全则返回 null */
 async function loadReadyUserOss() {
   try {
@@ -3465,10 +3494,14 @@ export async function localGenerateVideo(params: {
   /** @deprecated 请用 resolution；若传入且像分辨率则当清晰度 */
   size?: string;
   imageUrls?: string[];
+  /** 与 imageUrls 对齐的 @ 标签（多模态 prompt 改写用） */
+  imageLabels?: string[];
   /** 参考视频公网 URL（需用户 OSS 或外链） */
   videoUrls?: string[];
+  videoLabels?: string[];
   /** 参考音频公网 URL / data URL（Seedance 多模态 reference_audio） */
   audioUrls?: string[];
+  audioLabels?: string[];
   /** 画布工具 id（去字幕时分流到 /v1/videos） */
   canvasTool?: string;
   /** 去字幕：eraseType / encodeMode / 框选区域 */
@@ -3727,8 +3760,36 @@ export async function localGenerateVideo(params: {
     );
   }
   if (jumeng) {
-    promptText = rewriteJumengImagePromptRefs(promptText, publicImgs.length);
-    // 视频参考：补 [Video N]（与官方多模态参考提示对齐）
+    // 按图/视频/音频标签分别改写；勿再用「全部 @ → Image」（会把 @音频 改成 [Image 1]）
+    const hasTypedLabels =
+      (params.imageLabels?.length || 0) +
+        (params.videoLabels?.length || 0) +
+        (params.audioLabels?.length || 0) >
+      0;
+    if (hasTypedLabels) {
+      promptText = rewriteJumengMultimodalPromptRefs(promptText, {
+        imageLabels: params.imageLabels,
+        videoLabels: params.videoLabels,
+        audioLabels: params.audioLabels,
+      });
+    } else if (publicImgs.length > 0 && publicVideos.length === 0 && publicAudios.length === 0) {
+      // 仅图参考时保留旧逻辑
+      promptText = rewriteJumengImagePromptRefs(promptText, publicImgs.length);
+    }
+    // 缺显式 token 时补前缀（与官方 imageUrls/videoUrls/audioUrls 下标对齐）
+    if (publicImgs.length > 0) {
+      const missing: number[] = [];
+      for (let i = 1; i <= publicImgs.length; i++) {
+        if (!promptText.includes(`[Image ${i}]`)) missing.push(i);
+      }
+      if (missing.length) {
+        const imgs = missing.map((n) => `[Image ${n}]`).join("、");
+        promptText = `须严格参考${imgs}中的主体外貌、服装、场景与画面风格。${promptText}`.slice(
+          0,
+          20000
+        );
+      }
+    }
     if (publicVideos.length > 0) {
       const missing: number[] = [];
       for (let i = 1; i <= publicVideos.length; i++) {
@@ -3739,7 +3800,6 @@ export async function localGenerateVideo(params: {
         promptText = `须参考${vids}中的动作、镜头与画面内容。${promptText}`.slice(0, 20000);
       }
     }
-    // 音频参考：补 [Audio N]
     if (publicAudios.length > 0) {
       const missing: number[] = [];
       for (let i = 1; i <= publicAudios.length; i++) {
@@ -3836,6 +3896,7 @@ export async function localGenerateVideo(params: {
     metadata.audio_url = publicAudios[0];
     if (!audRefsAreDataUrls) {
       metadata.audio_urls = publicAudios;
+      metadata.audioUrls = publicAudios;
       metadata.referenceAudio = publicAudios;
     }
   }
@@ -3859,6 +3920,8 @@ export async function localGenerateVideo(params: {
     if (!imgRefsAreDataUrls) {
       body.images = publicImgs;
       body.image_urls = publicImgs;
+      // RH sparkvideo / 官方 OpenAPI：camelCase imageUrls
+      body.imageUrls = publicImgs;
     }
   }
   if (publicVideos.length) {
@@ -3868,6 +3931,7 @@ export async function localGenerateVideo(params: {
     if (!vidRefsAreDataUrls) {
       body.videos = publicVideos;
       body.video_urls = publicVideos;
+      body.videoUrls = publicVideos;
     }
   }
   if (publicAudios.length) {
@@ -3876,8 +3940,12 @@ export async function localGenerateVideo(params: {
     if (!audRefsAreDataUrls) {
       body.audios = publicAudios;
       body.audio_urls = publicAudios;
+      // RH 官方字段名 audioUrls；仅 audio_urls/referenceAudio 时上游常忽略音频
+      body.audioUrls = publicAudios;
     }
   }
+  // RH OpenAPI 用 generateAudio；与 generate_audio 双写
+  body.generateAudio = true;
 
   // base64 仅图、无视频/音频时：对齐 jumeng-media 精简体；有音视频参考时保留 content/role
   if (

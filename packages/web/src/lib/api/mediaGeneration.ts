@@ -277,32 +277,33 @@ async function generateFromMediaNodeLocal(
           isLikelyAudioMediaUrl(String(r.url || ""), { type: r.type });
 
         // 本机 /api/local/asset 常无扩展名：按 ref.type 区分；sourceUrl 在视频任务中强制当视频
-        const rawImageUrls = (request.references ?? [])
-          .filter((r) => {
-            const u = String(r.url || "").trim();
-            if (!u || isAudioRef(r)) return false;
-            if (isLikelyVideoMediaUrl(u, { type: r.type, canvasTool: request.canvasTool })) {
-              return false;
-            }
-            if (r.type === "image" || r.type === "file" || r.type === "link") return true;
-            if (/\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)) return true;
-            if (u.startsWith("data:image")) return true;
-            // 无 type 的本机资产：视频任务里默认不当图片（避免把源视频当图）
-            if (/\/api\/local\//i.test(u) && request.category === "video" && !r.type) {
-              return false;
-            }
-            if (/\/api\/local\//i.test(u)) return true;
+        const imageRefItems = (request.references ?? []).filter((r) => {
+          const u = String(r.url || "").trim();
+          if (!u || isAudioRef(r)) return false;
+          if (isLikelyVideoMediaUrl(u, { type: r.type, canvasTool: request.canvasTool })) {
             return false;
-          })
+          }
+          if (r.type === "image" || r.type === "file" || r.type === "link") return true;
+          if (/\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)) return true;
+          if (u.startsWith("data:image")) return true;
+          // 无 type 的本机资产：视频任务里默认不当图片（避免把源视频当图）
+          if (/\/api\/local\//i.test(u) && request.category === "video" && !r.type) {
+            return false;
+          }
+          if (/\/api\/local\//i.test(u)) return true;
+          return false;
+        });
+        const rawImageUrls = imageRefItems
           .map((r) => String(r.url || "").trim())
           .filter(Boolean);
+        const imageLabels = imageRefItems.map((r) => String(r.label || "").trim());
 
-        const rawVideoUrls: string[] = [];
+        const videoRefItems: { url: string; label: string }[] = [];
         for (const r of request.references ?? []) {
           const u = String(r.url || "").trim();
           if (!u) continue;
           if (isLikelyVideoMediaUrl(u, { type: r.type, canvasTool: request.canvasTool })) {
-            rawVideoUrls.push(u);
+            videoRefItems.push({ url: u, label: String(r.label || "").trim() });
             continue;
           }
           // 视频任务 + 无 type 的本机 URL：视为视频参考（顶栏工具常只传 sourceUrl/未标 type）
@@ -312,14 +313,16 @@ async function generateFromMediaNodeLocal(
             /\/api\/local\//i.test(u) &&
             !isAudioRef(r)
           ) {
-            rawVideoUrls.push(u);
+            videoRefItems.push({ url: u, label: String(r.label || "").trim() });
           }
         }
+        const rawVideoUrls = videoRefItems.map((r) => r.url);
         if (request.sourceUrl?.trim()) {
           const su = request.sourceUrl.trim();
           // 视频节点 / 顶栏视频工具：sourceUrl 一律当视频参考（与节点带参考同链路）
           if (request.category === "video") {
             rawVideoUrls.unshift(su);
+            videoRefItems.unshift({ url: su, label: "" });
           } else if (
             isLikelyVideoMediaUrl(su, {
               canvasTool: request.canvasTool,
@@ -327,24 +330,33 @@ async function generateFromMediaNodeLocal(
             })
           ) {
             rawVideoUrls.unshift(su);
+            videoRefItems.unshift({ url: su, label: "" });
           } else if (!isAudioRef({ url: su })) {
             rawImageUrls.unshift(su);
+            imageLabels.unshift("");
           }
         }
 
         // 去字幕 / 画质增强：只要 1 条源视频（优先 sourceUrl）
         let dedupedVideoUrls = rawVideoUrls;
+        let dedupedVideoLabels = videoRefItems.map((r) => r.label);
         if (singleSourceVideo) {
           const preferred = String(request.sourceUrl || "").trim();
           const uniq: string[] = [];
+          const uniqLabels: string[] = [];
           const seen = new Set<string>();
-          for (const u of preferred ? [preferred, ...rawVideoUrls] : rawVideoUrls) {
-            const key = u.split("?")[0] || u;
+          const paired = preferred
+            ? [{ url: preferred, label: "" }, ...videoRefItems]
+            : videoRefItems;
+          for (const item of paired) {
+            const key = item.url.split("?")[0] || item.url;
             if (seen.has(key)) continue;
             seen.add(key);
-            uniq.push(u);
+            uniq.push(item.url);
+            uniqLabels.push(item.label);
           }
           dedupedVideoUrls = uniq.slice(0, 1);
+          dedupedVideoLabels = uniqLabels.slice(0, 1);
           if (!dedupedVideoUrls.length) {
             throw new Error(
               volcEnhance
@@ -354,20 +366,27 @@ async function generateFromMediaNodeLocal(
           }
         }
 
+        const audioRefItems = singleSourceVideo
+          ? []
+          : (request.references ?? []).filter((r) => isAudioRef(r));
+        const rawAudioUrls = audioRefItems
+          .map((r) => String(r.url || "").trim())
+          .filter(Boolean);
+        const audioLabels = audioRefItems.map((r) => String(r.label || "").trim());
+
         const prepared = await prepareUpstreamMediaRefs({
           modelId: request.model,
           imageUrls: singleSourceVideo ? [] : rawImageUrls,
           videoUrls: dedupedVideoUrls,
-          audioUrls: singleSourceVideo
-            ? []
-            : (request.references ?? [])
-                .filter((r) => isAudioRef(r))
-                .map((r) => String(r.url || "").trim())
-                .filter(Boolean),
+          audioUrls: rawAudioUrls,
         });
         const imageUrls = prepared.imageUrls;
         const videoUrls = prepared.videoUrls;
         const audioUrls = prepared.audioUrls;
+        // 与提交 URL 同序的标签（prepare 保序；失败会整批抛错）
+        const outImageLabels = singleSourceVideo ? [] : imageLabels.slice(0, imageUrls.length);
+        const outVideoLabels = dedupedVideoLabels.slice(0, videoUrls.length);
+        const outAudioLabels = audioLabels.slice(0, audioUrls.length);
         if (dedupedVideoUrls.length > 0 && videoUrls.length === 0) {
           throw new Error(
             "画布有参考视频，但未能提交给上游。未配 OSS 时请保证单段 ≤20MB，或启用「参考图 OSS」"
@@ -391,8 +410,11 @@ async function generateFromMediaNodeLocal(
           resolution: String(opts.enhanceResolution || opts.resolution || resolution),
           ratio: String(ratio),
           imageUrls,
+          imageLabels: outImageLabels,
           videoUrls,
+          videoLabels: outVideoLabels,
           audioUrls,
+          audioLabels: outAudioLabels,
           canvasTool: request.canvasTool,
           eraseType: opts.eraseType,
           encodeMode: opts.encodeMode,
