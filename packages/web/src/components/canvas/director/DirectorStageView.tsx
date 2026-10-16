@@ -2305,10 +2305,11 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
           signal: abort.signal,
           onProgress: (r) => setExportProgress(r),
           seekAndWait: async (t) => {
-            // 同步提交播放头，再等两帧 R3F 渲染，避免采到旧姿态造成跳帧
+            // 同步提交播放头 → invalidate View → 再等两帧，避免采到旧姿态/空缓冲
             flushSync(() => {
               setTimelinePlayhead(t);
             });
+            captureApiRef.current?.invalidate();
             await new Promise<void>((resolve) => {
               requestAnimationFrame(() =>
                 requestAnimationFrame(() => resolve())
@@ -2350,11 +2351,15 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                 liveCameraRef.current ??
                 scene.camera;
             }
-            return captureApiRef.current!.captureRgb(cam, {
+            const dataUrl = captureApiRef.current!.captureRgb(cam, {
               ...lensCaptureOptions,
               aspect,
               maxWidth: width,
             });
+            if (!dataUrl || !dataUrl.startsWith("data:image")) {
+              throw new Error("截帧失败：导演台未渲染出画面，请确认场景内有可见物体");
+            }
+            return dataUrl;
           },
         });
         const file = new File(
@@ -2364,7 +2369,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             : `director-timeline-${nodeId || "scene"}-${Date.now()}.webm`,
           { type: blob.type || "video/webm" }
         );
-        await uploadAsset({
+        const asset = await uploadAsset({
           file,
           projectId,
           category: "video",
@@ -2372,10 +2377,31 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             ? `导演台机位·${forceTrack.name}`
             : "导演台动画预演",
         });
+        // 直接落到画布视频节点（写入 videoUrl），避免只进素材库后拖节点空白
+        const store = useCanvasStore.getState();
+        const host = nodeId
+          ? store.nodes.find((n) => n.id === nodeId)
+          : null;
+        const hostW = host?.width ?? 280;
+        const dropPos = host
+          ? { x: host.position.x + hostW + 48, y: host.position.y }
+          : {
+              x: 120 + Math.random() * 40,
+              y: 120 + Math.random() * 40,
+            };
+        store.addNodeFromAsset(
+          {
+            id: asset.id,
+            category: "video",
+            fileUrl: asset.fileUrl,
+            title: asset.title || file.name,
+          },
+          dropPos
+        );
         toast.success(
           forceTrack
-            ? `已导出机位「${forceTrack.name}」录像到素材库`
-            : "已导出预演视频到素材库（可拖到画布视频节点）"
+            ? `已导出机位「${forceTrack.name}」并放到画布`
+            : "已导出预演视频并放到画布"
         );
         setExportDialogOpen(false);
         setExportCameraTrackId(null);

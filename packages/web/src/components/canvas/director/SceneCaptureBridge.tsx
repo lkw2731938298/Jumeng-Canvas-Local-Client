@@ -18,6 +18,8 @@ export interface DirectorCaptureApi {
   captureRgb: (cameraState?: DirectorCameraState, options?: DirectorCaptureOptions) => string;
   captureRgbPreview: (cameraState: DirectorCameraState, hideObjectIds?: string[]) => string;
   getCurrentCamera: () => DirectorCameraState;
+  /** 触发 R3F View 重绘（导出 seek 后须调用，再截帧） */
+  invalidate: () => void;
 }
 
 export function SceneCaptureBridge({
@@ -49,6 +51,9 @@ export function SceneCaptureBridge({
           target: [...targetRef.current],
           fov: cam.fov,
         };
+      },
+      invalidate: () => {
+        invalidate();
       },
       capture: (cameraState, objectList, options) => {
         const state: DirectorCameraState = cameraState ?? {

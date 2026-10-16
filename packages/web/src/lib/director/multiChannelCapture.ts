@@ -418,7 +418,9 @@ export function buildPerspectiveCamera(state: DirectorCameraState, aspect: numbe
   const cam = new PerspectiveCamera(state.fov, aspect, 0.1, 1500);
   cam.position.set(...state.position);
   cam.lookAt(...state.target);
+  // 与主视口一致：默认层 + layer1（主相机 enable(1)），避免只采到空层
   cam.layers.set(0);
+  cam.layers.enable(1);
   cam.updateProjectionMatrix();
   return cam;
 }

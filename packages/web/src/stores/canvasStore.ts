@@ -914,8 +914,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     defaults.assetId = asset.id;
     if (asset.fileUrl && isSignedOssUrl(asset.fileUrl)) {
       defaults[urlKey] = ensureHttpsOssUrl(asset.fileUrl);
-    } else if (asset.fileUrl && type === "document_input") {
-      // 文档签名模式外也写入 fileUrl，便于立即展示
+    } else if (asset.fileUrl) {
+      // 本机 /api/local/asset 等稳定直链写入 URL，避免仅靠 assetId 时
+      // manifest 尚未刷新导致视频/图片节点空白（导演台导机位常见）
       defaults[urlKey] = asset.fileUrl;
     }
     if (type === "document_input") {

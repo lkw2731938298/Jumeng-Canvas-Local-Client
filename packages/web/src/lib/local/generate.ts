@@ -3782,123 +3782,170 @@ export async function localGenerateVideo(params: {
     requestedAud.length
   );
 
-  // 对齐商业 jumengai._build_jumengai_video_payload：content + role；prompt 必须与 content[0].text 一致
-  const content: Array<Record<string, unknown>> = [{ type: "text", text: promptText }];
-  for (const u of publicImgs) {
-    content.push({
-      type: "image_url",
-      image_url: { url: u },
-      role: "reference_image",
-    });
-  }
-  for (const u of publicVideos) {
-    content.push({
-      type: "video_url",
-      video_url: { url: u },
-      role: "reference_video",
-    });
-  }
-  for (const u of publicAudios) {
-    content.push({
-      type: "audio_url",
-      audio_url: { url: u },
-      role: "reference_audio",
-    });
-  }
-  const metadata: Record<string, unknown> = {
-    resolution,
-    ratio,
-    duration,
-    generate_audio: true,
-    content,
-    // skill / 聚梦多分辨率：清晰度与画幅都进 parameters
-    parameters: { ratio, resolution, watermark: false },
-  };
-  // 仅聚梦官方通道：base64 参考不能进 *_urls 列表字段（网关按 URL 校验，data: 会被判「必须以 http 开头」）。
-  // 第三方 OpenAI 兼容网关维持原画布行为，参考图仍需用户自配 OSS 公网直链。
-  const imgRefsAreDataUrls = jumeng && publicImgs.some((u) => u.startsWith("data:"));
-  const vidRefsAreDataUrls = jumeng && publicVideos.some((u) => u.startsWith("data:"));
-  const audRefsAreDataUrls = jumeng && publicAudios.some((u) => u.startsWith("data:"));
+  // —— 聚梦官方视频字段（doc.jumengai.com/api/video）——
+  // 统一字段：prompt / image|images|input_reference /
+  // metadata.first_frame|last_frame|reference_videos|reference_audios|parameters
+  // 禁止：上游私有名、content Ark 体、body.audio（格式枚举）、Base64 data URL
+  const isHttpsRef = (u: string) => /^https?:\/\//i.test(String(u || "").trim());
+  const httpsImgs = publicImgs.filter(isHttpsRef);
+  const httpsVids = publicVideos.filter(isHttpsRef);
+  const httpsAuds = publicAudios.filter(isHttpsRef);
 
-  if (publicImgs.length) {
-    metadata.imageMode = "reference";
-    metadata.img_url = publicImgs[0];
-    if (!imgRefsAreDataUrls) metadata.image_urls = publicImgs;
-  }
-  if (publicVideos.length) {
-    metadata.video_url = publicVideos[0];
-    if (!vidRefsAreDataUrls) {
-      metadata.video_urls = publicVideos;
-      metadata.referenceVideos = publicVideos;
-    }
-  }
-  if (publicAudios.length) {
-    metadata.audio_url = publicAudios[0];
-    if (!audRefsAreDataUrls) {
-      metadata.audio_urls = publicAudios;
-      metadata.referenceAudio = publicAudios;
+  if (jumeng) {
+    const dropped =
+      publicImgs.length -
+      httpsImgs.length +
+      (publicVideos.length - httpsVids.length) +
+      (publicAudios.length - httpsAuds.length);
+    if (dropped > 0 && httpsImgs.length + httpsVids.length + httpsAuds.length === 0) {
+      throw new Error(
+        (lastRefUploadIssue ? `${lastRefUploadIssue}。` : "") +
+          "聚梦视频通道只收公网 HTTPS 参考（官方文档不接受 Base64）。" +
+          "请完成实名以启用官方文件上传，或在「本地设置 → 参考图 OSS」配置公共读直链。"
+      );
     }
   }
 
-  const body: Record<string, unknown> = {
-    model: upstreamModel,
-    prompt: promptText,
-    duration,
-    seconds: String(duration),
-    size: sizeForUpstream,
-    resolution,
-    ratio,
-    aspect_ratio: ratio,
-    generate_audio: true,
-    content,
-    metadata,
-  };
-  if (publicImgs.length) {
-    body.image = publicImgs[0];
-    body.input_reference = publicImgs[0];
-    if (!imgRefsAreDataUrls) {
-      body.images = publicImgs;
-      body.image_urls = publicImgs;
-    }
-  }
-  if (publicVideos.length) {
-    body.video = publicVideos[0];
-    body.video_url = publicVideos[0];
-    body.videoUrl = publicVideos[0];
-    if (!vidRefsAreDataUrls) {
-      body.videos = publicVideos;
-      body.video_urls = publicVideos;
-    }
-  }
-  if (publicAudios.length) {
-    body.audio = publicAudios[0];
-    body.audio_url = publicAudios[0];
-    if (!audRefsAreDataUrls) {
-      body.audios = publicAudios;
-      body.audio_urls = publicAudios;
-    }
-  }
+  const body: Record<string, unknown> = jumeng
+    ? (() => {
+        const parameters: Record<string, unknown> = {
+          ratio,
+          watermark: false,
+        };
+        // 多分辨率模型可读 parameters.resolution；与顶层 size 语义分离
+        if (resolution) parameters.resolution = resolution;
 
-  // base64 仅图、无视频/音频时：对齐 jumeng-media 精简体；有音视频参考时保留 content/role
-  if (
-    jumeng &&
-    imgRefsAreDataUrls &&
-    publicVideos.length === 0 &&
-    publicAudios.length === 0
-  ) {
-    const minimal: Record<string, unknown> = {
-      model: upstreamModel,
-      prompt: promptText,
-      size: sizeForUpstream,
-      resolution,
-      duration,
-      seconds: String(duration),
-      image: publicImgs[0],
-      metadata: { parameters: { ratio, resolution, watermark: false } },
-    };
-    for (const key of Object.keys(body)) delete body[key];
-    Object.assign(body, minimal);
-  }
+        const metadata: Record<string, unknown> = { parameters };
+
+        // 仅参考视频 / 多模态：文档 metadata.reference_videos
+        if (httpsVids.length) {
+          metadata.reference_videos = httpsVids;
+        }
+        // 多模态音频：文档 metadata.reference_audios（勿写 body.audio）
+        if (httpsAuds.length) {
+          metadata.reference_audios = httpsAuds;
+        }
+
+        const lean: Record<string, unknown> = {
+          model: upstreamModel,
+          prompt: promptText,
+          // Seedance 等多分辨率：size=画幅比时须另带顶层 resolution（上游会校验「请选择 resolution」）
+          size: sizeForUpstream,
+          duration,
+          seconds: String(duration),
+          metadata,
+        };
+        if (resolution) {
+          lean.resolution = resolution;
+        }
+
+        if (httpsImgs.length === 1 && httpsVids.length === 0 && httpsAuds.length === 0) {
+          // 图生 / 首帧：prompt + image（兼 input_reference）
+          lean.image = httpsImgs[0];
+          lean.input_reference = httpsImgs[0];
+          lean.images = httpsImgs;
+        } else if (httpsImgs.length >= 2 && httpsVids.length === 0 && httpsAuds.length === 0) {
+          // 多参考图：prompt + images；恰为 2 张时兼写首尾帧，兼容首尾帧模型
+          lean.images = httpsImgs;
+          lean.image = httpsImgs[0];
+          lean.input_reference = httpsImgs[0];
+          if (httpsImgs.length === 2) {
+            metadata.first_frame = httpsImgs[0];
+            metadata.last_frame = httpsImgs[1];
+          }
+          // 文档扩展字段：与顶层 images 合并
+          metadata.reference_images = httpsImgs;
+        } else if (httpsImgs.length > 0) {
+          // 多模态：图 + 视频/音频
+          lean.images = httpsImgs;
+          lean.image = httpsImgs[0];
+          lean.input_reference = httpsImgs[0];
+          metadata.reference_images = httpsImgs;
+        }
+        // 文生：仅 prompt（+ size/duration/metadata.parameters）
+
+        console.info(
+          "[localGenerateVideo] jumeng doc body keys=%s imgs=%s vids=%s auds=%s size=%s",
+          Object.keys(lean).join(","),
+          httpsImgs.length,
+          httpsVids.length,
+          httpsAuds.length,
+          sizeForUpstream
+        );
+        return lean;
+      })()
+    : (() => {
+        // 非聚梦：保留兼容胖体（第三方 OpenAI 风格网关）
+        const content: Array<Record<string, unknown>> = [{ type: "text", text: promptText }];
+        for (const u of publicImgs) {
+          content.push({
+            type: "image_url",
+            image_url: { url: u },
+            role: "reference_image",
+          });
+        }
+        for (const u of publicVideos) {
+          content.push({
+            type: "video_url",
+            video_url: { url: u },
+            role: "reference_video",
+          });
+        }
+        for (const u of publicAudios) {
+          content.push({
+            type: "audio_url",
+            audio_url: { url: u },
+            role: "reference_audio",
+          });
+        }
+        const metadata: Record<string, unknown> = {
+          resolution,
+          ratio,
+          duration,
+          generate_audio: true,
+          content,
+          parameters: { ratio, resolution, watermark: false },
+        };
+        if (publicImgs.length) {
+          metadata.imageMode = "reference";
+          metadata.img_url = publicImgs[0];
+          metadata.image_urls = publicImgs;
+        }
+        if (publicVideos.length) {
+          metadata.video_url = publicVideos[0];
+          metadata.video_urls = publicVideos;
+          metadata.reference_videos = publicVideos;
+        }
+        if (publicAudios.length) {
+          metadata.reference_audios = publicAudios;
+        }
+        const fat: Record<string, unknown> = {
+          model: upstreamModel,
+          prompt: promptText,
+          duration,
+          seconds: String(duration),
+          size: sizeForUpstream,
+          resolution,
+          ratio,
+          aspect_ratio: ratio,
+          generate_audio: true,
+          content,
+          metadata,
+        };
+        if (publicImgs.length) {
+          fat.image = publicImgs[0];
+          fat.input_reference = publicImgs[0];
+          fat.images = publicImgs;
+        }
+        if (publicVideos.length) {
+          fat.video = publicVideos[0];
+          fat.videos = publicVideos;
+        }
+        if (publicAudios.length) {
+          fat.audio_urls = publicAudios;
+        }
+        return fat;
+      })();
 
   const videoReqBody = JSON.stringify(body);
   const submit = await proxyUpstream({

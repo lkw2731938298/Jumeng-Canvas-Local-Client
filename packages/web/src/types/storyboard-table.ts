@@ -33,7 +33,7 @@ export const STORYBOARD_TABLE_COLUMNS = [
   { key: "sfx", label: "音效", width: 72 },
   { key: "cameraPrompt", label: "运镜提示词", width: 100 },
   { key: "videoPrompt", label: "视频提示词", width: 120 },
-  { key: "replaceCue", label: "替换指令", width: 140 },
+  // 替换指令不再作为分镜表可见列；字段仍保留在行数据供出海/爆款管线使用
 ] as const;
 
 export type StoryboardTableColumnKey = (typeof STORYBOARD_TABLE_COLUMNS)[number]["key"];
@@ -308,7 +308,6 @@ export function rowToShotRowsJson(row: StoryboardTableRow): Record<string, strin
     音效: row.sfx,
     运镜提示词: row.cameraPrompt,
     视频提示词: row.videoPrompt,
-    替换指令: row.replaceCue ?? "",
     草图提示词: row.sketchPrompt ?? "",
   };
 }

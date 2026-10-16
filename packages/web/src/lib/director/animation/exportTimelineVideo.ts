@@ -1,6 +1,6 @@
 /**
- * 时间轴导出预演视频：先离线采帧（JPEG）→ 再按固定 fps 实时灌入 MediaRecorder。
- * 避免 captureStream(0)+慢截图导致墙钟时间戳不均、成片卡顿。
+ * 时间轴导出预演视频：先离线采帧（JPEG）→ 再按固定 fps 用 requestFrame 灌入 MediaRecorder。
+ * 使用 captureStream(0)+requestFrame，避免 captureStream(fps) 在离屏 canvas 上采到空缓冲（成片黑屏）。
  * 仅面向 Chromium 桌面。
  */
 
@@ -16,6 +16,8 @@ export type ExportTimelineVideoParams = {
   /** 返回当前帧 data URL（image/png 或 jpeg） */
   captureFrameDataUrl: (timeSec: number) => string | Promise<string>;
 };
+
+type CanvasCaptureTrack = MediaStreamTrack & { requestFrame?: () => void };
 
 function pickMimeType(): string {
   // VP8 对实时灌帧更稳；VP9 在短 GOP + 不规则推帧时更容易糊/顿
@@ -37,8 +39,14 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function dataUrlToImageBitmap(dataUrl: string): Promise<ImageBitmap> {
+  if (!dataUrl || !dataUrl.startsWith("data:image")) {
+    throw new Error("截帧失败：未拿到有效画面（空帧）");
+  }
   const res = await fetch(dataUrl);
   const blob = await res.blob();
+  if (!blob.size) {
+    throw new Error("截帧失败：画面数据为空");
+  }
   return createImageBitmap(blob);
 }
 
@@ -68,13 +76,15 @@ async function captureToJpegBlob(
   const blob = await new Promise<Blob | null>((resolve) =>
     scratch.toBlob((b) => resolve(b), "image/jpeg", quality)
   );
-  if (!blob) throw new Error("帧压缩失败");
+  if (!blob || blob.size < 256) {
+    throw new Error("帧压缩失败或画面过空，请确认导演台视口有模型/场景后再导出");
+  }
   return blob;
 }
 
 /**
  * 按 fps 导出 webm。
- * 两阶段：① 按内容时间采满帧（可慢）② 按 1/fps 墙钟均匀推入录制器（保证播放流畅）。
+ * 两阶段：① 按内容时间采满帧（可慢）② 按 1/fps 墙钟 + requestFrame 推入录制器。
  */
 export async function exportTimelineVideo(
   params: ExportTimelineVideoParams
@@ -94,7 +104,7 @@ export async function exportTimelineVideo(
   }
 
   const scratch = document.createElement("canvas");
-  const frameBlobs: Blob[] = [];
+  const frameBlobs: Array<Blob | null> = [];
 
   // ── 阶段 1：离线采帧并压成 JPEG ──
   try {
@@ -121,8 +131,23 @@ export async function exportTimelineVideo(
     throw new Error("无法创建导出画布");
   }
 
-  // 固定 fps 的 captureStream：由墙钟驱动时间戳，配合下方匀速推帧
-  const stream = canvas.captureStream(fps);
+  // 首帧先画上再开录，避免录到空白缓冲
+  const first = frameBlobs[0];
+  if (!first) throw new Error("没有可导出的帧");
+  {
+    const bmp = await createImageBitmap(first);
+    ctx.fillStyle = "#0a0a12";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(bmp, 0, 0, width, height);
+    bmp.close();
+  }
+
+  // captureStream(0)：仅在 requestFrame 时出帧，杜绝离屏 canvas 定时采空帧导致黑屏
+  const stream = canvas.captureStream(0);
+  const track = stream.getVideoTracks()[0] as CanvasCaptureTrack | undefined;
+  if (!track) {
+    throw new Error("无法创建录制轨道");
+  }
   const mimeType = pickMimeType();
   const chunks: BlobPart[] = [];
   const bitrate = width >= 1280 ? 6_000_000 : width >= 720 ? 4_000_000 : 2_500_000;
@@ -143,6 +168,7 @@ export async function exportTimelineVideo(
 
   // ── 阶段 2：匀速灌帧编码 ──
   recorder.start(100);
+  track.requestFrame?.();
   const encodeStart = performance.now();
 
   try {
@@ -150,19 +176,23 @@ export async function exportTimelineVideo(
       if (params.signal?.aborted) {
         throw new DOMException("导出已取消", "AbortError");
       }
-      const bmp = await createImageBitmap(frameBlobs[i]!);
-      // 释放已用 JPEG，压低峰值内存
-      frameBlobs[i] = null as unknown as Blob;
-      ctx.drawImage(bmp, 0, 0, width, height);
-      bmp.close();
+      const blob = frameBlobs[i];
+      if (blob) {
+        const bmp = await createImageBitmap(blob);
+        frameBlobs[i] = null;
+        ctx.drawImage(bmp, 0, 0, width, height);
+        bmp.close();
+      }
+      track.requestFrame?.();
 
-      const targetAt = encodeStart + i * frameMs;
+      const targetAt = encodeStart + (i + 1) * frameMs;
       const wait = targetAt - performance.now();
       if (wait > 1) await sleep(wait);
 
       params.onProgress?.(0.75 + ((i + 1) / frameCount) * 0.25, i + 1, frameCount);
     }
     // 末帧多留一拍，避免录制器截断最后一帧
+    track.requestFrame?.();
     await sleep(frameMs + 40);
     params.onProgress?.(1, frameCount, frameCount);
   } finally {
