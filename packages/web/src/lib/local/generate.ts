@@ -2466,14 +2466,14 @@ function sleep(ms: number, signal?: AbortSignal) {
 }
 
 /**
- * 本地画布在浏览器侧轮询上游：可等更久、间隔略放宽（无服务端 Worker 超时压力）。
+ * 本地画布在浏览器侧轮询上游：间隔宜短，否则「上游已完成 → 节点才出现结果」会空等一整轮。
  * 「同步上游」短查仍用 SYNC_POLL_BUDGET_MS，避免点一次卡太久。
  */
-const LOCAL_IMAGE_POLL_INTERVAL_MS = 6_000;
+const LOCAL_IMAGE_POLL_INTERVAL_MS = 2_000;
 const LOCAL_IMAGE_POLL_TIMEOUT_MS = 30 * 60 * 1000;
-const LOCAL_VIDEO_POLL_INTERVAL_MS = 8_000;
+const LOCAL_VIDEO_POLL_INTERVAL_MS = 3_000;
 const LOCAL_VIDEO_POLL_TIMEOUT_MS = 60 * 60 * 1000;
-const LOCAL_MODEL3D_POLL_INTERVAL_MS = 8_000;
+const LOCAL_MODEL3D_POLL_INTERVAL_MS = 3_000;
 const LOCAL_MODEL3D_POLL_TIMEOUT_MS = 45 * 60 * 1000;
 const SYNC_POLL_BUDGET_MS = 45_000;
 

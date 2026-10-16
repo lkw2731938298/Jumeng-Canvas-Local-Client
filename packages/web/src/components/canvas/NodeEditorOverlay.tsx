@@ -1245,7 +1245,23 @@ export function NodeEditorOverlay() {
       } catch {
         /* 沿用底栏凭证 */
       }
-      const submitOptions = { idempotencyKey, quoteToken: submitQuoteToken };
+      const applyNodeGeneratedMedia = useCanvasStore.getState().applyNodeGeneratedMedia;
+      const submitOptions = {
+        idempotencyKey,
+        quoteToken: submitQuoteToken,
+        // 上游一出结果就先画到节点，落盘完成后再换成本地 URL
+        onUpstreamPreview: (preview: { url?: string; b64?: string }) => {
+          const urlParamKey = config.urlParamKey;
+          if (!urlParamKey || !selectedNodeId) return;
+          const previewUrl = String(preview.url || "").trim()
+            || (preview.b64
+              ? `data:image/png;base64,${String(preview.b64).replace(/^data:image\/\w+;base64,/, "")}`
+              : "");
+          if (!previewUrl) return;
+          applyNodeGeneratedMedia(selectedNodeId, urlParamKey, previewUrl);
+          endNodeGeneration(selectedNodeId);
+        },
+      };
 
       const result = await generateFromMediaNode({
         projectId,

@@ -123,6 +123,11 @@ export interface GenerationSubmitOptions {
   expectedPricingVersion?: number;
   /** 用户停止助手时中断本地/云端提交与轮询 */
   signal?: AbortSignal;
+  /**
+   * 上游已出结果、本机落盘开始前回调（可先把远程 URL / dataURL 画到节点，缩短等待感）。
+   * 落盘成功后仍会以本地 asset URL 再写一次。
+   */
+  onUpstreamPreview?: (preview: { url?: string; b64?: string }) => void;
 }
 
 /** 从 PRICING_CHANGED 错误体取出可重试的报价凭证与选项快照 */
@@ -408,6 +413,14 @@ async function generateFromMediaNodeLocal(
           ? providers.find((p) => p.id === model.providerId)
           : undefined;
         const apiKey = normalizeApiKey(model?.apiKey || provider?.apiKey || "");
+        // 先预览上游 URL，再落盘；避免大视频下载期间节点一直转圈
+        if (raw.url) {
+          try {
+            options?.onUpstreamPreview?.({ url: raw.url });
+          } catch {
+            /* 预览失败不阻断落盘 */
+          }
+        }
         const persisted = await persistLocalVideoResult({
           projectId: request.projectId,
           nodeId: request.nodeId,
@@ -508,6 +521,14 @@ async function generateFromMediaNodeLocal(
         onSubmittedRefs: noteSubmittedRefs,
         signal: options?.signal,
       });
+      // 先把上游结果画到节点，再本机落盘（大图/慢网时体感差主要在落盘）
+      if (raw.url || raw.b64) {
+        try {
+          options?.onUpstreamPreview?.({ url: raw.url, b64: raw.b64 });
+        } catch {
+          /* 预览失败不阻断落盘 */
+        }
+      }
       const persisted = await persistLocalImageResult({
         projectId: request.projectId,
         nodeId: request.nodeId,

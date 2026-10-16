@@ -252,7 +252,13 @@ export async function applyMediaJobResultToNode(
   const currentNode = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   const currentParams = (currentNode?.data.params ?? {}) as Record<string, unknown>;
 
-  if (rawAssetId) {
+  // 已有可用预览 URL 时跳过 listAssets，避免回写再等一轮本机 IO
+  const hasUsableMediaUrl =
+    !!mediaUrl &&
+    (/^https?:\/\//i.test(mediaUrl) ||
+      mediaUrl.startsWith("data:") ||
+      /\/api\/local\//i.test(mediaUrl));
+  if (rawAssetId && !hasUsableMediaUrl) {
     const asset = await fetchAssetById(projectId, rawAssetId);
     if (asset?.fileUrl) {
       mediaUrl = isSignedOssUrl(asset.fileUrl)

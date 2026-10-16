@@ -17,7 +17,8 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import type { WorkflowNodeData } from "@/types/workflow";
 import { isLocalDesktop } from "@/lib/localDesktop";
 
-const POLL_INTERVAL_MS = 3000;
+/** 本地桌面略加快兜底回写；云端仍 3s */
+const POLL_INTERVAL_MS = isLocalDesktop ? 1500 : 3000;
 
 function nodeNeedsJobPoll(
   node: { id: string; type?: string; data: WorkflowNodeData },
