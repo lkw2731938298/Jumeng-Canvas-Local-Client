@@ -25,7 +25,7 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
       >
         <DialogHeader className="sr-only">
           <DialogTitle>画布设置</DialogTitle>
-          <DialogDescription>外观、模型服务与存储空间</DialogDescription>
+          <DialogDescription>外观、模型服务、存储空间与技能设置</DialogDescription>
         </DialogHeader>
         {open ? <UserSettingsContent variant="dialog" /> : null}
       </DialogContent>

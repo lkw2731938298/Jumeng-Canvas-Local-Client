@@ -360,7 +360,7 @@ export function DirectorTimelinePanel({
             type="button"
             title={
               selectedIsCameraTrack
-                ? "导出选中摄像机轨的镜头运动录像（全员按时轴动）"
+                ? "导出选中摄像机轨录像（与右侧镜头监视器同一视角；全员按时轴动）"
                 : "请先在左侧选中一条摄像机轨道"
             }
             disabled={!onExportCameraTrackVideo || !selectedIsCameraTrack}

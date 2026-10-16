@@ -3,19 +3,25 @@
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import type { PerspectiveCamera, WebGLRenderer } from "three";
-import { captureAllChannels, captureRgbOnly, captureRgbPreview } from "@/lib/director/multiChannelCapture";
+import {
+  captureAllChannels,
+  captureRgbOnly,
+  captureRgbPreview,
+  type CaptureCameraState,
+} from "@/lib/director/multiChannelCapture";
 import type { DirectorCaptureOptions } from "@/lib/director/multiChannelCapture";
 import type { DirectorCameraState, DirectorObject } from "@/types/director-scene";
 
 export type { DirectorCaptureResult, DirectorCaptureOptions } from "@/lib/director/multiChannelCapture";
+export type { CaptureCameraState };
 
 export interface DirectorCaptureApi {
   capture: (
-    cameraState?: DirectorCameraState,
+    cameraState?: CaptureCameraState,
     objects?: DirectorObject[],
     options?: DirectorCaptureOptions
   ) => ReturnType<typeof captureAllChannels>;
-  captureRgb: (cameraState?: DirectorCameraState, options?: DirectorCaptureOptions) => string;
+  captureRgb: (cameraState?: CaptureCameraState, options?: DirectorCaptureOptions) => string;
   captureRgbPreview: (cameraState: DirectorCameraState, hideObjectIds?: string[]) => string;
   getCurrentCamera: () => DirectorCameraState;
   /** 触发 R3F View 重绘（导出 seek 后须调用，再截帧） */

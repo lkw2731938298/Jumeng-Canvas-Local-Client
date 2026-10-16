@@ -13,6 +13,7 @@ import {
   loadFavoriteModelIds,
   toggleFavoriteModel,
 } from "@/lib/canvas/favoriteModels";
+import { modelOptionMatchesQuery } from "@/lib/canvas/modelSearchFuzzy";
 import { cn } from "@/lib/utils";
 
 interface ModelFlatFavoriteListProps {
@@ -42,13 +43,17 @@ export function ModelFlatFavoriteList({
   }, [open]);
 
   const sorted = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? options.filter((o) => {
-          const hay = `${o.label} ${o.value} ${o.description ?? ""} ${o.series ?? ""}`.toLowerCase();
-          return hay.includes(q);
-        })
-      : options.slice();
+    const filtered = options.filter((o) =>
+      modelOptionMatchesQuery(
+        {
+          label: o.label,
+          value: o.value,
+          description: o.description,
+          series: o.series,
+        },
+        query
+      )
+    );
 
     filtered.sort((a, b) => {
       const af = isFavoriteModel(a.value, favorites) ? 0 : 1;
@@ -64,16 +69,29 @@ export function ModelFlatFavoriteList({
       {/* 固定搜索条：不参与列表滚动 */}
       <div
         className="shrink-0 border-b border-white/10 bg-[#1a1a28] px-2 pb-2 pt-1.5"
-        onPointerDown={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
+        // 只阻断冒泡，勿 preventDefault，否则点搜索框无法聚焦、数字键会被 Select typeahead 吃掉
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <label className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 text-white/50 focus-within:border-white/25">
           <Search className="size-3.5 shrink-0" aria-hidden />
           <input
             ref={inputRef}
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索模型…"
+            onKeyDown={(e) => {
+              // 阻止 Base UI Select 的 typeahead 拦截字母/数字
+              e.stopPropagation();
+            }}
+            onKeyUp={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            placeholder="搜索模型（支持模糊，如 sd2）…"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-white/85 outline-none placeholder:text-white/35"
             aria-label="搜索模型"
           />

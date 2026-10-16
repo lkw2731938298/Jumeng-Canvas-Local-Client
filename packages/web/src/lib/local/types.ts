@@ -204,6 +204,14 @@ export interface LocalDesktopApi {
     skipped: string[];
     errors: Array<{ slug: string; error: string }>;
   }>;
+  /** 本机任选文件夹导入技能包（含系统目录对话框） */
+  importLocalSkillFolder?: () => Promise<{
+    cancelled: boolean;
+    slug?: string;
+    name?: string;
+    destDir?: string;
+    error?: string;
+  }>;
 }
 
 /** Electron 安装包更新（官网 latest.json + Setup.exe 直链） */

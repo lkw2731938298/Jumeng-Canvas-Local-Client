@@ -38,6 +38,7 @@ import {
 import type { LightingPresetId } from "@/lib/director/lightingPresets";
 import { interpolateCameraTrack } from "@/lib/director/cameraTrack";
 import { normalizeDirectorScene } from "@/lib/director/sceneNormalize";
+import { resolveDirectorCameraWorldPose } from "@/lib/director/cameraWorldPose";
 import {
   applySampleToScene,
   buildCameraMotionPath,
@@ -68,6 +69,7 @@ import {
 } from "@/lib/director/lensCapture";
 import { aspectRatioToNumber } from "@/lib/director/aspectRatio";
 import { findBuiltinModel } from "@/lib/director/builtinModels";
+import { allocateDirectorObjectName } from "@/lib/director/objectNaming";
 import { syncCameraLookAtFromTransform, rotationFromPositionLookAt } from "@/lib/director/shotPreview";
 import { writeDirectorCaptureToLinkedShot } from "@/lib/canvas/storyboardNarrativeBootstrap";
 import { useProjectAssetManifest } from "@/lib/canvas/useProjectAssets";
@@ -1765,6 +1767,55 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
     [patchScene, scene?.animation?.tracks, selectedObjectId]
   );
 
+  /** 大纲「复制」：深拷贝造具，新 id / 新名 / 略偏移，不复制动画轨与截图 */
+  const duplicateObject = useCallback(
+    (id: string) => {
+      const src = scene?.objects.find((o) => o.id === id);
+      if (!src) {
+        toast.error("对象不存在");
+        return;
+      }
+      if (src.kind === "prop" && !src.modelAssetId && /生成中/.test(src.name)) {
+        toast.error("生成中的占位道具无法复制");
+        return;
+      }
+      patchScene((prev) => {
+        const source = prev.objects.find((o) => o.id === id);
+        if (!source) return prev;
+        const cloned = structuredClone(source) as DirectorObject;
+        const newId =
+          source.kind === "camera"
+            ? `camobj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+            : `obj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        cloned.id = newId;
+        cloned.name = allocateDirectorObjectName(prev.objects, source);
+        cloned.transform = {
+          ...cloned.transform,
+          position: [
+            cloned.transform.position[0] + 0.8,
+            cloned.transform.position[1],
+            cloned.transform.position[2] + 0.4,
+          ],
+        };
+        // 截图挂在原机位资产上，副本从空列表开始，避免两机位共用同一截图数组引用
+        if (cloned.kind === "camera") {
+          cloned.screenshots = [];
+        }
+        setSelectedObjectId(newId);
+        if (cloned.kind === "camera") {
+          setCameraPropViewMode("thirdPerson");
+        }
+        return {
+          ...prev,
+          objects: [...prev.objects, cloned],
+          viewMode: "director",
+        };
+      });
+      toast.success("已复制");
+    },
+    [patchScene, scene?.objects]
+  );
+
   const selectCameraObject = useCallback((id: string) => {
     setSelectedObjectId(id);
     setCameraPropViewMode("thirdPerson");
@@ -2317,32 +2368,79 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
             });
           },
           captureFrameDataUrl: async (t) => {
+            // locomotion=false：与 seek 后 displayScene（暂停 scrub）一致，物体位姿对齐监视器
             const sample = evaluateTimeline(scene, t, scene.animation, {
-              locomotion: true,
+              locomotion: false,
             });
-            let cam: DirectorCameraState;
+            let cam: DirectorCameraState & {
+              rotation?: [number, number, number];
+            };
             if (forceTrack) {
-              // 强制用选中摄像机轨采样镜头；物体仍由整表 evaluate 驱动
+              // 「导机位」：必须与右侧镜头监视器同路径（世界空间 + rotation）
               if (forceTrack.targetId === DIRECTOR_CAMERA_TRACK_TARGET) {
-                cam =
-                  sample.directorCamera ??
-                  captureApiRef.current?.getCurrentCamera() ??
-                  scene.camera;
+                // 自由主机位轨：无造具监视器；若当前选中了摄像机造具，优先导出监视器视角
+                const monitorCamId =
+                  selectedCameraObject?.kind === "camera"
+                    ? selectedCameraObject.id
+                    : null;
+                if (monitorCamId) {
+                  const sampledScene = applySampleToScene(scene, sample);
+                  const pose = resolveDirectorCameraWorldPose(
+                    monitorCamId,
+                    sampledScene.objects,
+                    sampledScene.sceneSettings
+                  );
+                  if (pose) {
+                    cam = {
+                      position: pose.position,
+                      target: pose.target,
+                      fov: pose.fov,
+                      rotation: pose.rotation,
+                    };
+                  } else {
+                    cam =
+                      sample.directorCamera ??
+                      captureApiRef.current?.getCurrentCamera() ??
+                      scene.camera;
+                  }
+                } else {
+                  cam =
+                    sample.directorCamera ??
+                    captureApiRef.current?.getCurrentCamera() ??
+                    scene.camera;
+                }
               } else {
-                const ov = sample.objects[forceTrack.targetId];
-                const baseObj = scene.objects.find(
-                  (o) => o.id === forceTrack.targetId
+                // 摄像机造具轨：与 DirectorLensPreviewScene 同一套世界位姿
+                const sampledScene = applySampleToScene(scene, sample);
+                const pose = resolveDirectorCameraWorldPose(
+                  forceTrack.targetId,
+                  sampledScene.objects,
+                  sampledScene.sceneSettings
                 );
-                cam = {
-                  position: ov?.position ??
-                    baseObj?.transform.position ??
-                    scene.camera.position,
-                  target:
-                    ov?.lookAt ??
-                    baseObj?.lookAt ??
-                    scene.camera.target,
-                  fov: ov?.fov ?? baseObj?.fov ?? scene.camera.fov ?? 45,
-                };
+                if (pose) {
+                  cam = {
+                    position: pose.position,
+                    target: pose.target,
+                    fov: pose.fov,
+                    rotation: pose.rotation,
+                  };
+                } else {
+                  const ov = sample.objects[forceTrack.targetId];
+                  const baseObj = scene.objects.find(
+                    (o) => o.id === forceTrack.targetId
+                  );
+                  cam = {
+                    position:
+                      ov?.position ??
+                      baseObj?.transform.position ??
+                      scene.camera.position,
+                    target:
+                      ov?.lookAt ??
+                      baseObj?.lookAt ??
+                      scene.camera.target,
+                    fov: ov?.fov ?? baseObj?.fov ?? scene.camera.fov ?? 45,
+                  };
+                }
               }
             } else {
               // 普通「导出」：固定主视口 Orbit 镜头，不跟时间轴机位轨
@@ -2424,6 +2522,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
       nodeId,
       projectId,
       scene,
+      selectedCameraObject,
     ]
   );
 
@@ -2867,6 +2966,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
               uploadingModel={uploadingModel}
               onSelect={selectSceneObject}
               onRemove={(id) => removeSelected(id)}
+              onDuplicate={duplicateObject}
               onAddBuiltin={addBuiltinModel}
               onUploadModel={() => modelFileRef.current?.click()}
               onAddCamera={addCameraObject}

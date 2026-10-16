@@ -10,6 +10,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   ChevronDown,
+  Copy,
   Loader2,
   PersonStanding,
   Search,
@@ -92,6 +93,7 @@ export function DirectorOutliner({
   uploadingModel,
   onSelect,
   onRemove,
+  onDuplicate,
   onAddBuiltin,
   onUploadModel,
   onAddCamera,
@@ -103,6 +105,8 @@ export function DirectorOutliner({
   uploadingModel?: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
+  /** 复制人设 / 道具 / 摄像机造具（生成中占位不可复制） */
+  onDuplicate: (id: string) => void;
   onAddBuiltin: (builtinId: string) => void;
   onUploadModel: () => void;
   onAddCamera: () => void;
@@ -286,6 +290,19 @@ export function DirectorOutliner({
                           {meta ? (
                             <span className={`shrink-0 font-mono text-[9px] ${group.accent} opacity-70`}>{meta}</span>
                           ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          title="复制"
+                          aria-label={`复制 ${obj.name}`}
+                          disabled={disabled || isGeneratingPlaceholder(obj)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDuplicate(obj.id);
+                          }}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/0 transition-colors hover:bg-white/10 hover:!text-white/80 group-hover:text-white/40 disabled:pointer-events-none disabled:opacity-0"
+                        >
+                          <Copy className="h-3 w-3" />
                         </button>
                         <button
                           type="button"

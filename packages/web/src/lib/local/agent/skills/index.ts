@@ -126,6 +126,21 @@ export async function importCodexSkills(slugs: string[]): Promise<{
   return api.importCodexSkills(slugs);
 }
 
+/** 本机文件夹对话框导入技能包到 agent-skills */
+export async function importLocalSkillFolder(): Promise<{
+  cancelled: boolean;
+  slug?: string;
+  name?: string;
+  destDir?: string;
+  error?: string;
+}> {
+  const api = localStore();
+  if (typeof api.importLocalSkillFolder !== "function") {
+    throw new Error("当前环境不支持本机导入技能");
+  }
+  return api.importLocalSkillFolder();
+}
+
 /** 供 Runtime 注入；失败返回空串 */
 export async function loadSkillPrompt(slug: string | null | undefined): Promise<string> {
   const key = String(slug || "").trim();

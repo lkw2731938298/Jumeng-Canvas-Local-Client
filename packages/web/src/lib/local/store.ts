@@ -137,6 +137,14 @@ function httpDiskApi(): LocalDesktopApi {
         skipped: string[];
         errors: Array<{ slug: string; error: string }>;
       }>("importCodexSkills", [slugs]),
+    importLocalSkillFolder: () =>
+      rpc<{
+        cancelled: boolean;
+        slug?: string;
+        name?: string;
+        destDir?: string;
+        error?: string;
+      }>("importLocalSkillFolder"),
   };
 }
 
@@ -413,12 +421,20 @@ function browserLocalStorageApi(): LocalDesktopApi {
     async importCodexSkills() {
       throw new Error("浏览器 localStorage 模式不支持导入技能");
     },
+    async importLocalSkillFolder() {
+      throw new Error("浏览器 localStorage 模式不支持本机导入技能，请使用本机 Harness");
+    },
   };
 }
 
-/** 统一入口：IPC（需已含 OSS / 任务列表 API）> 本机磁盘 API > localStorage */
+/**
+ * 统一入口：IPC（需已含 OSS / 任务列表 API）> 本机磁盘 API > localStorage。
+ * Electron 旧 preload 常缺 Agent 技能等方法：对这些可选 API 回退到 /api/local，
+ * 避免「目录路径能显示、本机技能列表却永远为空」。
+ */
 export function localStore(): LocalDesktopApi {
   const desktop = getDesktopApi();
+  const http = typeof window !== "undefined" ? httpDiskApi() : null;
   // Electron 旧 preload 可能没有新 API，回退到 /api/local 磁盘实现
   if (
     desktop &&
@@ -426,8 +442,27 @@ export function localStore(): LocalDesktopApi {
     typeof desktop.listGenerationJobs === "function" &&
     typeof desktop.listAssets === "function"
   ) {
-    return desktop;
+    if (!http) return desktop;
+    const pick = <K extends keyof LocalDesktopApi>(key: K): LocalDesktopApi[K] => {
+      const fromDesktop = desktop[key];
+      if (typeof fromDesktop === "function") {
+        return (fromDesktop as (...a: unknown[]) => unknown).bind(desktop) as LocalDesktopApi[K];
+      }
+      return http[key];
+    };
+    return {
+      ...desktop,
+      listAgentSkills: pick("listAgentSkills"),
+      readAgentSkill: pick("readAgentSkill"),
+      getAgentSkillsInfo: pick("getAgentSkillsInfo"),
+      openAgentSkillsDir: pick("openAgentSkillsDir"),
+      listCodexSkills: pick("listCodexSkills"),
+      importCodexSkills: pick("importCodexSkills"),
+      importLocalSkillFolder: pick("importLocalSkillFolder"),
+      readAgentSession: pick("readAgentSession"),
+      writeAgentSession: pick("writeAgentSession"),
+    };
   }
-  if (typeof window !== "undefined") return httpDiskApi();
+  if (http) return http;
   return browserLocalStorageApi();
 }

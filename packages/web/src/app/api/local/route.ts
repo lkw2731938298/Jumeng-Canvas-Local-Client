@@ -51,6 +51,7 @@ const OPS = new Set([
   "openAgentSkillsDir",
   "listCodexSkills",
   "importCodexSkills",
+  "importLocalSkillFolder",
 ]);
 
 export async function POST(req: Request) {

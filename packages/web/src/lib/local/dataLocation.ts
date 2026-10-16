@@ -202,22 +202,34 @@ function migrateDataRoot(current: string, nextRoot: string): void {
   fs.cpSync(current, nextRoot, { recursive: true, force: true });
 }
 
+export type PickDirectoryDialogOpts = {
+  /** 对话框说明文字 */
+  description?: string;
+};
+
 /**
  * 弹出系统文件夹选择框，返回用户选中的绝对路径；取消则 null。
  * Windows: FolderBrowserDialog；macOS: choose folder；其它：不支持。
  */
-export function pickDirectoryDialog(initialDir?: string): string | null {
+export function pickDirectoryDialog(
+  initialDir?: string,
+  opts?: PickDirectoryDialogOpts
+): string | null {
   const initial =
     initialDir && path.isAbsolute(initialDir)
       ? path.resolve(initialDir)
       : resolveDataParentDir();
+  const description =
+    (opts?.description || "").trim() ||
+    "选择聚梦画布数据保存文件夹（将在其下使用 JumengCanvas）";
 
   if (process.platform === "win32") {
     const escaped = initial.replace(/'/g, "''");
+    const descEscaped = description.replace(/'/g, "''");
     const ps = [
       "Add-Type -AssemblyName System.Windows.Forms",
       "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-      "$d.Description = '选择聚梦画布数据保存文件夹（将在其下使用 JumengCanvas）'",
+      `$d.Description = '${descEscaped}'`,
       "$d.ShowNewFolderButton = $true",
       `if (Test-Path -LiteralPath '${escaped}') { $d.SelectedPath = '${escaped}' }`,
       "$r = $d.ShowDialog()",
@@ -244,9 +256,10 @@ export function pickDirectoryDialog(initialDir?: string): string | null {
 
   if (process.platform === "darwin") {
     try {
+      const promptEscaped = description.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       const out = execFileSync(
         "osascript",
-        ["-e", 'POSIX path of (choose folder with prompt "选择聚梦画布数据保存文件夹")'],
+        ["-e", `POSIX path of (choose folder with prompt "${promptEscaped}")`],
         { encoding: "utf8", timeout: 600_000 }
       );
       const picked = String(out || "").trim().replace(/\/$/, "");

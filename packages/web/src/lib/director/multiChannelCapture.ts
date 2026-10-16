@@ -413,11 +413,21 @@ function renderOpenPosePass(
   return renderToDataUrl(gl, poseScene, camera, width, height);
 }
 
-export function buildPerspectiveCamera(state: DirectorCameraState, aspect: number): PerspectiveCamera {
+/** 截图用相机：可选 rotation，与镜头监视器 / 视锥一致（禁止仅 lookAt 丢滚转） */
+export type CaptureCameraState = DirectorCameraState & {
+  rotation?: [number, number, number];
+};
+
+export function buildPerspectiveCamera(state: CaptureCameraState, aspect: number): PerspectiveCamera {
   // far 与直播视口对齐，避免全景/远景被裁切导致画面发黑发空
   const cam = new PerspectiveCamera(state.fov, aspect, 0.1, 1500);
   cam.position.set(...state.position);
-  cam.lookAt(...state.target);
+  if (state.rotation) {
+    // 与 DirectorLensPreviewScene / resolveDirectorCameraWorldPose 同路径
+    cam.rotation.set(state.rotation[0], state.rotation[1], state.rotation[2], "XYZ");
+  } else {
+    cam.lookAt(...state.target);
+  }
   // 与主视口一致：默认层 + layer1（主相机 enable(1)），避免只采到空层
   cam.layers.set(0);
   cam.layers.enable(1);
@@ -454,7 +464,7 @@ export function captureAllChannels(
   gl: WebGLRenderer,
   scene: Scene,
   liveCamera: PerspectiveCamera,
-  cameraState: DirectorCameraState,
+  cameraState: CaptureCameraState,
   objects: DirectorObject[],
   options: DirectorCaptureOptions = {}
 ): DirectorCaptureResult {
@@ -502,7 +512,7 @@ export function captureRgbOnly(
   gl: WebGLRenderer,
   scene: Scene,
   _liveCamera: PerspectiveCamera,
-  cameraState: DirectorCameraState,
+  cameraState: CaptureCameraState,
   options: DirectorCaptureOptions = {}
 ): string {
   const aspect = options.aspect ?? LENS_CAPTURE_ASPECT;

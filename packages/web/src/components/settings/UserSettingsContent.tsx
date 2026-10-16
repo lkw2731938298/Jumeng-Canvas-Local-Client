@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * 用户设置主体：外观 / 模型服务 / 存储。
+ * 用户设置主体：外观 / 模型服务 / 存储 / 技能。
  * 设置页与画布弹窗共用，避免两套逻辑。
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Cpu, Database, Palette } from "lucide-react";
+import { Cpu, Database, Palette, Sparkles } from "lucide-react";
 import { AppearanceSettingsPanel } from "@/components/settings/AppearanceSettingsPanel";
 import { useAppTheme } from "@/components/providers/AppThemeProvider";
+import { AgentSkillsSettingsPanel } from "@/components/settings/AgentSkillsSettingsPanel";
 import { DataLocationSettingsPanel } from "@/components/settings/DataLocationSettingsPanel";
 import { UserOssSettingsPanel } from "@/components/settings/UserOssSettingsPanel";
 import "@/app/(app)/settings/settingsPage.css";
@@ -42,7 +43,7 @@ function uid() {
 }
 
 type TabId = AdvancedTab;
-type SettingsGroup = "appearance" | "models" | "storage";
+type SettingsGroup = "appearance" | "models" | "storage" | "skills";
 
 const EMPTY_MODEL = (category: LocalModel["category"] = "text"): LocalModel => {
   const id = uid();
@@ -260,6 +261,7 @@ export function UserSettingsContent({
     { id: "appearance", label: "外观", icon: Palette },
     { id: "models", label: "模型服务", icon: Cpu },
     { id: "storage", label: "存储空间", icon: Database },
+    { id: "skills", label: "技能设置", icon: Sparkles },
   ];
 
   return (
@@ -324,6 +326,8 @@ export function UserSettingsContent({
                   <UserOssSettingsPanel />
                 )}
               </div>
+            ) : group === "skills" ? (
+              <AgentSkillsSettingsPanel />
             ) : (
               <div className="st-legacy">
                 <div className="st-section-head">

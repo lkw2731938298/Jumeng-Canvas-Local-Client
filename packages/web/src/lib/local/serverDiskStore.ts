@@ -454,6 +454,13 @@ export function createServerDiskStore(): LocalDesktopApi {
       const list = Array.isArray(slugs) ? slugs.map(String) : [];
       return importCodexSkillsToLocal(resolveDataRoot(), list);
     },
+    /** 本机文件夹选择框导入技能包到 agent-skills */
+    async importLocalSkillFolder() {
+      const { importLocalSkillFolderToLocal } = await import(
+        "@/lib/local/agent/skills/disk"
+      );
+      return importLocalSkillFolderToLocal(resolveDataRoot());
+    },
   };
 }
 
