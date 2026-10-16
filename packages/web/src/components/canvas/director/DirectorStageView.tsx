@@ -2385,9 +2385,10 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                     : null;
                 if (monitorCamId) {
                   const sampledScene = applySampleToScene(scene, sample);
+                  // applySampleToScene 走 shared 类型（pose: string）；监视器位姿只读 transform
                   const pose = resolveDirectorCameraWorldPose(
                     monitorCamId,
-                    sampledScene.objects,
+                    sampledScene.objects as DirectorObject[],
                     sampledScene.sceneSettings
                   );
                   if (pose) {
@@ -2414,7 +2415,7 @@ export function DirectorStageView({ projectId, nodeId }: DirectorStageViewProps)
                 const sampledScene = applySampleToScene(scene, sample);
                 const pose = resolveDirectorCameraWorldPose(
                   forceTrack.targetId,
-                  sampledScene.objects,
+                  sampledScene.objects as DirectorObject[],
                   sampledScene.sceneSettings
                 );
                 if (pose) {
