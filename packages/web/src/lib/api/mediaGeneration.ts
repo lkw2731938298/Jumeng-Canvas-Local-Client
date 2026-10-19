@@ -194,15 +194,10 @@ async function generateFromMediaNodeLocal(
     const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
     throw new AgentTurnAbortedError();
   }
-  if (request.category === "audio") {
-    throw new Error(
-      "本地版暂不支持音频节点直连生成；人声分离等请用自定义 HTTP 模板接入，或改用图片/视频模型。" +
-        "参考素材提交链路与节点一致（OSS → 官方文件上传 → base64），待音频通道接通后自动生效"
-    );
-  }
   if (
     request.category !== "image" &&
     request.category !== "video" &&
+    request.category !== "audio" &&
     request.category !== "tool"
   ) {
     throw new Error(`本地版暂不支持类别：${request.category}`);
@@ -215,6 +210,76 @@ async function generateFromMediaNodeLocal(
   const upstreamModel = modelMeta?.upstreamModel || modelMeta?.name || request.model;
   const referenceCount = (request.references ?? []).filter((r) => String(r.url || "").trim())
     .length;
+
+  // 音频：Suno 等异步走 /v1/video/generations；TTS 走 /v1/audio/speech
+  if (request.category === "audio") {
+    return withLocalGenerationJob(
+      {
+        category: "audio",
+        modelId: request.model,
+        modelLabel,
+        upstreamModel,
+        projectId: request.projectId,
+        nodeId: request.nodeId,
+        prompt: request.prompt,
+        referenceCount,
+      },
+      async ({ noteProviderTaskId, noteSubmitBody }) => {
+        const {
+          localGenerateAudio,
+          persistLocalAudioResult,
+          normalizeApiKey,
+        } = await import("@/lib/local/generate");
+        const { localStore } = await import("@/lib/local/store");
+        const raw = await localGenerateAudio({
+          modelId: request.model,
+          prompt: request.prompt,
+          generationOptions: request.generationOptions as Record<string, unknown> | undefined,
+          onProviderTaskId: noteProviderTaskId,
+          onSubmitBody: noteSubmitBody,
+          signal: options?.signal,
+        });
+        const model = await findLocalModel(request.model);
+        const providers = await localStore().listProviders();
+        const provider = model?.providerId
+          ? providers.find((p) => p.id === model.providerId)
+          : undefined;
+        const apiKey = normalizeApiKey(model?.apiKey || provider?.apiKey || "");
+        if (raw.url) {
+          try {
+            options?.onUpstreamPreview?.({ url: raw.url });
+          } catch {
+            /* 预览失败不阻断落盘 */
+          }
+        }
+        const persisted = await persistLocalAudioResult({
+          projectId: request.projectId,
+          nodeId: request.nodeId,
+          url: raw.url,
+          b64: raw.b64,
+          apiKey,
+          assetTitle: request.assetTitle,
+        });
+        return {
+          result: {
+            jobId: persisted.assetId,
+            status: "succeeded" as const,
+            resultUrl: persisted.url,
+            assetId: persisted.assetId,
+            outputAssets: [
+              { url: persisted.url, id: persisted.assetId, assetId: persisted.assetId },
+            ],
+            message: "本地音频生成完成",
+            creditCost: 0,
+          },
+          resultUrlPreview: persisted.url,
+          resultAssetId: persisted.assetId,
+          upstreamModel: model?.upstreamModel || upstreamModel,
+          providerTaskId: raw.providerTaskId,
+        };
+      }
+    );
+  }
 
   if (request.category === "video") {
     return withLocalGenerationJob(
@@ -468,12 +533,28 @@ async function generateFromMediaNodeLocal(
         "@/lib/local/generate"
       );
       const { prepareUpstreamMediaRefs } = await import("@/lib/local/upstreamMediaRefs");
-      // 顶栏图片工具与节点参考同链路：OSS → 官方 /files/upload → base64
+      // 顶栏图片工具与节点参考同链路：官方 /files/upload → OSS → base64
       const opts = request.generationOptions ?? {};
-      const aspectRatio = pickCanvasAspectFromOptions(opts, "1:1");
-      const resolution = pickCanvasClarityFromOptions(opts, "2K");
-      const sizeRaw = String(opts.size || "").trim();
-      const size = aspectRatio;
+      const canvasToolId = String(request.canvasTool || "").trim();
+      // HD / 扩图：固定 gemini-nano-banana-2.1 + 官方文件
+      const isFixedNanoBanana =
+        canvasToolId === "hd_upscale" || canvasToolId === "outpaint";
+      const sizeRaw = String(
+        opts.size || opts.hdOutputSize || opts.outpaintOutputSize || ""
+      ).trim();
+      const pixelSize = /^\d+[xX*]\d+$/.test(sizeRaw)
+        ? sizeRaw.replace(/[xX]/g, "x")
+        : "";
+      const aspectRatio = pixelSize ? "" : pickCanvasAspectFromOptions(opts, "1:1");
+      const hdClarity = String(opts.hdClarityTier || opts.hdMpTier || "").trim();
+      const resolutionFromHd = /^(1|2|4)k$/i.test(hdClarity)
+        ? hdClarity.toUpperCase()
+        : sizeRaw && /^(1|2|4)[kK]$/.test(sizeRaw)
+          ? sizeRaw.toUpperCase()
+          : "";
+      const resolution = pixelSize
+        ? ""
+        : resolutionFromHd || pickCanvasClarityFromOptions(opts, "2K");
       const rawImageUrls = (request.references ?? [])
         .filter((r) => {
           const u = String(r.url || "").trim();
@@ -495,28 +576,42 @@ async function generateFromMediaNodeLocal(
           `画布已连接/提及 ${intendedRefs} 个参考，但未解析到可用图片 URL。请确认「图片节点」已有图，并重新连接后重试`
         );
       }
+      // HD / 扩图：目录 name 取凭据；上游 model 一律固定 gemini-nano-banana-2.1；参考图强制官方 /files/upload
+      let submitModelId = request.model;
+      let forcedUpstreamModel: string | undefined;
+      if (isFixedNanoBanana) {
+        const {
+          HD_NANO_BANANA_I2I_UPSTREAM,
+          pickHdNanoBananaCatalogModel,
+        } = await import("@/lib/local/topazHdUpscale");
+        const { listModels } = await import("@/lib/api/models");
+        const imageModels = await listModels({ category: "image" });
+        const hdHit = pickHdNanoBananaCatalogModel(imageModels);
+        if (hdHit?.name) submitModelId = hdHit.name;
+        forcedUpstreamModel = HD_NANO_BANANA_I2I_UPSTREAM;
+      }
       const prepared = await prepareUpstreamMediaRefs({
-        modelId: request.model,
+        modelId: submitModelId,
         imageUrls: rawImageUrls,
+        forceJumengOfficialFiles: isFixedNanoBanana,
       });
       const imageUrls = prepared.imageUrls;
       if (rawImageUrls.length > 0 && imageUrls.length === 0) {
         throw new Error(
-          prepared.jumengOfficial
-            ? "参考图未能转换成上游可用格式（https 或 base64），已中止（避免变成纯文生图）"
+          prepared.jumengOfficial || isFixedNanoBanana
+            ? "参考图未能经聚梦官方文件上传转换成上游可用地址，已中止（避免变成纯文生图）"
             : "参考图未能转换成公网直链，已中止。第三方接口请先配置「参考图 OSS」"
         );
       }
       const raw = await localGenerateImage({
-        modelId: request.model,
+        modelId: submitModelId,
         prompt: request.prompt,
-        size,
-        aspectRatio: aspectRatio || undefined,
-        resolution:
-          resolution ||
-          (sizeRaw && /^(1|2|4)[kK]$/.test(sizeRaw) ? sizeRaw : undefined) ||
-          undefined,
+        // HD 已算出像素 WxH，优先提交；其余走画幅 + 清晰度
+        size: pixelSize || aspectRatio || undefined,
+        aspectRatio: pixelSize ? undefined : aspectRatio || undefined,
+        resolution: pixelSize ? undefined : resolution || undefined,
         imageUrls,
+        forcedUpstreamModel,
         onProviderTaskId: noteProviderTaskId,
         onSubmittedRefs: noteSubmittedRefs,
         signal: options?.signal,

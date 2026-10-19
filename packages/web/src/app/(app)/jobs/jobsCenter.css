@@ -380,6 +380,29 @@
   color: var(--jm-danger);
 }
 
+.jc-ref-note.mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.jc-submit-body {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--jm-line);
+  border-radius: 10px;
+  background: var(--jm-inset);
+  color: var(--jm-text-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .jc-detail-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

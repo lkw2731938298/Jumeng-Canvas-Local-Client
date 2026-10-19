@@ -35,6 +35,10 @@ export const LOCAL_AGENT_OPS = [
 
 /** 不在 LOCAL_CANVAS_TOOL_DEFS 但 runAgentCanvasTool 支持的工具（补充给模型） */
 const EXTRA_TOOLS: Array<{ toolId: string; label: string; group: string }> = [
+  // 扩图/高清固定模型、抠图本地去背景：不进后台模型开关，但仍须出现在助手工具列表
+  { toolId: "outpaint", label: "扩图（固定 gemini-nano-banana-2.1）", group: "图片工具" },
+  { toolId: "hd_upscale", label: "高清（固定 gemini-nano-banana-2.1）", group: "图片工具" },
+  { toolId: "cutout", label: "抠图（本地去背景）", group: "图片工具" },
   { toolId: "grid_split", label: "宫格切分（把宫格图拆成单图）", group: "图片工具" },
   { toolId: "visual_style", label: "视觉风格（params.styleId）", group: "图片工具" },
   { toolId: "panorama_720", label: "720° 全景", group: "图片工具" },
@@ -45,10 +49,11 @@ const EXTRA_TOOLS: Array<{ toolId: string; label: string; group: string }> = [
 const TOOL_PARAM_HINTS: Record<string, string> = {
   multi_angle: 'params: {"azimuth":-180~180,"elevation":-90~90,"shot":"close|medium|wide","extraPrompt":""}',
   lighting: 'params: {"direction":"left|right|top|front|back","brightness":0~100,"color":"#ffcc88","extraPrompt":""}',
-  outpaint: 'params: {"aspectRatio":"16:9|9:16|1:1|original","resolution":"2k","prompt":""}',
-  hd_upscale: 'params: {"hdModel":"general"}',
-  portrait_adjust: 'params: {"prompt":"调整要求"}',
-  emotion_adjust: 'params: {"prompt":"目标情绪"}',
+  outpaint:
+    'params: {"top":0,"right":0,"bottom":0,"left":0}（像素外扩；用户宜在画布拖框）。模型固定 gemini-nano-banana-2.1；输出按外扩框 WxH',
+  hd_upscale:
+    'params: {"hdClarityTier":"1k|2k|4k"}。模型固定 gemini-nano-banana-2.1；比例跟原图',
+  cutout: "无额外 params；对已有图做本地抠图去背景",
   storyboard: 'params: {"prompt":"故事板要求（可选）"}',
   blocking_storyboard: 'params: {"prompt":"调度要求（可选）"}',
   video_subject_edit: 'params: {"prompt":"修改描述"}',
@@ -169,8 +174,9 @@ export function buildLocalAgentSystemPrompt(models: LocalModel[]): string {
 3. 提示词写具体的画面描述（主体、场景、光线、构图、风格），默认用中文。
 4. 图片/视频节点的 params.model 只能从下方可用模型中选；不写则自动使用第一个可用模型。
 5. 工具只作用于已有素材的节点（图片工具要求图片节点已出图，视频工具要求视频节点已有视频）。
-6. 执行结果会以【画布操作执行结果】返回；若失败请根据原因修正或向用户说明，不要重复同样的错误操作。
-7. 不要编造云端账号、算力或不存在的功能。
+6. 扩图 outpaint / 高清 hd_upscale 固定 gemini-nano-banana-2.1（不读后台模型开关）；扩图输出跟外扩框 WxH，高清用 hdClarityTier=1k|2k|4k 且比例跟原图。人像质感（portrait_adjust / emotion_adjust）已下线，勿调用。
+7. 执行结果会以【画布操作执行结果】返回；若失败请根据原因修正或向用户说明，不要重复同样的错误操作。
+8. 不要编造云端账号、算力或不存在的功能。
 
 ## 可用模型
 - 图片：${img.join("、") || "（未配置，无法生图，请提醒用户到「设置」添加图片模型）"}
@@ -211,7 +217,8 @@ export function buildLocalAgentToolsSystemPrompt(models: LocalModel[]): string {
 8. 用户 @ / 上传的参考素材会全部进入本对话（无数量上限），由你自行判断取用。写文本、改提示词、做网页、生图、生视频时都要结合这些素材，勿无视。看图用 media_inspect_images；生图用 media_generate_image；生视频用 media_generate_video（有 @ 图时优先这两个工具）；查模型用 media_list_models。按任务需要选择 referenceNodeIds / imageNodeIds；未传时系统才会自动并入本轮 @ 媒体。
 9. 启用技能时按技能工作流执行；需要 references 时用 skill_read_reference（须传 path，或先不传 path 列出可用文件）。
 10. 做网页用 web_create_page（静态 HTML）。要用画布上的图时：imageNodeIds 填节点 id，HTML 里 img src 写 \`canvas-node:<该id>\`（或 \`canvas-asset:0\` 对应列表第 1 张）；系统会内联素材，预览才能显示。不要编造外链图；可读公开页摘要，但不要承诺部署或整站仿站。回复用简洁 Markdown。
-11. 不要编造云端账号或不存在的功能。
+11. 扩图 outpaint / 高清 hd_upscale 固定 gemini-nano-banana-2.1；扩图跟外扩框尺寸，高清用清晰档。人像质感已下线，勿调用。
+12. 不要编造云端账号或不存在的功能。
 
 ## 可用模型
 - 图片：${img.join("、") || "（未配置）"}

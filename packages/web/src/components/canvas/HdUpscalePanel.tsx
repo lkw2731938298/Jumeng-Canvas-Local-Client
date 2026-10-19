@@ -1,17 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Box, Clapperboard, Gauge, Sparkles, Zap } from "lucide-react";
+import { Clapperboard, Gauge, Maximize2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  HD_UPSCALE_CREDIT_COST,
-  HD_UPSCALE_MODELS,
-  HD_UPSCALE_SCALES,
-  type HdUpscaleMediaKind,
-  type HdUpscaleScale,
-} from "@/lib/canvas/createHdUpscaleNode";
+import { type HdUpscaleMediaKind } from "@/lib/canvas/createHdUpscaleNode";
 import {
   hdUpscaleCanvasTool,
   runHdUpscaleGenerate,
@@ -37,11 +31,31 @@ import {
   VOLC_ENHANCE_STANDARD_PRO_MODEL,
   volcEnhanceResolutions,
 } from "@/lib/local/volcVideoEnhance";
+import {
+  DEFAULT_HD_ASPECT_RATIO,
+  DEFAULT_HD_CLARITY_TIER,
+  HD_CLARITY_TIERS,
+  HD_NANO_BANANA_I2I_DISPLAY,
+  HD_NANO_BANANA_I2I_UPSTREAM,
+  buildHdImageGenerationOptions,
+  computeHdOutputSizePx,
+  isHdClarityTierId,
+  probeImageNaturalSize,
+  type HdClarityTierId,
+} from "@/lib/local/topazHdUpscale";
+import { resolveNodeMediaUrl } from "@/lib/canvas/resolveNodeMediaUrl";
 
 export interface HdUpscalePanelValues {
   hdProvider: string;
   hdModel: string;
   hdScale: number;
+  /** 图片高清：1k / 2k / 4k */
+  hdClarityTier?: string;
+  /** @deprecated 已固定原图比例，保留字段兼容旧节点 */
+  hdAspectRatio?: string;
+  /** @deprecated 旧 MP 档，等同 hdClarityTier */
+  hdMpTier?: string;
+  hdMpPlusSteps?: number;
   /** 画质增强：标准版 / 专业版 */
   enhanceMode?: string;
   enhanceResolution?: string;
@@ -93,7 +107,7 @@ const ENHANCE_RES_LABEL: Record<string, string> = {
 };
 
 /**
- * 图片：高清放大参数面板。
+ * 图片：固定 gemini-nano-banana-2.1 + 1K/2K/4K，比例始终跟原图。
  * 视频：火山画质增强（固定标准专业版模型；节点选档次/画质/帧率等）。
  */
 export function HdUpscalePanel({
@@ -106,12 +120,13 @@ export function HdUpscalePanel({
   const projectId = useCanvasStore((s) => s.projectId);
   const workflowId = useCanvasStore((s) => s.workflowId);
   const hdNode = useCanvasStore((s) => s.nodes.find((n) => n.id === nodeId) ?? null);
-  const hdVideoUrl = String(
-    ((hdNode?.data as WorkflowNodeData | undefined)?.params as Record<string, unknown> | undefined)
-      ?.videoUrl ?? ""
-  );
+  const hdParams = ((hdNode?.data as WorkflowNodeData | undefined)?.params ??
+    {}) as Record<string, unknown>;
+  const hdVideoUrl = String(hdParams.videoUrl ?? "");
+  const hdImageUrl = String(hdParams.imageUrl ?? "");
   const queryClient = useQueryClient();
   const [generating, setGenerating] = useState(false);
+  const [srcPx, setSrcPx] = useState<{ w: number; h: number } | null>(null);
   const canvasTool = hdUpscaleCanvasTool(mediaKind);
   const isVideoHd = mediaKind === "video";
   const { durationSec: videoBillSec } = useNodeVideoDurationSec(
@@ -119,22 +134,73 @@ export function HdUpscalePanel({
     hdVideoUrl,
     isVideoHd && Boolean(nodeId)
   );
-  const extraGenerationOptions = useMemo(() => {
-    if (!isVideoHd) return undefined;
-    const bill =
-      videoBillSec != null ? canvasVideoToolBillingOptions(videoBillSec) : undefined;
-    return {
-      ...(bill || {}),
-      enhanceMode: values.enhanceMode || "standard",
-      enhanceResolution: values.enhanceResolution || "1080p",
-      enhanceFps: values.enhanceFps || "",
-      enhanceScene: values.enhanceScene || "common",
-      enhanceStyle: values.enhanceStyle || "hd",
-      enhanceBitrateLevel: values.enhanceBitrateLevel || "medium",
-      enhanceBitDepth: values.enhanceBitDepth || "8",
-      resolution: values.enhanceResolution || "1080p",
-      mode: values.enhanceMode || "standard",
+
+  const clarityTier: HdClarityTierId = isHdClarityTierId(
+    values.hdClarityTier || values.hdMpTier
+  )
+    ? ((values.hdClarityTier || values.hdMpTier) as HdClarityTierId)
+    : DEFAULT_HD_CLARITY_TIER;
+  // 图片比例固定原图，不再提供 UI 选择
+  const aspectRatio = DEFAULT_HD_ASPECT_RATIO;
+
+  const previewSize = useMemo(() => {
+    if (!srcPx) return null;
+    return computeHdOutputSizePx({
+      srcW: srcPx.w,
+      srcH: srcPx.h,
+      clarityTier,
+      aspectRatio,
+    });
+  }, [srcPx, clarityTier, aspectRatio]);
+
+  // 探测源图像素，供 MP 档预览与提交 size
+  useEffect(() => {
+    if (isVideoHd || !projectId || !hasSourceImage) {
+      setSrcPx(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const url =
+          (await resolveNodeMediaUrl(projectId, hdParams, "imageUrl")) || hdImageUrl;
+        if (!url || cancelled) return;
+        const size = await probeImageNaturalSize(url);
+        if (!cancelled) setSrcPx({ w: size.width, h: size.height });
+      } catch {
+        if (!cancelled) setSrcPx(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随节点/源图变化探测
+  }, [isVideoHd, projectId, hasSourceImage, nodeId, hdImageUrl]);
+
+  const extraGenerationOptions = useMemo(() => {
+    if (isVideoHd) {
+      const bill =
+        videoBillSec != null ? canvasVideoToolBillingOptions(videoBillSec) : undefined;
+      return {
+        ...(bill || {}),
+        enhanceMode: values.enhanceMode || "standard",
+        enhanceResolution: values.enhanceResolution || "1080p",
+        enhanceFps: values.enhanceFps || "",
+        enhanceScene: values.enhanceScene || "common",
+        enhanceStyle: values.enhanceStyle || "hd",
+        enhanceBitrateLevel: values.enhanceBitrateLevel || "medium",
+        enhanceBitDepth: values.enhanceBitDepth || "8",
+        resolution: values.enhanceResolution || "1080p",
+        mode: values.enhanceMode || "standard",
+      };
+    }
+    // 主组 id 在 run 时按目录模型再对齐；此处 size + 档位足够报价刷新
+    return buildHdImageGenerationOptions({
+      clarityTier,
+      aspectRatio,
+      outputSize: previewSize?.size || "1024x1024",
+      model: null,
+    });
   }, [
     isVideoHd,
     videoBillSec,
@@ -145,16 +211,16 @@ export function HdUpscalePanel({
     values.enhanceStyle,
     values.enhanceBitrateLevel,
     values.enhanceBitDepth,
+    clarityTier,
+    aspectRatio,
+    previewSize?.size,
   ]);
 
   const {
     modelName,
-    displayName,
     hasModel,
     defaultGenerationOptions,
-    total: creditTotal,
     creditsEnabled,
-    isLoading: quoteLoading,
     refetch: refetchQuote,
   } = useCanvasToolConfiguredModel(
     canvasTool,
@@ -163,12 +229,6 @@ export function HdUpscalePanel({
     extraGenerationOptions
   );
 
-  const scale = (HD_UPSCALE_SCALES as readonly number[]).includes(values.hdScale)
-    ? (values.hdScale as HdUpscaleScale)
-    : 2;
-  const presetLabel =
-    HD_UPSCALE_MODELS.find((o) => o.value === (values.hdModel || "general"))?.label ?? "通用";
-
   const enhanceMode = values.enhanceMode === "professional" ? "professional" : "standard";
   const enhanceResolutions = volcEnhanceResolutions("standard_pro");
   const enhanceResolution = enhanceResolutions.includes(
@@ -176,16 +236,6 @@ export function HdUpscalePanel({
   )
     ? String(values.enhanceResolution)
     : "1080p";
-
-  const creditNumber = quoteLoading
-    ? "…"
-    : creditTotal > 0
-      ? String(creditTotal)
-      : String(HD_UPSCALE_CREDIT_COST);
-  const creditTitle =
-    creditTotal > 0
-      ? `本次消耗 ${creditTotal} 算力`
-      : `本次消耗 ${HD_UPSCALE_CREDIT_COST} 算力（默认）`;
 
   const handleGenerate = async () => {
     if (!projectId || !nodeId) {
@@ -200,7 +250,7 @@ export function HdUpscalePanel({
       toast.error(
         mediaKind === "video"
           ? `请先在设置中拉取并勾选「${VOLC_ENHANCE_STANDARD_PRO_MODEL}」`
-          : "高清模型未配置或不可用（请在后台「模型开关」配置）"
+          : `请先确保目录含「${HD_NANO_BANANA_I2I_DISPLAY}」`
       );
       return;
     }
@@ -211,13 +261,16 @@ export function HdUpscalePanel({
       await runHdUpscaleGenerate({
         projectId,
         nodeId,
-        hdModel: values.hdModel || "general",
-        hdScale: scale,
-        hdProvider: values.hdProvider || "topazlabs",
+        hdModel: HD_NANO_BANANA_I2I_UPSTREAM,
+        hdScale: Number(values.hdScale) || 2,
+        hdProvider: values.hdProvider || "jumengai",
+        hdClarityTier: clarityTier,
+        hdAspectRatio: DEFAULT_HD_ASPECT_RATIO,
+        hdMpTier: clarityTier,
         modelName,
         generationOptions: {
           ...defaultGenerationOptions,
-          ...(extraGenerationOptions || {}),
+          ...extraGenerationOptions,
         },
         workflowId,
         creditsEnabled,
@@ -248,7 +301,6 @@ export function HdUpscalePanel({
           e.preventDefault();
         }}
       >
-        {/* 胶片感底纹：冷青 → 暖琥珀，避免紫系默认风 */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -296,13 +348,15 @@ export function HdUpscalePanel({
                   {isPro ? "Pro" : "Std"}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[11px] text-white/40" title={VOLC_ENHANCE_STANDARD_PRO_MODEL}>
+              <p
+                className="mt-0.5 truncate text-[11px] text-white/40"
+                title={VOLC_ENHANCE_STANDARD_PRO_MODEL}
+              >
                 {VOLC_ENHANCE_STANDARD_PRO_MODEL}
               </p>
             </div>
           </header>
 
-          {/* 档次：双卡片对比 */}
           <div className="mb-3 grid grid-cols-2 gap-1.5">
             {(
               [
@@ -353,7 +407,6 @@ export function HdUpscalePanel({
             })}
           </div>
 
-          {/* 画质芯片 */}
           <div className="mb-3">
             <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-white/40">
               <Gauge className="size-3.5 opacity-70" strokeWidth={1.75} />
@@ -381,7 +434,6 @@ export function HdUpscalePanel({
             </div>
           </div>
 
-          {/* 帧率 / 风格 / 场景 · 两列 */}
           <div className="mb-3 grid grid-cols-2 gap-2">
             <label className="block space-y-1">
               <span className="flex items-center gap-1 text-[11px] text-white/40">
@@ -516,15 +568,6 @@ export function HdUpscalePanel({
                 : "bg-gradient-to-r from-teal-300 via-cyan-200 to-teal-100 text-[#06201c] hover:brightness-105"
             )}
           >
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 hover:opacity-100"
-              style={{
-                background:
-                  "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%)",
-                backgroundSize: "200% 100%",
-              }}
-            />
             <Sparkles className="relative size-4" strokeWidth={2} />
             <span className="relative">{generating ? "增强处理中…" : "开始增强"}</span>
           </button>
@@ -533,86 +576,99 @@ export function HdUpscalePanel({
     );
   }
 
+  // —— 图片高清：gemini-nano-banana-2.1 + 1K/2K/4K，比例跟原图 ——
   return (
     <div
-      className="px-3 pb-2.5 pt-2"
+      className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
       onDoubleClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
       }}
     >
-      <h3 className="mb-3 text-[14px] font-medium text-white/90">高清放大</h3>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 80% at 0% 0%, rgba(56,189,248,0.14), transparent 55%)," +
+            "radial-gradient(90% 70% at 100% 100%, rgba(167,139,250,0.10), transparent 50%)," +
+            "linear-gradient(165deg, #12141c 0%, #0c0e14 55%, #141018 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-70"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(56,189,248,0.55), rgba(167,139,250,0.4), transparent)",
+        }}
+      />
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="w-[72px] shrink-0 text-[13px] text-white/45">模型选择</span>
-          <div
-            className="pointer-events-none flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-white/10 bg-[#1a1a28] px-2 text-[13px] text-white/75"
-            title="在管理后台「模型开关 → 高清」配置实际调用模型"
-          >
-            <Box className="size-4 shrink-0 text-white/70" strokeWidth={1.75} />
-            <span className="truncate text-left text-white/85">{displayName}</span>
+      <div className="relative px-3.5 pb-3.5 pt-3">
+        <header className="mb-3 flex items-start gap-2.5">
+          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-sky-400/35 bg-sky-400/10 text-sky-200">
+            <Maximize2 className="size-4" strokeWidth={1.75} />
           </div>
-        </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-semibold tracking-wide text-white/95">HD 高清</h3>
+              <span className="rounded-full bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-sky-200/90 uppercase">
+                I2I
+              </span>
+            </div>
+          </div>
+        </header>
 
-        <div className="flex items-center gap-3">
-          <span className="w-[72px] shrink-0 text-[13px] text-white/45">预设</span>
-          <Select
-            value={values.hdModel || "general"}
-            onValueChange={(value) => value && onChange({ hdModel: value })}
-          >
-            <SelectTrigger className={cn(CANVAS_SELECT_TRIGGER_CLASS, "min-w-0 flex-1")}>
-              <SelectValue placeholder={presetLabel}>{presetLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent className={CANVAS_SELECT_CONTENT_CLASS} side="top" sideOffset={6}>
-              {HD_UPSCALE_MODELS.map((opt) => (
-                <SelectItem
-                  key={opt.value}
-                  value={opt.value}
-                  label={opt.label}
-                  className={CANVAS_SELECT_ITEM_CLASS}
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-white/40">
+            <Gauge className="size-3.5 opacity-70" strokeWidth={1.75} />
+            清晰档次
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {HD_CLARITY_TIERS.map((tier) => {
+              const on = clarityTier === tier.id;
+              return (
+                <button
+                  key={tier.id}
+                  type="button"
+                  onClick={() =>
+                    onChange({ hdClarityTier: tier.id, hdMpTier: tier.id })
+                  }
+                  className={cn(
+                    "min-w-[72px] flex-1 rounded-lg px-2 py-2 text-center text-[13px] font-medium tabular-nums transition-all duration-150",
+                    on
+                      ? "bg-white text-[#0c0e14] shadow-sm"
+                      : "bg-white/[0.06] text-white/60 hover:bg-white/[0.1] hover:text-white/85"
+                  )}
                 >
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="w-[72px] shrink-0 text-[13px] text-white/45">放大倍数</span>
-          <div className="inline-flex rounded-lg border border-white/10 bg-[#1a1a28] p-0.5">
-            {HD_UPSCALE_SCALES.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[12px] transition-colors",
-                  scale === n ? "bg-white/15 text-white" : "text-white/55 hover:text-white/80"
-                )}
-                onClick={() => onChange({ hdScale: n })}
-              >
-                {n}x
-              </button>
-            ))}
+                  {tier.label}
+                </button>
+              );
+            })}
           </div>
+          <p className="mt-1.5 text-[11px] tabular-nums text-white/35">
+            {previewSize
+              ? `按原图比例提交 ${previewSize.size}${
+                  srcPx ? `（源 ${srcPx.w}×${srcPx.h}）` : ""
+                }`
+              : hasSourceImage
+                ? "正在读取原图尺寸…"
+                : "连接参考图后按原图比例提交"}
+          </p>
         </div>
 
         <button
           type="button"
-          disabled={generating || !hasSourceImage || !hasModel}
+          disabled={generating || !hasSourceImage || !hasModel || !previewSize}
           onClick={() => void handleGenerate()}
-          className="mt-1 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-white/90 text-[13px] font-medium text-black hover:bg-white disabled:opacity-40"
+          className={cn(
+            "relative flex h-10 w-full items-center justify-center gap-2 overflow-hidden rounded-xl text-[13px] font-semibold transition-all duration-200",
+            "bg-gradient-to-r from-sky-300 via-cyan-200 to-sky-100 text-[#06201c] hover:brightness-105",
+            "disabled:cursor-not-allowed disabled:opacity-40"
+          )}
         >
-          <ArrowUp className="size-4" strokeWidth={2} />
-          {generating ? "生成中…" : "开始生成"}
-          <span
-            className="ml-1 inline-flex items-center gap-0.5 text-[12px] text-black/55"
-            title={creditTitle}
-          >
-            <Zap className="size-3.5" />
-            {creditNumber}
-          </span>
+          <Maximize2 className="relative size-4" strokeWidth={2} />
+          <span className="relative">{generating ? "放大处理中…" : "开始放大"}</span>
         </button>
       </div>
     </div>

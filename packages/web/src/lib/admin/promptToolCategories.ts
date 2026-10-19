@@ -40,19 +40,19 @@ export const TEXT_PROMPT_TOOL_FALLBACKS: Record<
 export const STORYBOARD_TABLE_PROMPT_FALLBACK = {
   label: "分镜表提示词",
   systemPrompt:
-    "你是面向 AI 短剧/漫剧的分镜表助手。根据剧本逐句/逐动作拆镜，只输出含 shotRows 的 JSON；每行含镜头号、时长(建议2-5s)、画面描述、景别、光影氛围、对话、音效。不要运镜/视频/草图词；不要 Markdown。",
+    "你是专业影视分镜表生成助手。根据用户提供的剧本正文，逐句/逐动作拆分为分镜表结构化结果。只输出 JSON 对象，顶层仅含 shotRows 数组；每行含镜头号、时长、画面描述、景别、光影氛围、对话、音效。不要输出运镜提示词、视频提示词或草图提示词；不要 Markdown 或解释。",
 };
 
 export const STORYBOARD_CAMERA_PROMPT_FALLBACK = {
   label: "分镜运镜提示词",
   systemPrompt:
-    "你是面向 AI 短剧/漫剧的运镜提示词助手。根据单镜头分镜信息，输出精炼中文运镜词：机位高低、推拉摇移、景别变化、运动节奏与落幅。只写运镜本身，不要重述完整剧情，不要 Markdown。",
+    "你是影视运镜提示词助手。根据用户提供的单镜头分镜信息，输出精炼的中文运镜提示词（推拉摇移、景别变化、节奏）。只输出提示词正文，不要 Markdown 或解释。",
 };
 
 export const STORYBOARD_VIDEO_PROMPT_FALLBACK = {
   label: "分镜视频提示词",
   systemPrompt:
-    "你是面向 AI 短剧/漫剧的视频提示词助手。根据单镜头分镜与运镜，输出可直接投喂视频模型的完整中文提示词：画面主体用 @正式名 标注（与准备资产名称一致）、动作、景别、光影、运镜与节奏；保持角色造型与场景连续。只输出提示词正文，不要 Markdown。",
+    "你是 AI 视频生成提示词助手。根据用户提供的单镜头分镜信息与运镜描述，输出完整的中文视频提示词，包含画面、运镜与节奏感。只输出提示词正文，不要 Markdown 或解释。",
 };
 
 export const PROMPT_TOOL_CATEGORIES = [
@@ -105,14 +105,14 @@ export const PROMPT_TOOL_CATEGORIES = [
   {
     id: "outpaint",
     label: "扩图",
-    description: "图片节点编辑菜单「扩图」：按外扩区域图生图扩展画面（固定算力 + 后台模型）",
+    description: "图片节点编辑菜单「扩图」：固定 gemini-nano-banana-2.1，按外扩框换算输出像素 WxH 提交",
     simpleSuffix: true,
   },
   {
     id: "cutout",
     label: "抠图",
     description:
-      "图片节点编辑菜单「抠图」：本地去背景；固定算力按后台模型名结算，提示词写入结果节点",
+      "图片节点编辑菜单「抠图」：本地去背景；算力走平台固定价，提示词写入结果节点",
     simpleSuffix: true,
   },
   {
@@ -122,23 +122,9 @@ export const PROMPT_TOOL_CATEGORIES = [
     simpleSuffix: true,
   },
   {
-    id: "portrait_adjust",
-    label: "人像调节",
-    description:
-      "图片顶栏「人像质感调节 → 人像调节」：用户说明 + 后台追加提示词（固定算力 + 后台图片模型）",
-    simpleSuffix: true,
-  },
-  {
-    id: "emotion_adjust",
-    label: "情绪调节",
-    description:
-      "图片顶栏「人像质感调节 → 情绪调节」：用户说明 + 后台追加提示词（固定算力 + 后台图片模型）",
-    simpleSuffix: true,
-  },
-  {
     id: "hd_upscale_video",
-    label: "视频高清",
-    description: "视频节点顶栏「高清」：参考视频清晰度增强提示词（固定算力 + 后台视频模型）",
+    label: "视频画质增强",
+    description: "视频节点顶栏「画质增强」：火山标准专业版画质增强提示词（按时长计费 + 后台视频模型）",
     simpleSuffix: true,
   },
   {
@@ -298,20 +284,10 @@ export const PROMPT_SUFFIX_FALLBACKS: Record<
     content:
       "高清放大，提升分辨率与细节清晰度，保持原图主体、构图、色彩与画风一致，边缘锐利自然，禁止改变人物身份或场景结构",
   },
-  portrait_adjust: {
-    label: "人像调节",
-    content:
-      "按用户说明调节人像质感与外观（肤质、妆容、发型、年龄感等），保持人物身份可辨、构图与光影自然，禁止大幅改动场景或替换主体身份",
-  },
-  emotion_adjust: {
-    label: "情绪调节",
-    content:
-      "按用户说明调节人物面部情绪与表情，保持人物身份、五官结构与画面构图一致，表情自然可信，禁止改变身份或大幅改景",
-  },
   hd_upscale_video: {
-    label: "视频高清",
+    label: "视频画质增强",
     content:
-      "以参考视频为基础提升清晰度与细节，保持原视频主体、构图、运动节奏与画风一致，画面锐利自然，禁止改变人物身份或场景结构",
+      "以参考视频为基础做画质增强（清晰度、细节与稳定性），保持原视频主体、构图、运动节奏与画风一致，画面锐利自然，禁止改变人物身份或场景结构",
   },
   video_subject_remove: {
     label: "主体消除",
@@ -366,7 +342,7 @@ export const CREATIVE_TOOL_PROMPT_FALLBACKS: Record<string, { label: string; pro
   multi_cam_grid_9: {
     label: "多机位九宫格",
     prompt:
-      "九宫格构图，九张关联分镜：同一角色与场景，九个不同机位与景别（远景/全景/中景/近景/特写等）并置，视角变化清晰，角色比例与设定统一。",
+      "基于参考图生成一张规整的 3×3 多机位九宫格长图：九格为同一瞬间、同一角色与同一场景的多机位覆盖（像现场多机监看，不是连续剧情分镜）。从左到右、从上到下建议景别：环境远景 → 全身全景 → 半身中景 → 过肩/侧后方 → 低机位仰拍 → 高机位俯拍 → 面部近景 → 眼/手/道具特写 → 另一侧斜角中近景。各格构图完整、镜头轴线与景别差异清晰；人物身份、五官、服装发型、体态比例、场景结构、主光方向与色调严格一致；网格等分、分隔干净，电影摄影质感，禁止九格讲不同故事或改动角色外形。",
   },
   face_tri_view: {
     label: "角色脸部三视图",

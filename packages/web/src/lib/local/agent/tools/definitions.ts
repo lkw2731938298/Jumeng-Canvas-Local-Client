@@ -37,6 +37,10 @@ function tool(name: string, description: string, properties: Record<string, unkn
 
 const canvasToolEnum = [
   ...LOCAL_CANVAS_TOOL_DEFS.map((d) => d.toolId),
+  // 固定模型 / 本地处理：不进后台模型开关，但仍须出现在 canvas_run_tool 枚举
+  "outpaint",
+  "hd_upscale",
+  "cutout",
   "grid_split",
   "visual_style",
   "panorama_720",
@@ -121,7 +125,7 @@ export function buildCanvasAgentTools(): LocalChatTool[] {
     tool("canvas_generate_node", "对节点触发生成（走用户配置的图/视频等 API，会耗额度）", {
       ...nodeRefProps,
     }, ["nodeId"]),
-    tool("canvas_run_tool", "对节点执行画布创作工具（多角度、打光、高清等）", {
+    tool("canvas_run_tool", "对节点执行画布创作工具（多角度、打光、扩图、高清、九宫格等；不含已下线人像质感）", {
       ...nodeRefProps,
       tool: { type: "string", enum: canvasToolEnum, description: "工具 id" },
       scriptFromNodeId: { type: "string", description: "剧本来源节点（部分分镜工具）" },

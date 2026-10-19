@@ -22,6 +22,8 @@ export async function withLocalGenerationJob<T>(
     noteProviderTaskId: (taskId: string) => Promise<void>;
     /** 参考素材在 POST 前就落库：超时/报错时任务页仍能看出到底带了什么 */
     noteSubmittedRefs: (note: SubmittedRefsNote) => Promise<void>;
+    /** POST 前落库提交 URL + body，失败时任务页可查「提交报文」 */
+    noteSubmitBody: (note: { url: string; body: unknown }) => Promise<void>;
   }) => Promise<{
     result: T;
     resultUrlPreview?: string;
@@ -66,8 +68,32 @@ export async function withLocalGenerationJob<T>(
     }
   };
 
+  const noteSubmitBody = async (note: { url: string; body: unknown }) => {
+    if (!jobId) return;
+    try {
+      const url = String(note.url || "").trim();
+      let preview = "";
+      try {
+        preview =
+          typeof note.body === "string"
+            ? note.body
+            : JSON.stringify(note.body ?? null, null, 2);
+      } catch {
+        preview = String(note.body ?? "");
+      }
+      const patch: LocalGenerationJobPatch = {
+        submitUrl: url.slice(0, 500) || undefined,
+        // 控制体积：任务页只需排查字段，截断到约 8KB
+        submitBodyPreview: preview.slice(0, 8000) || undefined,
+      };
+      await api.updateGenerationJob(jobId, patch);
+    } catch {
+      /* ignore */
+    }
+  };
+
   try {
-    const out = await run({ noteProviderTaskId, noteSubmittedRefs });
+    const out = await run({ noteProviderTaskId, noteSubmittedRefs, noteSubmitBody });
     if (jobId) {
       try {
         const patch: LocalGenerationJobPatch = {

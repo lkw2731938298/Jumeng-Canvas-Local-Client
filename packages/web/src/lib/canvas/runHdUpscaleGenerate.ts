@@ -6,11 +6,7 @@ import { generateFromMediaNode } from "@/lib/api/mediaGeneration";
 import { getPromptConfig } from "@/lib/api/promptConfig";
 import { PROMPT_SUFFIX_FALLBACKS } from "@/lib/admin/promptToolCategories";
 import type { AppendPromptToolConfig } from "@/lib/canvas/renderToolPrompt";
-import {
-  HD_UPSCALE_MODELS,
-  hdModelPromptHint,
-  type HdUpscaleMediaKind,
-} from "@/lib/canvas/createHdUpscaleNode";
+import { type HdUpscaleMediaKind } from "@/lib/canvas/createHdUpscaleNode";
 import { resolveMediaGenerationAssetId } from "@/lib/canvas/canvasToolGeneratedImage";
 import {
   handleCollaboratorSpendCapError,
@@ -32,7 +28,22 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import type { GenerationOptions } from "@/types/generationPresets";
 import { toast } from "sonner";
 import { VOLC_ENHANCE_STANDARD_PRO_MODEL } from "@/lib/local/volcVideoEnhance";
-import { listModels } from "@/lib/api/models";
+import { listModels, type CanvasModel } from "@/lib/api/models";
+import {
+  DEFAULT_HD_ASPECT_RATIO,
+  DEFAULT_HD_CLARITY_TIER,
+  HD_NANO_BANANA_I2I_CATALOG,
+  HD_NANO_BANANA_I2I_DISPLAY,
+  HD_NANO_BANANA_I2I_UPSTREAM,
+  buildHdImageGenerationOptions,
+  computeHdOutputSizePx,
+  hdAspectRatioById,
+  hdClarityTierById,
+  isHdClarityTierId,
+  pickHdNanoBananaCatalogModel,
+  probeImageNaturalSize,
+  resolveHdUpstreamModelId,
+} from "@/lib/local/topazHdUpscale";
 
 /** 图片高清固定算力工具 */
 export const HD_UPSCALE_CANVAS_TOOL = "hd_upscale";
@@ -60,6 +71,36 @@ async function resolveVolcEnhanceStandardProModelName(
     /* ignore */
   }
   return fallback || "";
+}
+
+/** 解析固定高清模型 gemini-nano-banana-2.1（优先本地已启用模型的 name，便于官方文件上传凭据） */
+async function resolveHdNanoBananaI2iModel(
+  fallback?: string
+): Promise<{ name: string; model: CanvasModel | null; upstreamModel: string }> {
+  try {
+    const list = await listModels({ category: "image" });
+    const hit = pickHdNanoBananaCatalogModel(list);
+    if (hit?.name) {
+      return {
+        name: hit.name,
+        model: hit,
+        upstreamModel: resolveHdUpstreamModelId({
+          name: hit.name,
+          displayName: hit.displayName,
+          upstreamModel: String(
+            (hit.parameters as { upstreamModel?: string } | undefined)?.upstreamModel || ""
+          ),
+        }),
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    name: fallback || HD_NANO_BANANA_I2I_CATALOG,
+    model: null,
+    upstreamModel: HD_NANO_BANANA_I2I_UPSTREAM,
+  };
 }
 
 export function hdUpscaleCanvasTool(mediaKind: HdUpscaleMediaKind): string {
@@ -95,18 +136,15 @@ export async function loadHdUpscaleAdminPrompt(
   return fallback;
 }
 
-function buildHdPrompt(adminPrompt: string, hdModel: string, hdScale: number): string {
-  const modelLabel =
-    HD_UPSCALE_MODELS.find((m) => m.value === hdModel)?.label || "通用";
-  const hint = hdModelPromptHint(hdModel);
-  return [adminPrompt, hint, `放大约${hdScale}倍`, `预设「${modelLabel}」`]
+function buildHdPrompt(adminPrompt: string, clarityLabel: string, size: string): string {
+  return [adminPrompt, HD_NANO_BANANA_I2I_UPSTREAM, `清晰度${clarityLabel}`, `size ${size}`]
     .filter(Boolean)
     .join("，");
 }
 
 /**
  * 图片高清 / 视频画质增强：结果写回当前工具节点。
- * 视频固定调用「火山画质增强-标准专业版」。
+ * 图片固定 gemini-nano-banana-2.1 + 1K/2K/4K；视频固定火山标准专业版。
  */
 export async function runHdUpscaleGenerate(opts: {
   projectId: string;
@@ -114,6 +152,13 @@ export async function runHdUpscaleGenerate(opts: {
   hdModel: string;
   hdScale: number;
   hdProvider?: string;
+  /** 图片高清：1k / 2k / 4k */
+  hdClarityTier?: string;
+  /** 图片比例：original | 16:9 | … */
+  hdAspectRatio?: string;
+  /** @deprecated 旧 MP 档字段，等同 hdClarityTier */
+  hdMpTier?: string;
+  hdMpPlusSteps?: number;
   modelName: string;
   generationOptions: GenerationOptions;
   workflowId?: string | null;
@@ -134,35 +179,35 @@ export async function runHdUpscaleGenerate(opts: {
 
   const params = (node.data?.params ?? {}) as Record<string, unknown>;
   const adminPrompt = await loadHdUpscaleAdminPrompt(mediaKind);
-  const prompt =
-    mediaKind === "video"
-      ? [adminPrompt, "火山画质增强", `档次${params.enhanceMode || "standard"}`]
-          .filter(Boolean)
-          .join("，") || "视频画质增强"
-      : buildHdPrompt(adminPrompt, opts.hdModel, opts.hdScale);
-  if (!prompt.trim()) {
-    toast.error(
-      mediaKind === "video"
-        ? "画质增强提示词为空"
-        : "请在后台「Prompt 模板 → 高清」配置提示词"
-    );
-    return false;
-  }
 
   let modelName = opts.modelName;
+  let hdCatalogModel: CanvasModel | null = null;
   if (mediaKind === "video") {
     modelName =
       (await resolveVolcEnhanceStandardProModelName(opts.modelName)) || opts.modelName;
     if (!modelName) {
-      toast.error(`请先在设置中拉取并勾选「${VOLC_ENHANCE_STANDARD_PRO_MODEL}」`);
+      toast.error(
+        `视频画质增强模型未配置（请在后台配置「${VOLC_ENHANCE_STANDARD_PRO_MODEL}」或「模型开关 → 视频高清」）`
+      );
+      return false;
+    }
+  } else {
+    const resolved = await resolveHdNanoBananaI2iModel(opts.modelName);
+    modelName = resolved.name || HD_NANO_BANANA_I2I_CATALOG;
+    hdCatalogModel = resolved.model;
+    if (!modelName) {
+      toast.error(
+        `高清模型未配置（请确保设置中已添加「${HD_NANO_BANANA_I2I_DISPLAY}」）`
+      );
       return false;
     }
   }
 
   const generationOptions: GenerationOptions = {
     ...opts.generationOptions,
-    hdProvider: String(opts.hdProvider || "topazlabs"),
-    hdModel: String(opts.hdModel || "general"),
+    hdProvider: String(opts.hdProvider || "jumengai"),
+    // 固定上游模型族：gemini-nano-banana-2.1
+    hdModel: HD_NANO_BANANA_I2I_UPSTREAM,
     hdScale: String(opts.hdScale || 2),
   };
   if (mediaKind === "video") {
@@ -197,11 +242,71 @@ export async function runHdUpscaleGenerate(opts: {
       return false;
     }
 
+    let prompt = "";
     if (mediaKind === "video") {
       const mounted = mediaDurationToBillSeconds(getVideoNodeRef(opts.nodeId)?.duration);
       const probed = mounted ?? mediaDurationToBillSeconds(await probeVideoDurationSec(sourceUrl));
       const billSec = probed ?? resolveCanvasVideoBillSeconds(node, mounted);
       Object.assign(generationOptions, canvasVideoToolBillingOptions(billSec));
+      prompt =
+        [adminPrompt, "火山画质增强", `档次${params.enhanceMode || "standard"}`]
+          .filter(Boolean)
+          .join("，") || "视频画质增强";
+    } else {
+      // 图片：固定 gemini-nano-banana-2.1；清晰档 + 原图比例 → WxH
+      const rawTier =
+        opts.hdClarityTier ||
+        params.hdClarityTier ||
+        opts.hdMpTier ||
+        params.hdMpTier;
+      const tierId = isHdClarityTierId(rawTier) ? rawTier : DEFAULT_HD_CLARITY_TIER;
+      const tier = hdClarityTierById(String(tierId));
+      // 比例固定跟原图，忽略节点/面板里旧的比例选择
+      const aspect = hdAspectRatioById(DEFAULT_HD_ASPECT_RATIO);
+      let srcW = 0;
+      let srcH = 0;
+      try {
+        const nat = await probeImageNaturalSize(sourceUrl);
+        srcW = nat.width;
+        srcH = nat.height;
+      } catch {
+        /* 下方统一报错 */
+      }
+      if (!(srcW >= 2 && srcH >= 2)) {
+        store.setNodeStatus(opts.nodeId, "idle");
+        toast.error("无法读取原图像素尺寸，请确认参考图已加载后重试");
+        return false;
+      }
+      const out = computeHdOutputSizePx({
+        srcW,
+        srcH,
+        clarityTier: tier.id,
+        aspectRatio: aspect.id,
+      });
+      Object.assign(
+        generationOptions,
+        buildHdImageGenerationOptions({
+          clarityTier: tier.id,
+          aspectRatio: aspect.id,
+          outputSize: out.size,
+          model: hdCatalogModel,
+        })
+      );
+      store.updateNodeParam(opts.nodeId, "hdClarityTier", tier.id);
+      store.updateNodeParam(opts.nodeId, "hdAspectRatio", aspect.id);
+      store.updateNodeParam(opts.nodeId, "hdMpTier", tier.id);
+      store.updateNodeParam(opts.nodeId, "hdOutputSize", out.size);
+      prompt = buildHdPrompt(adminPrompt, tier.label, out.size);
+    }
+
+    if (!prompt.trim()) {
+      store.setNodeStatus(opts.nodeId, "idle");
+      toast.error(
+        mediaKind === "video"
+          ? "画质增强提示词为空"
+          : "请在后台「Prompt 模板 → 高清」配置提示词"
+      );
+      return false;
     }
 
     const quote = await getCreditQuote({
@@ -230,7 +335,14 @@ export async function runHdUpscaleGenerate(opts: {
                   label: "画质增强",
                 },
               ]
-            : undefined,
+            : [
+                {
+                  nodeId: opts.nodeId,
+                  type: "image",
+                  url: sourceUrl,
+                  label: "高清参考",
+                },
+              ],
         generationOptions,
         canvasTool,
       },

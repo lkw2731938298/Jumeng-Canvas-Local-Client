@@ -26,10 +26,6 @@ import { runHdUpscaleGenerate } from "@/lib/canvas/runHdUpscaleGenerate";
 import { runLightingGenerate } from "@/lib/canvas/runLightingGenerate";
 import { runMultiAngleGenerate } from "@/lib/canvas/runMultiAngleGenerate";
 import {
-  runPortraitAdjustGenerate,
-  type PortraitAdjustKind,
-} from "@/lib/canvas/runPortraitAdjustGenerate";
-import {
   runStoryboardSheetGenerate,
   type StoryboardSheetKind,
 } from "@/lib/canvas/runStoryboardSheetGenerate";
@@ -653,39 +649,10 @@ export async function runAgentCanvasTool(
     return splitOk ? okResult() : failResult("宫格切分失败");
   }
 
-  // —— 人像 / 情绪调节 ——
+  // —— 人像 / 情绪调节：已下线 ——
   if (tool === "portrait_adjust" || tool === "emotion_adjust") {
-    const kind: PortraitAdjustKind = tool === "emotion_adjust" ? "emotion" : "portrait";
-    const userPrompt =
-      paramStr(params, "userPrompt") ||
-      paramStr(params, "prompt") ||
-      String(((sourceNode.data as WorkflowNodeData | undefined)?.params ?? {}).prompt ?? "").trim();
-    if (!userPrompt) {
-      toast.error(`${kind === "emotion" ? "情绪" : "人像"}调节需要 params.userPrompt`);
-      return failResult(`${kind === "emotion" ? "情绪" : "人像"}调节需要 params.userPrompt`);
-    }
-    let modelName = "";
-    let generationOptions;
-    try {
-      const resolved = await resolveCreativeGridToolModel(tool);
-      modelName = resolved.modelName;
-      generationOptions = resolved.generationOptions;
-    } catch {
-      toast.error("无法读取人像工具模型配置");
-      return failResult("无法读取人像工具模型配置");
-    }
-    const portraitOk = await runPortraitAdjustGenerate({
-      kind,
-      projectId,
-      sourceNodeId: nodeId,
-      modelName,
-      generationOptions,
-      workflowId,
-      creditsEnabled,
-      queryClient,
-      userPrompt,
-    });
-    return portraitOk ? okResult() : failResult("人像/情绪调节失败");
+    toast.error("人像质感功能已下线");
+    return failResult("人像质感功能已下线");
   }
 
   // —— 高清放大（图 / 视频） ——

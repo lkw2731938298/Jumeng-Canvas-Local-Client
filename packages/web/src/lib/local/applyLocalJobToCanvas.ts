@@ -29,7 +29,8 @@ async function resolveAssetUrl(
       const list = await localStore().listAssets(projectId);
       const hit = list.find((a) => a.id === id || a.fileName === id);
       if (hit) {
-        const fileUrl = `/api/local/asset?projectId=${encodeURIComponent(projectId)}&name=${encodeURIComponent(hit.fileName)}`;
+        // 须与 writeAsset / assets.ts 一致用 file=；name= 会被 /api/local/asset 拒绝 → 节点 0:00 无法播
+        const fileUrl = `/api/local/asset?projectId=${encodeURIComponent(projectId)}&file=${encodeURIComponent(hit.fileName)}`;
         return { url: fileUrl, assetId: hit.id };
       }
     } catch {

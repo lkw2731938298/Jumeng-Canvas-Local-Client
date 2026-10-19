@@ -80,8 +80,11 @@ import {
 } from "@/lib/canvas/minimaxMusicParams";
 import {
   isSunoCustomModel,
+  isSunoSingleModel,
   SUNO_LYRICS_MAX,
   SUNO_LYRICS_PLACEHOLDER,
+  SUNO_SINGLE_DESC_MAX,
+  SUNO_SINGLE_PLACEHOLDER,
   SUNO_TAGS_MAX,
   SUNO_TAGS_PLACEHOLDER,
   SUNO_TITLE_MAX,
@@ -410,8 +413,10 @@ export function NodeEditorOverlay() {
   const isMinimaxMusic = isAudioNode && isMinimaxMusicModel(model);
   const isMinimaxInstrumentalMode =
     isMinimaxMusic && isMinimaxInstrumental(generationOptions);
-  /** Suno Custom v5.5：标题 + 歌词 + 风格标签（均必填） */
+  /** Suno Custom：标题 + 歌词 + 风格标签（均必填） */
   const isSunoMusic = isAudioNode && isSunoCustomModel(model);
+  /** Suno Single / 灵感：主输入框即一句话描述 */
+  const isSunoSingle = isAudioNode && isSunoSingleModel(model);
   const isMediaNode = isImageNode || isVideoNode || isAudioNode;
   const nodeParamsForMode = ((node?.data as WorkflowNodeData | undefined)?.params ??
     {}) as Record<string, unknown>;
@@ -657,12 +662,14 @@ export function NodeEditorOverlay() {
   const handlePromptChange = useCallback(
     (value: string, cursorPos?: number) => {
       if (!selectedNodeId) return;
-      // MiniMax 风格描述 2000；Suno 歌词 5000；其它音频通用上限
+      // MiniMax 风格 2000；Suno custom 歌词 5000；Suno single 描述 400；其它通用上限
       const maxChars = isMinimaxMusic
         ? MINIMAX_MUSIC_PROMPT_MAX
         : isSunoMusic
           ? SUNO_LYRICS_MAX
-          : AUDIO_PROMPT_MAX_CHARS;
+          : isSunoSingle
+            ? SUNO_SINGLE_DESC_MAX
+            : AUDIO_PROMPT_MAX_CHARS;
       const nextValue =
         isAudioNode && value.length > maxChars ? value.slice(0, maxChars) : value;
       setDraft(nextValue);
@@ -688,6 +695,7 @@ export function NodeEditorOverlay() {
       isAudioNode,
       isMinimaxMusic,
       isSunoMusic,
+      isSunoSingle,
       scheduleSave,
       model,
     ]
@@ -831,6 +839,10 @@ export function NodeEditorOverlay() {
       hdProvider?: string;
       hdModel?: string;
       hdScale?: number;
+      hdClarityTier?: string;
+      hdAspectRatio?: string;
+      hdMpTier?: string;
+      hdMpPlusSteps?: number;
       enhanceMode?: string;
       enhanceResolution?: string;
       enhanceFps?: string;
@@ -843,6 +855,13 @@ export function NodeEditorOverlay() {
       if (patch.hdProvider != null) updateNodeParam(selectedNodeId, "hdProvider", patch.hdProvider);
       if (patch.hdModel != null) updateNodeParam(selectedNodeId, "hdModel", patch.hdModel);
       if (patch.hdScale != null) updateNodeParam(selectedNodeId, "hdScale", patch.hdScale);
+      if (patch.hdClarityTier != null)
+        updateNodeParam(selectedNodeId, "hdClarityTier", patch.hdClarityTier);
+      if (patch.hdAspectRatio != null)
+        updateNodeParam(selectedNodeId, "hdAspectRatio", patch.hdAspectRatio);
+      if (patch.hdMpTier != null) updateNodeParam(selectedNodeId, "hdMpTier", patch.hdMpTier);
+      if (patch.hdMpPlusSteps != null)
+        updateNodeParam(selectedNodeId, "hdMpPlusSteps", patch.hdMpPlusSteps);
       if (patch.enhanceMode != null)
         updateNodeParam(selectedNodeId, "enhanceMode", patch.enhanceMode);
       if (patch.enhanceResolution != null)
@@ -965,8 +984,10 @@ export function NodeEditorOverlay() {
               : !musicLyrics.trim()
             : isSunoMusic
               ? !musicTitle.trim() || !musicTags.trim() || !draft.trim()
-            : !draft.trim() &&
-              !materialSlots.some((s) => s.type === "image" || s.type === "video"));
+              : isSunoSingle
+                ? !draft.trim()
+                : !draft.trim() &&
+                  !materialSlots.some((s) => s.type === "image" || s.type === "video"));
 
   const handleGenerate = useCallback(async () => {
     if (!selectedNodeId || !projectId || !config || submitLockRef.current || isGenerating) return;
@@ -993,6 +1014,11 @@ export function NodeEditorOverlay() {
         }
       } else if (!musicLyrics.trim()) {
         toast.error("歌曲模式请填写歌词");
+        return;
+      }
+    } else if (isSunoSingle) {
+      if (!draft.trim()) {
+        toast.error("请填写歌曲主题或氛围描述");
         return;
       }
     } else if (isSunoMusic) {
@@ -1068,8 +1094,8 @@ export function NodeEditorOverlay() {
         const { resolvedPrompt } = resolveMentionsInPrompt(draft, allRefs);
         promptForApi = stripMentionTokens(resolvedPrompt, allRefs) || resolvedPrompt.trim();
       } else {
-        // 图片/视频：展开 @文本 + 合并已连接上游文本节点正文
-        if (isVideoNode || isImageNode) {
+        // 图片/视频/音频：展开 @文本 + 合并已连接上游文本节点正文
+        if (isVideoNode || isImageNode || isAudioNode) {
           const resolved = await resolveMediaPromptForGeneration({
             draft,
             references: allRefs,
@@ -1393,6 +1419,7 @@ export function NodeEditorOverlay() {
     isMinimaxInstrumentalMode,
     musicLyrics,
     isSunoMusic,
+    isSunoSingle,
     musicTitle,
     musicTags,
     hasCloneAudioRef,
@@ -1524,11 +1551,11 @@ export function NodeEditorOverlay() {
   const panelWidth = Math.round(basePanelWidth * popupScale);
   const promptMinHeight = Math.round(110 * popupScale);
 
-  // 视频画质增强面板自带视觉底，外壳透明以免双层玻璃叠色
-  const isVideoEnhancePanel = isHdUpscaleNode && hdMediaKind === "video";
+  // 高清 / 画质增强面板自带视觉底，外壳透明以免双层玻璃叠色
+  const isStyledHdPanel = isHdUpscaleNode;
   const overlayStyle = buildCanvasOverlayStyle(anchorX, anchorY, viewportZoom, "below", {
-    width: isVideoEnhancePanel ? Math.max(panelWidth, 360) : panelWidth,
-    ...(isVideoEnhancePanel
+    width: isStyledHdPanel ? Math.max(panelWidth, 360) : panelWidth,
+    ...(isStyledHdPanel
       ? {
           background: "transparent",
           backdropFilter: "none",
@@ -1564,9 +1591,15 @@ export function NodeEditorOverlay() {
             hasSourceImage={Boolean(hdSourceUrl)}
             mediaKind={hdMediaKind}
             values={{
-              hdProvider: String(nodeParamsForMode.hdProvider ?? "topazlabs"),
-              hdModel: String(nodeParamsForMode.hdModel ?? "general"),
+              hdProvider: String(nodeParamsForMode.hdProvider ?? "jumengai"),
+              hdModel: String(nodeParamsForMode.hdModel ?? "gemini_nano_banana_21"),
               hdScale: Number(nodeParamsForMode.hdScale) || 2,
+              hdClarityTier: String(
+                nodeParamsForMode.hdClarityTier ?? nodeParamsForMode.hdMpTier ?? "2k"
+              ),
+              hdAspectRatio: String(nodeParamsForMode.hdAspectRatio ?? "original"),
+              hdMpTier: String(nodeParamsForMode.hdMpTier ?? "2k"),
+              hdMpPlusSteps: Number(nodeParamsForMode.hdMpPlusSteps) || 1,
               enhanceMode: String(nodeParamsForMode.enhanceMode ?? "standard"),
               enhanceResolution: String(nodeParamsForMode.enhanceResolution ?? "1080p"),
               enhanceFps: String(nodeParamsForMode.enhanceFps ?? ""),
@@ -1647,7 +1680,9 @@ export function NodeEditorOverlay() {
                 ? minimaxMusicStylePlaceholder(isMinimaxInstrumentalMode)
                 : isSunoMusic
                   ? SUNO_LYRICS_PLACEHOLDER
-                  : config.placeholder
+                  : isSunoSingle
+                    ? SUNO_SINGLE_PLACEHOLDER
+                    : config.placeholder
             }
             style={{ minHeight: promptMinHeight }}
           />
@@ -1947,7 +1982,9 @@ export function NodeEditorOverlay() {
                       ? "风格描述字数"
                       : isSunoMusic
                         ? "歌词字数"
-                        : "提示词字数"
+                        : isSunoSingle
+                          ? "描述字数"
+                          : "提示词字数"
                   }
                 >
                   {draft.length}/
@@ -1955,7 +1992,9 @@ export function NodeEditorOverlay() {
                     ? MINIMAX_MUSIC_PROMPT_MAX
                     : isSunoMusic
                       ? SUNO_LYRICS_MAX
-                      : AUDIO_PROMPT_MAX_CHARS}
+                      : isSunoSingle
+                        ? SUNO_SINGLE_DESC_MAX
+                        : AUDIO_PROMPT_MAX_CHARS}
                 </span>
               </>
             ) : null}

@@ -2,25 +2,25 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { ArrowUp, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCanvasStore } from "@/stores/canvasStore";
-import { ImageGenParamsToolbar } from "@/components/canvas/ImageGenParamsToolbar";
 import { useToolImageCreditQuote } from "@/lib/canvas/canvasToolImageModel";
 import {
   OUTPAINT_CANVAS_TOOL,
   runOutpaintGenerate,
 } from "@/lib/canvas/runOutpaintGenerate";
-import { formatCreditLabel } from "@/lib/api/credits";
 
 interface ImageOutpaintToolbarProps {
   onClose: () => void;
 }
 
-/** 扩图浮条：关闭 + 生成参数（算力走画布工具固定价） */
+/**
+ * 扩图浮条：仅关闭 + 提交。
+ * PRO / 比例 / 2K / 张数已无效（模型固定 nano-banana-2.1，尺寸跟外扩框 WxH）。
+ */
 export function ImageOutpaintToolbar({ onClose }: ImageOutpaintToolbarProps) {
   const outpaint = useCanvasStore((s) => s.inlineImageOutpaint);
-  const patchOutpaint = useCanvasStore((s) => s.patchInlineImageOutpaint);
   const projectId = useCanvasStore((s) => s.projectId);
   const workflowId = useCanvasStore((s) => s.workflowId);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
@@ -32,17 +32,11 @@ export function ImageOutpaintToolbar({ onClose }: ImageOutpaintToolbarProps) {
     modelName,
     hasModel,
     defaultGenerationOptions,
-    total: creditTotal,
     creditsEnabled,
-    isLoading: quoteLoading,
     refetch: refetchQuote,
   } = useToolImageCreditQuote(Boolean(outpaint && selectedNodeId), OUTPAINT_CANVAS_TOOL);
 
   if (!outpaint) return null;
-
-  const creditLabel = quoteLoading
-    ? "…"
-    : formatCreditLabel(creditTotal, creditsEnabled);
 
   const handleGenerate = async () => {
     if (!projectId || !selectedNodeId) {
@@ -50,7 +44,7 @@ export function ImageOutpaintToolbar({ onClose }: ImageOutpaintToolbarProps) {
       return;
     }
     if (!hasModel || !modelName) {
-      toast.error("全能图片 Pro 图生图未配置或不可用");
+      toast.error("请先确保目录含「gemini-nano-banana-2.1」");
       return;
     }
     if (generating) return;
@@ -96,15 +90,15 @@ export function ImageOutpaintToolbar({ onClose }: ImageOutpaintToolbarProps) {
 
       <span className="mx-0.5 h-5 w-px bg-white/10" aria-hidden />
 
-      <ImageGenParamsToolbar
-        variant="bare"
-        value={outpaint}
-        onChange={(patch) => patchOutpaint(patch)}
-        onGenerate={() => void handleGenerate()}
-        generateTitle={generating ? "扩图生成中…" : "开始扩图"}
-        creditCostLabel={creditLabel}
-        generateDisabled={generating}
-      />
+      <button
+        type="button"
+        title={generating ? "扩图生成中…" : "开始扩图"}
+        disabled={generating}
+        onClick={() => void handleGenerate()}
+        className="inline-flex size-8 items-center justify-center rounded-lg bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ArrowUp className="size-4" strokeWidth={2.25} />
+      </button>
     </div>
   );
 }

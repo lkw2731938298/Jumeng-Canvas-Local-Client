@@ -16,7 +16,8 @@ const CORS = {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId") || "";
-  const file = searchParams.get("file") || "";
+  // 历史回写误用 name=；与 file= 等价兼容，避免已落库节点 0:00 无法播放
+  const file = searchParams.get("file") || searchParams.get("name") || "";
   if (!projectId || !file) {
     return NextResponse.json({ error: "missing projectId/file" }, { status: 400 });
   }
@@ -40,9 +41,13 @@ export async function GET(req: Request) {
                   ? "audio/mpeg"
                   : lower.endsWith(".wav")
                     ? "audio/wav"
-                    : lower.endsWith(".glb")
-                      ? "model/gltf-binary"
-                      : "application/octet-stream";
+                    : lower.endsWith(".m4a") || lower.endsWith(".aac")
+                      ? "audio/mp4"
+                      : lower.endsWith(".ogg")
+                        ? "audio/ogg"
+                        : lower.endsWith(".glb")
+                          ? "model/gltf-binary"
+                          : "application/octet-stream";
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {

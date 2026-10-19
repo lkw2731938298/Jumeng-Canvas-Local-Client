@@ -11,6 +11,10 @@ import {
 } from "@/lib/canvas/generationPresets";
 import type { GenerationOptions, GenerationPresetsConfig } from "@/types/generationPresets";
 import { CREATIVE_TOOLS_CANVAS_TOOL } from "@/lib/canvas/runCreativeToolDirectGenerate";
+import {
+  HD_NANO_BANANA_I2I_CATALOG,
+  pickHdNanoBananaCatalogModel,
+} from "@/lib/local/topazHdUpscale";
 
 function isUsableModel(m: CanvasModel): boolean {
   return Boolean(m.isAvailable && m.isConfigured !== false && m.isImplemented !== false);
@@ -23,11 +27,22 @@ export async function resolveCreativeGridToolModel(toolId: string): Promise<{
   catalogModel: CanvasModel | null;
 }> {
   const tid = toolId.trim() || CREATIVE_TOOLS_CANVAS_TOOL;
-  const [toolModels, imageModels] = await Promise.all([
-    getCanvasToolModels(),
-    listModels({ category: "image" }),
-  ]);
+  const imageModels = await listModels({ category: "image" });
 
+  // 图片 HD / 扩图：固定 gemini-nano-banana-2.1，不读后台工具主模型
+  if (tid === "hd_upscale" || tid === "outpaint") {
+    const catalog = pickHdNanoBananaCatalogModel(imageModels);
+    const modelName = catalog?.name || HD_NANO_BANANA_I2I_CATALOG;
+    const generationPresets = getModelGenerationPresets(catalog ?? undefined);
+    return {
+      modelName,
+      generationOptions: defaultGenerationOptions(generationPresets),
+      generationPresets,
+      catalogModel: catalog,
+    };
+  }
+
+  const toolModels = await getCanvasToolModels();
   const primary =
     canvasToolModelPrimary(toolModels.tools, tid) ||
     canvasToolModelPrimary(toolModels.tools, CREATIVE_TOOLS_CANVAS_TOOL) ||

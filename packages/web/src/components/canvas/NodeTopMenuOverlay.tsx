@@ -22,11 +22,9 @@ import {
   PencilLine,
   ScanLine,
   Scissors,
-  Smile,
   SquarePen,
   SquareSplitVertical,
   Upload,
-  UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -132,11 +130,6 @@ import {
   type SubtitleEraseMode,
 } from "@/lib/canvas/videoSubtitleErase";
 import { useCanvasToolConfiguredModel } from "@/lib/canvas/useCanvasToolConfiguredModel";
-import {
-  PORTRAIT_ADJUST_TOOLS,
-  runPortraitAdjustGenerate,
-  type PortraitAdjustKind,
-} from "@/lib/canvas/runPortraitAdjustGenerate";
 
 function TopMenuActionButton({
   label,
@@ -518,23 +511,6 @@ export function NodeTopMenuOverlay() {
     Boolean(selectedNodeId && isVideoNode),
     "video"
   );
-  /** 人像质感调节：后台可切换的图片主模型 */
-  const {
-    modelName: portraitAdjustModelName,
-    defaultGenerationOptions: portraitAdjustGenerationOptions,
-  } = useCanvasToolConfiguredModel(
-    "portrait_adjust",
-    Boolean(selectedNodeId && isImageNode),
-    "image"
-  );
-  const {
-    modelName: emotionAdjustModelName,
-    defaultGenerationOptions: emotionAdjustGenerationOptions,
-  } = useCanvasToolConfiguredModel(
-    "emotion_adjust",
-    Boolean(selectedNodeId && isImageNode),
-    "image"
-  );
   const {
     costByTool: platformCostByTool,
     creditsEnabled: platformCreditsEnabled,
@@ -571,14 +547,12 @@ export function NodeTopMenuOverlay() {
   const [savingRotate, setSavingRotate] = useState(false);
   const [savingCrop, setSavingCrop] = useState(false);
   const [cutoutBusy, setCutoutBusy] = useState(false);
-  const [portraitAdjustBusy, setPortraitAdjustBusy] = useState(false);
   const [cropImageAspect, setCropImageAspect] = useState(1);
   const [videoCropAspect, setVideoCropAspect] = useState(16 / 9);
   const [generatingSuffixTool, setGeneratingSuffixTool] = useState<string | null>(null);
   const [gridSplitOpen, setGridSplitOpen] = useState(false);
   const [gridSplitBusy, setGridSplitBusy] = useState(false);
   const [gridSplitProgress, setGridSplitProgress] = useState("");
-  const [portraitMenuOpen, setPortraitMenuOpen] = useState(false);
   const [redrawMenuOpen, setRedrawMenuOpen] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [creativeToolsMenuOpen, setCreativeToolsMenuOpen] = useState(false);
@@ -594,7 +568,6 @@ export function NodeTopMenuOverlay() {
 
   const closeAllTopMenus = useCallback(() => {
     setGridSplitOpen(false);
-    setPortraitMenuOpen(false);
     setRedrawMenuOpen(false);
     setUploadMenuOpen(false);
     setCreativeToolsMenuOpen(false);
@@ -1075,8 +1048,7 @@ export function NodeTopMenuOverlay() {
   }, [imageUrl, openDrawingBoard, selectedNodeId]);
 
   const closeOtherImageMenus = useCallback(
-    (except?: "portrait" | "redraw" | "gridSplit" | "upload" | "creativeTools") => {
-      if (except !== "portrait") setPortraitMenuOpen(false);
+    (except?: "redraw" | "gridSplit" | "upload" | "creativeTools") => {
       if (except !== "redraw") setRedrawMenuOpen(false);
       if (except !== "gridSplit") setGridSplitOpen(false);
       if (except !== "upload") setUploadMenuOpen(false);
@@ -1814,71 +1786,6 @@ export function NodeTopMenuOverlay() {
       updateNodeParam(selectedNodeId, "visualStyleId", nextStyleId);
     },
     [selectedNodeId, updateNodeParam]
-  );
-
-  const handlePortraitMenuSelect = useCallback(
-    async (kind: PortraitAdjustKind) => {
-      if (!selectedNodeId || !projectId || !imageUrl || !node || portraitAdjustBusy) return;
-      const meta = PORTRAIT_ADJUST_TOOLS[kind];
-      const modelName =
-        (kind === "emotion" ? emotionAdjustModelName : portraitAdjustModelName) ||
-        toolModelName ||
-        "nano_pro_i2i";
-      if (!modelName.trim()) {
-        toast.error("请先在后台「模型开关」配置该功能的主模型");
-        return;
-      }
-      const typed = window.prompt(
-        kind === "portrait"
-          ? "人像调节说明（如：提升肤质细腻度、淡妆、柔和光影）"
-          : "情绪调节说明（如：微笑、略带惊讶、温柔眼神）",
-        ""
-      );
-      if (typed == null) return;
-      const userPrompt = typed.trim();
-      if (!userPrompt) {
-        toast.error(`请填写${meta.label}说明`);
-        return;
-      }
-
-      setPortraitAdjustBusy(true);
-      setPortraitMenuOpen(false);
-      try {
-        await runPortraitAdjustGenerate({
-          kind,
-          projectId,
-          sourceNodeId: selectedNodeId,
-          modelName,
-          generationOptions:
-            kind === "emotion"
-              ? emotionAdjustGenerationOptions
-              : portraitAdjustGenerationOptions,
-          workflowId,
-          creditsEnabled: toolCreditsEnabled,
-          queryClient,
-          userPrompt,
-          onRefetchPricing: () => void refetchAllToolPricing(),
-        });
-      } finally {
-        setPortraitAdjustBusy(false);
-      }
-    },
-    [
-      emotionAdjustGenerationOptions,
-      emotionAdjustModelName,
-      imageUrl,
-      node,
-      portraitAdjustBusy,
-      portraitAdjustGenerationOptions,
-      portraitAdjustModelName,
-      projectId,
-      queryClient,
-      refetchAllToolPricing,
-      selectedNodeId,
-      toolCreditsEnabled,
-      toolModelName,
-      workflowId,
-    ]
   );
 
   /** 抠图：固定算力扣费 → 本地去背景 → 右侧结果节点（模型/提示词走后台配置） */
@@ -2729,7 +2636,6 @@ export function NodeTopMenuOverlay() {
   }
 
   const anyMenuOpen =
-    portraitMenuOpen ||
     redrawMenuOpen ||
     uploadMenuOpen ||
     creativeToolsMenuOpen ||
@@ -3208,38 +3114,7 @@ export function NodeTopMenuOverlay() {
 
         {isImageNode ? (
           <>
-            {/* 图片顶栏改成截图同款的固定顺序入口，右侧只保留图标操作。 */}
-            <TopMenuDropdown
-              label={portraitAdjustBusy ? "调节中…" : "人像质感"}
-              // 外层不再挂 NEW，减少顶栏噪音
-              open={portraitMenuOpen}
-              onOpenChange={(next) => {
-                if (next) closeOtherImageMenus("portrait");
-                setPortraitMenuOpen(next);
-              }}
-              items={[
-                {
-                  id: "portrait",
-                  label: "人像调节",
-                  icon: <UserRound className="size-[18px]" strokeWidth={1.75} />,
-                  creditCost: costByTool.portrait_adjust,
-                  creditLoading: toolPricingLoading,
-                  creditsEnabled: toolCreditsEnabled,
-                  disabled: portraitAdjustBusy || !imageUrl,
-                  onSelect: () => void handlePortraitMenuSelect("portrait"),
-                },
-                {
-                  id: "emotion",
-                  label: "情绪调节",
-                  icon: <Smile className="size-[18px]" strokeWidth={1.75} />,
-                  creditCost: costByTool.emotion_adjust,
-                  creditLoading: toolPricingLoading,
-                  creditsEnabled: toolCreditsEnabled,
-                  disabled: portraitAdjustBusy || !imageUrl,
-                  onSelect: () => void handlePortraitMenuSelect("emotion"),
-                },
-              ]}
-            />
+            {/* 图片顶栏：人像质感已下线；右侧只保留图标操作。 */}
             <TopMenuActionButton
               label={panoramaItem?.label || "全景"}
               disabled={!imageUrl || !panoramaItem || Boolean(generatingSuffixTool) || gridSplitBusy}

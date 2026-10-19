@@ -5,6 +5,7 @@
  * 顶栏工具（去字幕 / HD / 画面编辑等）与节点生成须共用此路径，禁止只登记本机 assetId 就当已交给上游。
  */
 import {
+  resolveAnyJumengUploadCreds,
   resolveJumengUploadCreds,
   resolveLocalImageUrlsForUpstream,
   resolveLocalMediaUrlForUpstream,
@@ -67,8 +68,21 @@ export async function prepareUpstreamMediaRefs(opts: {
   imageUrls?: string[];
   videoUrls?: string[];
   audioUrls?: string[];
+  /**
+   * HD / 扩图等：即使 modelId 是商业 catalog / 未命中本地模型，
+   * 也强制走聚梦官方 /files/upload（可回退任意已启用聚梦通道凭据）。
+   */
+  forceJumengOfficialFiles?: boolean;
 }): Promise<PreparedUpstreamMediaRefs> {
-  const jumengCreds = await resolveJumengUploadCreds(opts.modelId);
+  let jumengCreds = await resolveJumengUploadCreds(opts.modelId);
+  if (!jumengCreds && opts.forceJumengOfficialFiles) {
+    jumengCreds = await resolveAnyJumengUploadCreds();
+  }
+  if (opts.forceJumengOfficialFiles && !jumengCreds) {
+    throw new Error(
+      "须走聚梦官方文件上传，但未找到可用的聚梦 API Base/Key。请在设置中启用聚梦供应商并填写密钥"
+    );
+  }
   const jumengOfficial = jumengCreds !== null;
 
   const imageUrls = await resolveLocalImageUrlsForUpstream(

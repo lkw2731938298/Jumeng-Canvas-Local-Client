@@ -159,6 +159,8 @@ export const MODEL_CAPS_RULES: CapsRule[] = [
     category: "video",
     caps: { durationSec: durationRange(4, 30) },
   },
+  // 以下 imageSizeMode 仅作用于「非聚梦」第三方网关。
+  // 聚梦官方 /api/images 一律在 generate.ts 强制 pixel（宽x高），UI 仍保留清晰度+比例。
   {
     id: "image-star",
     match: /qwen.?image|wanx|kolors|stable.?diffusion|sdxl|flux-digital/i,
@@ -207,7 +209,8 @@ function safeDefault(category?: ModelCapsInput["category"]): ResolvedModelCanvas
       clarityMap: identityClarityMap(),
       durationSec: [],
       ratios: [...DEFAULT_RATIOS],
-      // 官方文档 /api/images：size 是 1024x1024 这类像素宽高，比例只能靠它带过去
+      // 官方文档 https://doc.jumengai.com/api/images ：size=1024x1024（小写 x）；
+      // 画布 UI 仍展示清晰度(480p…4K)+比例(16:9…)，提交前换算成像素
       imageSizeMode: "pixel",
       videoSizeMode: "ratio",
       source: "default",

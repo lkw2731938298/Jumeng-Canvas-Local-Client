@@ -527,6 +527,35 @@ export async function resolveJumengUploadCreds(
   }
 }
 
+/**
+ * 任意已启用聚梦官方通道的上传凭据（不绑定具体模型）。
+ * HD 高清等固定上游场景：本地模型名可能是商业 catalog id，仍须走 /files/upload。
+ */
+export async function resolveAnyJumengUploadCreds(): Promise<JumengUploadCreds | null> {
+  try {
+    const [models, providers] = await Promise.all([
+      localStore().listModels(),
+      localStore().listProviders(),
+    ]);
+    for (const model of models) {
+      if (model.enabled === false) continue;
+      try {
+        const { apiBase, apiKey } = resolveCreds(model, providers);
+        const base = apiBase || model.url || "";
+        if (!isJumengaiUpstream(model.upstreamModel, model.name, base)) continue;
+        const key = normalizeApiKey(apiKey || "");
+        if (!base || !key) continue;
+        return { apiBase: base, apiKey: key };
+      } catch {
+        /* 试下一个 */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 /** 文本生成（聊天补全） */
 export async function localGenerateText(params: {
   modelId: string;
@@ -1127,45 +1156,111 @@ function imageSizeForUpstream(
   return toPixelSize(aspect, resolution);
 }
 
-/** 把用户点选的画幅写进聚梦生图请求体：别名三键 + 像素宽高 + metadata。
- *  官方文档只认 size（像素宽高），别名键是给各家兼容网关兜底用的；
- *  若 size 传了 2K 这类清晰度档而上游又不读别名键，就会按默认方图出图，
- *  用户就会觉得「比例没传进去」——所以默认走 pixel 模式。 */
+/** 解析调用方已算好的像素 size（1024x1536 / 1024*1536） */
+function parseExplicitPixelSize(raw: string): { w: number; h: number } | null {
+  const m = String(raw || "")
+    .trim()
+    .match(/^(\d+)\s*[xX*]\s*(\d+)$/);
+  if (!m) return null;
+  const w = Number.parseInt(m[1] || "", 10);
+  const h = Number.parseInt(m[2] || "", 10);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 2 || h < 2) return null;
+  return { w, h };
+}
+
+/** 由像素宽高归到常见画幅（供 aspect 别名兜底；真正权威仍是 size WxH） */
+function aspectHintFromPixelSize(w: number, h: number): string {
+  const r = w / Math.max(1, h);
+  const presets: Array<{ id: string; r: number }> = [
+    { id: "1:1", r: 1 },
+    { id: "4:3", r: 4 / 3 },
+    { id: "3:4", r: 3 / 4 },
+    { id: "16:9", r: 16 / 9 },
+    { id: "9:16", r: 9 / 16 },
+    { id: "3:2", r: 3 / 2 },
+    { id: "2:3", r: 2 / 3 },
+    { id: "21:9", r: 21 / 9 },
+  ];
+  let best = presets[0];
+  let bestDiff = Infinity;
+  for (const p of presets) {
+    const d = Math.abs(Math.log(r / p.r));
+    if (d < bestDiff) {
+      bestDiff = d;
+      best = p;
+    }
+  }
+  return best.id;
+}
+
+/**
+ * 聚梦官方生图请求体（doc.jumengai.com/api/images）：
+ * 只写文档关键字 model / prompt / size / n / response_format / image|images / quality。
+ * size = 宽x高（小写 x）；参考只用 image / images，禁止 imageUrls / image_urls 等别名。
+ */
+function writeJumengOfficialImageBody(
+  body: Record<string, unknown>,
+  opts: {
+    sizePx: string;
+    refs?: string[];
+    quality?: string;
+  }
+): void {
+  const sizePx = String(opts.sizePx || "")
+    .trim()
+    .replace(/\*/g, "x")
+    .replace(/X/g, "x");
+  body.size = sizePx;
+  body.response_format = "url";
+  // 清掉非文档顶层字段，避免网关按 16:9 / 2K / image_urls 误解析
+  for (const k of [
+    "aspect_ratio",
+    "aspectRatio",
+    "ratio",
+    "resolution",
+    "width",
+    "height",
+    "image_size",
+    "image_urls",
+    "imageUrls",
+    "imageUrl",
+    "inputImages",
+    "metadata",
+  ]) {
+    delete body[k];
+  }
+  const refs = (opts.refs || []).map((u) => String(u || "").trim()).filter(Boolean);
+  delete body.image;
+  delete body.images;
+  if (refs.length === 1) {
+    body.image = refs[0];
+  } else if (refs.length > 1) {
+    body.images = refs;
+    // 单字段兼容：部分通道仍读 image
+    body.image = refs;
+  }
+  if (opts.quality) body.quality = opts.quality;
+}
+
+/** @deprecated 兼容旧调用：聚梦路径已改走 writeJumengOfficialImageBody */
+function writeJumengExplicitPixelSize(
+  body: Record<string, unknown>,
+  width: number,
+  height: number,
+  _aspect: string,
+  _resolution: string
+): void {
+  writeJumengOfficialImageBody(body, { sizePx: `${width}x${height}` });
+}
+
+/** @deprecated 兼容旧调用：聚梦路径已改走 writeJumengOfficialImageBody */
 function writeJumengImageAspect(
   body: Record<string, unknown>,
   aspect: string,
   resolution: string,
-  sizeMode: ImageSizeMode
+  _sizeMode: ImageSizeMode
 ): void {
-  const star = toStarPixelSize(aspect, resolution);
-  const [wRaw, hRaw] = star.split("*");
-  const width = Number.parseInt(wRaw || "1024", 10) || 1024;
-  const height = Number.parseInt(hRaw || "1024", 10) || 1024;
-  body.aspect_ratio = aspect;
-  body.aspectRatio = aspect;
-  body.ratio = aspect;
-  body.width = width;
-  body.height = height;
-  body.image_size = star;
-  if (sizeMode !== "aspect") {
-    body.resolution = resolution;
-  }
-  const prevMeta =
-    body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
-      ? (body.metadata as Record<string, unknown>)
-      : {};
-  const prevParams =
-    prevMeta.parameters && typeof prevMeta.parameters === "object" && !Array.isArray(prevMeta.parameters)
-      ? (prevMeta.parameters as Record<string, unknown>)
-      : {};
-  body.metadata = {
-    ...prevMeta,
-    ratio: aspect,
-    resolution,
-    width,
-    height,
-    parameters: { ...prevParams, ratio: aspect, resolution, width, height },
-  };
+  writeJumengOfficialImageBody(body, { sizePx: toPixelSize(aspect, resolution) });
 }
 
 /**
@@ -1189,6 +1284,11 @@ export async function localGenerateImage(params: {
   resolution?: string;
   /** 参考图：公网 URL 或 data:（有用户 OSS 时应已是公网 URL） */
   imageUrls?: string[];
+  /**
+   * 覆盖提交给上游的 model id（凭据仍用 modelId 对应本地模型）。
+   * HD 高清固定 gemini-nano-banana-2.1 时使用。
+   */
+  forcedUpstreamModel?: string;
   /** 拿到上游 task_id 时回调（写入本机任务列表） */
   onProviderTaskId?: (taskId: string) => void | Promise<void>;
   /** POST 前回调实际带上的参考（失败也能在任务页查证） */
@@ -1223,18 +1323,16 @@ export async function localGenerateImage(params: {
 
   // 从 size / aspectRatio / resolution 拆出「比例」与「清晰度」，避免把 2K 塞进 aspectRatio
   const sizeRaw = String(params.size || "").trim();
+  // HD 等调用方已算出像素 WxH：以此为准，禁止再误写成 1:1
+  const explicitPixel = parseExplicitPixelSize(sizeRaw);
   let aspect =
     String(params.aspectRatio || "").trim() ||
     (isAspectRatioValue(sizeRaw) ? sizeRaw : "");
   let resolution =
     String(params.resolution || "").trim() ||
     (isImageResolutionTier(sizeRaw) ? sizeRaw : "");
-  if (!aspect && sizeRaw && /^\d+x\d+$/i.test(sizeRaw)) {
-    aspect = "1:1";
-  }
-  if (!aspect && sizeRaw && /^\d+\*\d+$/i.test(sizeRaw)) {
-    // 已是 width*height：从比例表反推画幅，size 稍后原样可用
-    aspect = "1:1";
+  if (!aspect && explicitPixel) {
+    aspect = aspectHintFromPixelSize(explicitPixel.w, explicitPixel.h);
   }
   aspect = normalizeImageAspectRatio(aspect || "1:1");
   resolution = normalizeImageResolutionTier(resolution || "2K");
@@ -1249,12 +1347,11 @@ export async function localGenerateImage(params: {
     );
   }
 
-  const configuredModel = (model.upstreamModel || model.name || "").trim();
-  const jumeng = isJumengaiUpstream(
-    model.upstreamModel,
-    model.name,
-    apiBase || model.url || ""
-  );
+  const forcedUp = String(params.forcedUpstreamModel || "").trim();
+  const configuredModel = (forcedUp || model.upstreamModel || model.name || "").trim();
+  const jumeng =
+    Boolean(forcedUp) ||
+    isJumengaiUpstream(model.upstreamModel, model.name, apiBase || model.url || "");
   if (jumeng && !configuredModel) {
     throw new Error(
       `模型「${model.displayName || model.name}」未填写平台模型名（upstreamModel）。请到本地设置填写供应商控制台里的准确模型 ID，或重新拉取模型目录后勾选`
@@ -1263,12 +1360,17 @@ export async function localGenerateImage(params: {
   const upstreamModel = jumeng
     ? normalizeJumengOpenAiModelId(configuredModel)
     : configuredModel;
-  // 尺寸写法按模型的「画布可选项 → 尺寸提交方式」走，第三方兼容网关同样适用
-  const sizeMode = jumengImageSizeMode(upstreamModel, model.displayName || model.name, model);
-  // 自定义模板 / 上游 body 用的 size 字符串
-  const sizeForUpstream =
-    sizeRaw && /^\d+\*\d+$/i.test(sizeRaw)
-      ? sizeRaw.replace(/x/gi, "*")
+  // 聚梦官方 /api/images：size 一律「宽x高」小写 x；画布「清晰度/比例」仅 UI，提交前换算成像素。
+  // 第三方网关仍按模型 caps 的 imageSizeMode（aspect/star/tier/pixel）。
+  const sizeMode: ImageSizeMode =
+    jumeng || explicitPixel
+      ? "pixel"
+      : jumengImageSizeMode(upstreamModel, model.displayName || model.name, model);
+  // 自定义模板 / 上游 body 用的 size；HD 等已算好的 WxH 原样；星号统一转小写 x（文档不认 *）
+  const sizeForUpstream = explicitPixel
+    ? `${explicitPixel.w}x${explicitPixel.h}`
+    : jumeng
+      ? toPixelSize(aspect, resolution)
       : imageSizeForUpstream(sizeMode, aspect, resolution);
 
   const requestedRefCount = allRefs.length;
@@ -1360,73 +1462,56 @@ export async function localGenerateImage(params: {
     n: 1,
   };
   if (jumeng) {
-    // 像素型（默认，对齐官方文档）：size 为 1080x1920，比例由宽高直接表达。
-    // 比例型（Gemini）：size 才是 16:9，不要带 resolution=2K。
-    // 清晰度型（x-imagine 等旧通道）：size 必须是 1K/2K/4K，画幅另写三键。
-    // 星号型（Qwen）：size 为 1920*1080。
-    body.size = sizeForUpstream;
-    body.response_format = "url";
-    writeJumengImageAspect(body, aspect, resolution, sizeMode);
-  } else if (sizeRaw && /^\d+[x*]\d+$/i.test(sizeRaw)) {
+    // 对齐 https://doc.jumengai.com/api/images：size=宽x高；参考只用 image/images
+    writeJumengOfficialImageBody(body, {
+      sizePx: sizeForUpstream,
+      refs: refsForBody,
+    });
+  } else if (explicitPixel) {
     // 调用方已给了具体像素，原样透传
-    body.size = sizeRaw;
+    body.size = `${explicitPixel.w}x${explicitPixel.h}`;
+    body.width = explicitPixel.w;
+    body.height = explicitPixel.h;
+    body.aspect_ratio = aspect;
+    body.aspectRatio = aspect;
+    body.ratio = aspect;
   } else {
-    // 第三方 OpenAI 兼容网关：默认也按标准像素宽高提交，比例三键同写兜底
+    // 第三方 OpenAI 兼容网关：按 caps 的 size 写法；比例三键同写兜底
     body.size = sizeForUpstream;
     body.aspect_ratio = aspect;
     body.aspectRatio = aspect;
     body.ratio = aspect;
   }
 
-  // 仅聚梦官方通道：base64 参考只能走 image（与技能/插件一致）；
-  // images / image_urls 被网关当 URL 列表校验，塞 data: 会报「参考图片 URL 必须以 http:// 开头」。
-  // 第三方网关维持原画布行为（参考图需用户自配 OSS）。
-  const refsAreDataUrls = jumeng && refsForBody.some((u) => u.startsWith("data:image"));
-
-  // 参考图写入 body：聚梦 = https 或 data URL；其它上游优先 https，可回退 data
-  if (refsForBody.length === 1) {
-    body.image = refsForBody[0];
-    if (!refsAreDataUrls) {
+  // 第三方：参考图优先 https，可回退 data；聚梦已在 writeJumengOfficialImageBody 写完
+  if (!jumeng) {
+    if (refsForBody.length === 1) {
+      body.image = refsForBody[0];
       body.images = refsForBody;
       body.image_urls = refsForBody;
-    }
-  } else if (refsForBody.length > 1) {
-    body.image = refsForBody;
-    if (!refsAreDataUrls) {
+    } else if (refsForBody.length > 1) {
+      body.image = refsForBody;
       body.images = refsForBody;
       body.image_urls = refsForBody;
+    } else if (dataImgs.length === 1) {
+      body.image = dataImgs[0];
+      body.images = dataImgs;
+    } else if (dataImgs.length > 1) {
+      body.images = dataImgs;
+      body.image = dataImgs[0];
     }
-  } else if (!jumeng && dataImgs.length === 1) {
-    body.image = dataImgs[0];
-    body.images = dataImgs;
-  } else if (!jumeng && dataImgs.length > 1) {
-    body.images = dataImgs;
-    body.image = dataImgs[0];
   }
 
-  // base64 参考：不要把 images/image_urls 列表字段带上（网关按 URL 校验 data:）。
-  // 画幅/清晰度必须留下，否则点了 9:16 实际按默认方图出。
-  if (jumeng && refsAreDataUrls && refsForBody.length > 0) {
-    const minimal: Record<string, unknown> = {
-      model: body.model,
-      prompt: body.prompt,
-      size: body.size,
-      n: 1,
-      image: refsForBody.length === 1 ? refsForBody[0] : refsForBody,
-    };
-    writeJumengImageAspect(minimal, aspect, resolution, sizeMode);
-    for (const key of Object.keys(body)) delete body[key];
-    Object.assign(body, minimal);
-  }
-
-  // body 里实际携带的参考（base64 只写 image，https 另有列表字段）
-  const bodyRefUrls: string[] = Array.isArray(body.image_urls)
-    ? (body.image_urls as string[])
-    : Array.isArray(body.image)
-      ? (body.image as string[])
-      : typeof body.image === "string" && body.image
-        ? [body.image]
-        : [];
+  // body 里实际携带的参考（聚梦：image / images；第三方可有 image_urls）
+  const bodyRefUrls: string[] = Array.isArray(body.images)
+    ? (body.images as string[])
+    : Array.isArray(body.image_urls)
+      ? (body.image_urls as string[])
+      : Array.isArray(body.image)
+        ? (body.image as string[])
+        : typeof body.image === "string" && body.image
+          ? [body.image]
+          : [];
 
   // 最终确认：聚梦有参考时须打进 https 或 data:
   if (jumeng && requestedRefCount > 0) {
@@ -2519,11 +2604,16 @@ function extractUpstreamStatus(body: unknown): string {
 function extractVideoUrl(body: unknown): string {
   const tryObj = (obj: Record<string, unknown> | null): string => {
     if (!obj) return "";
+    // 视频与 Suno 音乐等异步任务共用轮询：result_url 可能是 mp4 / mp3
     for (const key of [
       "result_url",
       "resultUrl",
       "video_url",
       "videoUrl",
+      "audio_url",
+      "audioUrl",
+      "mp3_url",
+      "mp3Url",
       "url",
       "output_url",
       "output",
@@ -4210,7 +4300,9 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
     }
   }
 
-  if (isVideo) {
+  // 视频与 Suno 等音频共用 /v1/video/generations 轮询；音频须落 persistLocalAudioResult
+  const isAudio = job.category === "audio";
+  if (isVideo || isAudio) {
     try {
       const url = await pollLocalVideoTaskOnceLoop({
         apiBase,
@@ -4219,22 +4311,37 @@ export async function syncLocalGenerationJobFromUpstream(jobId: string): Promise
         timeoutMs: syncBudgetMs,
       });
       let preview = url;
-      let videoAssetId: string | undefined;
+      let mediaAssetId: string | undefined;
       if (job.projectId && job.nodeId) {
         try {
-          const persisted = await persistLocalVideoResult({
-            projectId: job.projectId,
-            nodeId: job.nodeId,
-            url,
-            apiKey,
-          });
-          preview = persisted.url;
-          videoAssetId = persisted.assetId;
+          if (isAudio) {
+            const persisted = await persistLocalAudioResult({
+              projectId: job.projectId,
+              nodeId: job.nodeId,
+              url,
+              apiKey,
+            });
+            preview = persisted.url;
+            mediaAssetId = persisted.assetId;
+          } else {
+            const persisted = await persistLocalVideoResult({
+              projectId: job.projectId,
+              nodeId: job.nodeId,
+              url,
+              apiKey,
+            });
+            preview = persisted.url;
+            mediaAssetId = persisted.assetId;
+          }
         } catch {
           /* 预览失败仍用上游 URL */
         }
       }
-      return finishSucceeded(preview, videoAssetId, "上游视频已完成");
+      return finishSucceeded(
+        preview,
+        mediaAssetId,
+        isAudio ? "上游音频已完成" : "上游视频已完成"
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (/超时/.test(msg)) {
@@ -4693,6 +4800,388 @@ function safeJson(text: string): unknown {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 音频：
+ * - TTS：POST /v1/audio/speech（同步二进制，见 doc.jumengai.com/api/audio-speech）
+ * - Suno 等异步音乐：与视频同通道
+ *   POST /v1/video/generations → GET /v1/video/generations/{task_id}
+ *   （doc.jumengai.com/api/video · 异步任务含视频 / Suno 音乐等）
+ * - 自定义 HTTP 模板
+ * ------------------------------------------------------------------ */
+
+const LOCAL_AUDIO_POLL_TIMEOUT_MS = 20 * 60 * 1000;
+
+function isTtsLikeAudioModel(name: string, upstream: string): boolean {
+  const s = `${name} ${upstream}`.toLowerCase();
+  if (/suno|music|minimax.*music/.test(s)) return false;
+  return /(tts|speech|cosyvoice|openai-audio|audio\/speech)/.test(s);
+}
+
+/** Suno / 异步音乐：走 video/generations，非 /audio/speech */
+function isAsyncMusicAudioModel(name: string, upstream: string): boolean {
+  const s = `${name} ${upstream}`.toLowerCase();
+  if (isTtsLikeAudioModel(name, upstream)) return false;
+  return /suno|music|ttm|text[_-]?to[_-]?music/.test(s);
+}
+
+function parseMakeInstrumental(opts?: Record<string, unknown>): boolean {
+  const v =
+    opts?.make_instrumental ??
+    opts?.makeInstrumental ??
+    opts?.instrumental ??
+    opts?.isInstrumental;
+  if (v === true || v === 1) return true;
+  const s = String(v ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "true" || s === "1" || s === "instrumental" || s === "on" || s === "yes";
+}
+
+/**
+ * 本地音频生成（对齐聚梦文档）：
+ * - TTS → POST /v1/audio/speech
+ * - Suno 等 → POST /v1/video/generations + 轮询 GET /v1/video/generations/{task_id}
+ */
+export async function localGenerateAudio(params: {
+  modelId: string;
+  prompt: string;
+  /** title / tags / lyrics / make_instrumental / voice 等 */
+  generationOptions?: Record<string, unknown>;
+  onProviderTaskId?: (taskId: string) => void | Promise<void>;
+  /** POST 前回调：写入任务页「提交报文」 */
+  onSubmitBody?: (note: { url: string; body: unknown }) => void | Promise<void>;
+  signal?: AbortSignal;
+}): Promise<{ url: string; providerTaskId?: string; b64?: string }> {
+  if (params.signal?.aborted) {
+    const { AgentTurnAbortedError } = await import("@/lib/canvas/agentCanvasBusy");
+    throw new AgentTurnAbortedError();
+  }
+  const model = await findLocalModel(params.modelId);
+  if (!model) throw new Error(`未找到模型：${params.modelId}，请先在「本地设置」中配置并保存`);
+  if (model.enabled === false) {
+    throw new Error(`模型「${model.displayName || model.name}」未启用，请在设置中勾选启用`);
+  }
+  const providers = await localStore().listProviders();
+  const { apiBase, apiKey, provider } = resolveCreds(model, providers);
+  assertApiKeyReady(apiKey, model, provider);
+
+  const prompt = String(params.prompt || "").trim();
+  const opts = params.generationOptions || {};
+  const upstreamModel = String(model.upstreamModel || model.name || "").trim();
+  const displayBits = `${model.name} ${model.displayName || ""} ${upstreamModel}`;
+  const jumeng = isJumengaiUpstream(model.upstreamModel, model.name, apiBase || model.url || "");
+
+  if (model.mode === "custom_template") {
+    if (!apiBase && !(model.url || "").trim()) {
+      throw new Error("自定义音频模板未填写接口地址");
+    }
+    const raw = await runCustomTemplate(model, {
+      prompt,
+      input: prompt,
+      apiKey,
+      apiBase,
+      model: upstreamModel || model.name,
+      title: String(opts.title || "").trim(),
+      tags: String(opts.tags || "").trim(),
+      lyrics: String(opts.lyrics || prompt).trim(),
+      voice: String(opts.voice || opts.voiceId || "alloy").trim() || "alloy",
+    });
+    const text = String(raw || "").trim();
+    if (text.startsWith("data:audio") || /^https?:\/\//i.test(text)) {
+      return { url: text };
+    }
+    const maybeUrl = extractVideoUrl(safeJson(text) ?? text);
+    if (maybeUrl) return { url: maybeUrl };
+    throw new Error("自定义音频模板未返回可识别的音频 URL / data URL");
+  }
+
+  if (!apiBase) {
+    throw new Error(`模型 ${model.displayName || model.name} 未配置 API Base`);
+  }
+
+  // —— 异步音乐（Suno 等）：与视频同通道 POST/GET /v1/video/generations ——
+  // Single：{ model, prompt, metadata:{ description, make_instrumental } }
+  // Custom：{ model, metadata:{ title, tags, prompt(歌词) } }
+  if (isAsyncMusicAudioModel(model.name, displayBits) || (jumeng && !isTtsLikeAudioModel(model.name, displayBits))) {
+    if (!prompt) throw new Error("请填写歌曲主题、歌词或风格描述");
+    const instrumental = parseMakeInstrumental(opts);
+    const instrumentalStr = instrumental ? "true" : "false";
+    const title = String(opts.title || "").trim().slice(0, 80);
+    const tags = String(opts.tags || "").trim().slice(0, 1000);
+    const lyrics = String(opts.lyrics || "").trim();
+    const isCustom = /custom/i.test(displayBits);
+    const isSuno = /suno/i.test(displayBits);
+    const isSunoSingle = isSuno && !isCustom;
+
+    const lyricsOrPrompt = isCustom ? (lyrics || prompt).slice(0, 5000) : "";
+    const descriptionText = isSunoSingle ? prompt.slice(0, 400) : prompt;
+
+    if (isCustom) {
+      if (!title) throw new Error("Suno Custom 需要填写歌曲标题（title）");
+      if (!lyricsOrPrompt) throw new Error("Suno Custom 需要填写完整歌词");
+      if (!tags) throw new Error("Suno Custom 需要填写风格标签（tags）");
+    }
+
+    const modelId = upstreamModel || model.name;
+    let body: Record<string, unknown>;
+
+    if (isCustom) {
+      // 严格对齐约定：仅 model + metadata.title/tags/prompt
+      body = {
+        model: modelId,
+        metadata: {
+          title,
+          tags,
+          prompt: lyricsOrPrompt,
+        },
+      };
+    } else if (isSunoSingle) {
+      // { model, prompt, metadata:{ description, make_instrumental } }
+      body = {
+        model: modelId,
+        prompt: descriptionText,
+        metadata: {
+          description: descriptionText,
+          make_instrumental: instrumentalStr,
+        },
+      };
+    } else {
+      // 其它异步音乐：顶层 prompt + metadata 镜像
+      body = {
+        model: modelId,
+        prompt: descriptionText,
+        metadata: {
+          description: descriptionText,
+          make_instrumental: instrumentalStr,
+          ...(title ? { title } : {}),
+          ...(tags ? { tags } : {}),
+        },
+      };
+    }
+
+    const submitUrl = openAiCompatibleUrl(apiBase, "video"); // → /v1/video/generations
+    const metaPromptLen = isCustom
+      ? lyricsOrPrompt.length
+      : String((body.metadata as Record<string, unknown>)?.description ||
+          (body.metadata as Record<string, unknown>)?.prompt ||
+          "").length;
+    console.info(
+      "[localGenerateAudio] jumeng video/generations model=%s promptLen=%s custom=%s body=%s",
+      body.model,
+      metaPromptLen,
+      isCustom,
+      JSON.stringify(body).slice(0, 240)
+    );
+    try {
+      await params.onSubmitBody?.({ url: submitUrl, body });
+    } catch {
+      /* 落库失败不阻断提交 */
+    }
+    const submit = await proxyUpstream({
+      url: submitUrl,
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      timeoutMs: 180_000,
+      signal: params.signal,
+    });
+    if ((submit.status ?? 500) >= 400) {
+      throw new Error(
+        `音乐提交失败 HTTP ${submit.status}（${submitUrl}）：${upstreamErrorDetail(submit).slice(0, 240)}`
+      );
+    }
+    const submitPayload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+    const immediate = extractVideoUrl(submitPayload);
+    const taskId = extractUpstreamTaskId(submitPayload);
+    if (!taskId && immediate) return { url: immediate };
+    if (!taskId) {
+      throw new Error(
+        `上游未返回音乐 task_id（${submitUrl}）。请确认模型走 POST /v1/video/generations。` +
+          `响应：${JSON.stringify(submitPayload).slice(0, 300)}`
+      );
+    }
+    try {
+      await params.onProviderTaskId?.(taskId);
+    } catch {
+      /* ignore */
+    }
+    const url = await pollLocalVideoTaskOnceLoop({
+      apiBase,
+      apiKey,
+      taskId,
+      timeoutMs: LOCAL_AUDIO_POLL_TIMEOUT_MS,
+      signal: params.signal,
+    });
+    return { url, providerTaskId: taskId };
+  }
+
+  // —— TTS：POST /v1/audio/speech（doc.jumengai.com/api/audio-speech）——
+  if (!prompt) throw new Error("请填写要合成的文本");
+  const voice = String(opts.voice || opts.voiceId || "alloy").trim() || "alloy";
+  const responseFormat =
+    String(opts.response_format || opts.responseFormat || "mp3").trim() || "mp3";
+  const speedRaw = Number(opts.speed);
+  const speed =
+    Number.isFinite(speedRaw) && speedRaw >= 0.25 && speedRaw <= 4 ? speedRaw : 1;
+  const submitUrl = openAiCompatibleUrl(apiBase, "audio");
+  const ttsBody = {
+    model: upstreamModel || model.name,
+    input: prompt,
+    voice,
+    response_format: responseFormat,
+    speed,
+  };
+  try {
+    await params.onSubmitBody?.({ url: submitUrl, body: ttsBody });
+  } catch {
+    /* ignore */
+  }
+  const submit = await proxyUpstream({
+    url: submitUrl,
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(ttsBody),
+    timeoutMs: 180_000,
+    signal: params.signal,
+  });
+  if ((submit.status ?? 500) >= 400) {
+    throw new Error(
+      `语音合成失败 HTTP ${submit.status}（${submitUrl}）：${upstreamErrorDetail(submit).slice(0, 240)}`
+    );
+  }
+  if (submit.base64) {
+    const mime =
+      submit.contentType && /^audio\//i.test(submit.contentType)
+        ? submit.contentType
+        : responseFormat === "wav"
+          ? "audio/wav"
+          : "audio/mpeg";
+    return { url: `data:${mime};base64,${submit.base64}`, b64: submit.base64 };
+  }
+  const payload = submit.json ?? (submit.text ? safeJson(submit.text) : null);
+  const url = extractVideoUrl(payload);
+  if (url) return { url };
+  throw new Error(
+    `语音合成未返回音频流。请确认模型走 POST /v1/audio/speech，或改用自定义模板。` +
+      `响应：${JSON.stringify(payload ?? submit.text ?? "").slice(0, 200)}`
+  );
+}
+
+/** 将上游音频 URL / data URL 落成本地可播地址并登记素材 */
+export async function persistLocalAudioResult(params: {
+  projectId: string;
+  nodeId: string;
+  url: string;
+  b64?: string;
+  apiKey?: string;
+  assetTitle?: string;
+}): Promise<{ url: string; assetId: string }> {
+  const rawUrl = params.url?.trim() || "";
+  const title =
+    (params.assetTitle || "").trim() ||
+    String(params.nodeId || "").trim() ||
+    "生成音频";
+
+  const saveB64 = async (
+    b64Raw: string,
+    ext: string,
+    mime: string
+  ): Promise<{ url: string; assetId: string }> => {
+    const b64 = b64Raw.replace(/^data:audio\/[\w+.-]+;base64,/i, "").trim();
+    if (!b64) throw new Error("本地音频结果为空：base64 无效");
+    const id = crypto.randomUUID();
+    const fileName = `${id}.${ext}`;
+    const saved = await localStore().writeAsset(params.projectId, fileName, b64);
+    await localStore().registerAssetMeta(params.projectId, {
+      id,
+      fileName,
+      title,
+      category: "audio",
+      subcategory: null,
+      fileType: mime,
+      fileSize: Math.floor((b64.length * 3) / 4),
+      createdAt: new Date().toISOString(),
+    });
+    const url = saved.fileUrl.startsWith("data:application/octet-stream")
+      ? `data:${mime};base64,${b64}`
+      : saved.fileUrl;
+    return { url, assetId: id };
+  };
+
+  if (params.b64?.trim()) {
+    return saveB64(params.b64.trim(), "mp3", "audio/mpeg");
+  }
+  if (rawUrl.startsWith("data:audio")) {
+    const mime = rawUrl.match(/^data:(audio\/[\w+.-]+);base64,/i)?.[1] || "audio/mpeg";
+    const ext = mime.includes("wav")
+      ? "wav"
+      : mime.includes("ogg")
+        ? "ogg"
+        : mime.includes("mp4") || mime.includes("m4a")
+          ? "m4a"
+          : "mp3";
+    return saveB64(rawUrl, ext, mime);
+  }
+  if (!rawUrl) throw new Error("音频结果 URL 为空");
+  if (rawUrl.startsWith("data:") || rawUrl.startsWith("file:") || rawUrl.startsWith("blob:")) {
+    return { url: rawUrl, assetId: crypto.randomUUID() };
+  }
+  if (!rawUrl.startsWith("http")) {
+    return { url: rawUrl, assetId: crypto.randomUUID() };
+  }
+
+  try {
+    const headers: Record<string, string> = {};
+    if (params.apiKey) headers.Authorization = `Bearer ${normalizeApiKey(params.apiKey)}`;
+    const proxied = await proxyUpstream({
+      url: rawUrl,
+      method: "GET",
+      headers,
+      timeoutMs: 300_000,
+    });
+    if (proxied.status && proxied.status >= 400) {
+      return { url: rawUrl, assetId: crypto.randomUUID() };
+    }
+    if (proxied.base64) {
+      // 按 Content-Type / URL 后缀推断；Suno 偶发 video/mp4 外壳也按 m4a 落盘，避免强标 mp3 导致无法解码
+      const ct = String(proxied.contentType || "").toLowerCase();
+      const pathHint = rawUrl.split("?")[0]?.toLowerCase() || "";
+      let mime = "audio/mpeg";
+      let ext = "mp3";
+      if (/audio\/wav|audio\/x-wav|\.wav(\b|$)/i.test(ct) || pathHint.endsWith(".wav")) {
+        mime = "audio/wav";
+        ext = "wav";
+      } else if (/audio\/ogg|\.ogg(\b|$)/i.test(ct) || pathHint.endsWith(".ogg")) {
+        mime = "audio/ogg";
+        ext = "ogg";
+      } else if (
+        /audio\/(mp4|aac|x-m4a)|video\/mp4|\.m4a(\b|$)|\.mp4(\b|$)/i.test(ct) ||
+        pathHint.endsWith(".m4a") ||
+        pathHint.endsWith(".mp4")
+      ) {
+        mime = "audio/mp4";
+        ext = "m4a";
+      } else if (/audio\//i.test(ct)) {
+        mime = ct.split(";")[0].trim() || mime;
+        ext = mime.includes("mpeg") || mime.includes("mp3") ? "mp3" : ext;
+      } else if (pathHint.endsWith(".mp3")) {
+        mime = "audio/mpeg";
+        ext = "mp3";
+      }
+      return saveB64(proxied.base64, ext, mime);
+    }
+  } catch {
+    /* 回退直链 */
+  }
+  return { url: rawUrl, assetId: crypto.randomUUID() };
+}
+
 async function runCustomTemplate(
   model: LocalModel,
   vars: Record<string, string>,
@@ -4750,11 +5239,12 @@ async function runCustomTemplate(
     try {
       const parsed = JSON.parse(body) as Record<string, unknown>;
       let changed = false;
-      const wantSize = String(vars.size || "").trim();
-      if (wantSize && /^\d+\*\d+$/.test(wantSize)) {
-        const cur = String(parsed.size || "");
-        if (!/^\d+\*\d+$/.test(cur)) {
-          parsed.size = wantSize;
+      // 聚梦文档：size 用小写 x；模板若写成 * 或 2K/16:9 则尽量纠正
+      const wantSize = String(vars.size || "").trim().replace(/\*/g, "x");
+      if (wantSize && /^\d+x\d+$/i.test(wantSize)) {
+        const cur = String(parsed.size || "").replace(/\*/g, "x");
+        if (cur.toLowerCase() !== wantSize.toLowerCase()) {
+          parsed.size = wantSize.replace(/X/g, "x");
           changed = true;
         }
       }
@@ -4768,11 +5258,21 @@ async function runCustomTemplate(
         !parsed.image_urls &&
         !parsed.input_reference
       ) {
-        parsed.image = injectRefs[0];
-        parsed.images = injectRefs;
-        parsed.image_urls = injectRefs;
-        parsed.input_reference = injectRefs[0];
+        // 文档仅认 image / images
+        if (injectRefs.length === 1) {
+          parsed.image = injectRefs[0];
+        } else {
+          parsed.images = injectRefs;
+          parsed.image = injectRefs;
+        }
         changed = true;
+      }
+      // 去掉文档明确禁止的参考别名，避免误导网关
+      for (const bad of ["imageUrls", "imageUrl", "inputImages"]) {
+        if (bad in parsed) {
+          delete parsed[bad];
+          changed = true;
+        }
       }
       if (changed) body = JSON.stringify(parsed);
     } catch {

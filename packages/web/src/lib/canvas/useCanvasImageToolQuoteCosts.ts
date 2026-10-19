@@ -6,6 +6,7 @@ import { canvasToolModelPrimary, getCanvasToolModels } from "@/lib/api/canvasToo
 import { getCreditQuote, resolveQuoteTotal } from "@/lib/api/credits";
 import { CANVAS_TOOL_I2I_MODEL } from "@/lib/canvas/canvasToolImageModel";
 import type { ModelCategory } from "@/lib/canvas/nodeModelRouting";
+import { HD_NANO_BANANA_I2I_CATALOG } from "@/lib/local/topazHdUpscale";
 
 /**
  * 图片节点顶栏 / 九宫格弹层会展示预扣价的工具。
@@ -30,8 +31,6 @@ const IMAGE_TOOL_QUOTE_IDS = [
   "outpaint",
   "cutout",
   "hd_upscale",
-  "portrait_adjust",
-  "emotion_adjust",
   "drawing_board_ai",
   "storyboard",
   "blocking_storyboard",
@@ -60,6 +59,16 @@ export function useCanvasImageToolQuoteCosts(enabled = true) {
   const toolModelMap = useMemo(() => {
     const map: Record<string, string> = {};
     for (const toolId of QUOTE_TOOL_IDS) {
+      // HD / 扩图固定 gemini-nano-banana-2.1，不跟后台工具主模型
+      if (toolId === "hd_upscale" || toolId === "outpaint") {
+        map[toolId] = HD_NANO_BANANA_I2I_CATALOG;
+        continue;
+      }
+      // 抠图：平台固定价，占位模型名即可（同宫格切分）
+      if (toolId === "cutout") {
+        map[toolId] = CANVAS_TOOL_I2I_MODEL;
+        continue;
+      }
       const primary =
         canvasToolModelPrimary(toolModels?.tools, toolId) ||
         (TOOL_QUOTE_CATEGORY[toolId] === "text" ? "doubao_pro" : CANVAS_TOOL_I2I_MODEL);

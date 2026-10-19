@@ -29,11 +29,9 @@ export const LOCAL_CANVAS_TOOL_DEFS: LocalCanvasToolDef[] = [
   { toolId: "character_tri_view", category: "image", label: "角色三视图", group: "宫格 / 设定" },
   { toolId: "scene_sheet", category: "image", label: "场景设定图", group: "宫格 / 设定" },
   { toolId: "product_sheet", category: "image", label: "产品设定图", group: "宫格 / 设定" },
-  { toolId: "outpaint", category: "image", label: "扩图", group: "图片工具" },
-  { toolId: "cutout", category: "image", label: "抠图（结算用模型名）", group: "图片工具" },
-  { toolId: "hd_upscale", category: "image", label: "图片高清", group: "图片工具" },
-  { toolId: "portrait_adjust", category: "image", label: "人像调节", group: "图片工具" },
-  { toolId: "emotion_adjust", category: "image", label: "情绪调节", group: "图片工具" },
+  // 扩图 / 图片高清：固定 gemini-nano-banana-2.1，不在此配置
+  // 抠图：本地去背景，不调模型，不在此配置
+  // 人像质感（人像调节 / 情绪调节）：已下线，不在此配置
   { toolId: "drawing_board_ai", category: "image", label: "画板 AI", group: "图片工具" },
   { toolId: "storyboard", category: "image", label: "故事板出图", group: "分镜" },
   { toolId: "blocking_storyboard", category: "image", label: "调度故事板", group: "分镜" },

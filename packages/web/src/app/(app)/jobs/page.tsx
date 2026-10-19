@@ -515,6 +515,21 @@ export default function LocalGenerationJobsPage() {
                       {selected.error ? selected.error : selected.promptPreview || "（无提示词）"}
                     </div>
 
+                    {/* 提交报文：POST 上游前落库，便于对照 errorCode 1007 等 */}
+                    <div className="jc-refs">
+                      <div className="jc-refs-title">提交报文</div>
+                      {selected.submitUrl ? (
+                        <p className="jc-ref-note mono" title={selected.submitUrl}>
+                          {selected.submitUrl}
+                        </p>
+                      ) : null}
+                      {selected.submitBodyPreview ? (
+                        <pre className="jc-submit-body jm-scroll">{selected.submitBodyPreview}</pre>
+                      ) : (
+                        <p className="jc-ref-note">旧任务未记录提交体，请再生成一次后查看</p>
+                      )}
+                    </div>
+
                     {/* 参考图：本机代开实际上游参考（不走页面 Referer）；直链过期给文字说明 */}
                     <div className="jc-refs">
                       <div className="jc-refs-title">

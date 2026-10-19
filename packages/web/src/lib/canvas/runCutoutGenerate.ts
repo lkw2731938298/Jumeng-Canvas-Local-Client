@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { consumeLocalCanvasTool, resolveCanvasToolPrimaryModel } from "@/lib/api/canvasTools";
+import { consumeLocalCanvasTool } from "@/lib/api/canvasTools";
 import { getCreditQuote } from "@/lib/api/credits";
 import { getPromptConfig } from "@/lib/api/promptConfig";
 import { notifyAssetsUpdated } from "@/lib/api/assets";
@@ -24,6 +24,9 @@ import { toast } from "sonner";
 
 export const CUTOUT_CANVAS_TOOL = "cutout";
 
+/** 本地扣费接口仍需合法 catalog 模型名；金额走平台固定价，与宫格切分相同 */
+const CUTOUT_SETTLEMENT_MODEL = CANVAS_TOOL_I2I_MODEL;
+
 /** 读取后台「抠图」提示词（写入结果节点，便于追溯） */
 export async function loadCutoutAdminPrompt(): Promise<string> {
   const fallback = PROMPT_SUFFIX_FALLBACKS.cutout.content;
@@ -39,18 +42,9 @@ export async function loadCutoutAdminPrompt(): Promise<string> {
   return fallback;
 }
 
-/** 后台模型开关中的抠图主模型；缺省回退全能 Pro 图生图 */
-async function resolveCutoutModelName(fallback: string): Promise<string> {
-  const primary = await resolveCanvasToolPrimaryModel(
-    CUTOUT_CANVAS_TOOL,
-    fallback || CANVAS_TOOL_I2I_MODEL
-  );
-  return primary || CANVAS_TOOL_I2I_MODEL;
-}
-
 /**
- * 抠图：固定算力扣费（后台模型名结算）→ 浏览器本地去背景 → 右侧结果节点。
- * 提示词来自后台 Prompt 模板，写入结果节点便于审计。
+ * 抠图：平台固定算力扣费 → 浏览器本地去背景 → 右侧结果节点。
+ * 不调用上游模型，也不读「功能模型切换」；提示词来自 Prompt 模板，写入结果节点便于审计。
  */
 export async function runCutoutGenerate(opts: {
   projectId: string;
@@ -59,7 +53,7 @@ export async function runCutoutGenerate(opts: {
   workflowId?: string | null;
   creditsEnabled: boolean;
   queryClient: QueryClient;
-  /** 前端工具模型兜底名 */
+  /** @deprecated 已忽略；抠图不再绑定工具主模型 */
   fallbackModelName?: string;
   onRefetchPricing?: () => void;
 }): Promise<boolean> {
@@ -70,7 +64,7 @@ export async function runCutoutGenerate(opts: {
     return false;
   }
 
-  const modelName = await resolveCutoutModelName(opts.fallbackModelName || "");
+  const modelName = CUTOUT_SETTLEMENT_MODEL;
   const adminPrompt = await loadCutoutAdminPrompt();
   const toastId = toast.loading("正在抠图，请稍候…");
   const sourceLabel =

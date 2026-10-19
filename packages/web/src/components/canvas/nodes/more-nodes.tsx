@@ -14,13 +14,14 @@ function textModelUserLabel(modelId: string | undefined): string {
   return hit?.label ?? "文本模型";
 }
 import { useCanvasStore } from "@/stores/canvasStore";
-import { Music, Pause, Play } from "lucide-react";
+import { Pause, Play } from "lucide-react";
 import { useMediaUpload } from "./useMediaUpload";
 import { MediaSourceMenu } from "./MediaSourceMenu";
 import { MediaAssetPicker } from "./MediaAssetPicker";
 import { MediaUploadOverlay } from "./MediaUploadOverlay";
 import { VideoNodeControls } from "./VideoNodeControls";
 import { AudioNodeControls } from "./AudioNodeControls";
+import { AudioWaveformPeaks } from "./AudioWaveformPeaks";
 import { useMediaNodeSize } from "@/lib/canvas/useMediaNodeSize";
 import { sizeFromMedia } from "@/lib/canvas/nodeSizing";
 import { useNodeAssetMedia } from "@/lib/canvas/useNodeAssetMedia";
@@ -785,6 +786,13 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
   const fileLabel = useMemo(() => {
     if (!url) return "音频文件";
     try {
+      // 本机 /api/local/asset?...&file=xxx.mp3 → 显示文件名，勿把路径段 "asset" 当标题
+      if (url.includes("/api/local/asset")) {
+        const u = new URL(url, "http://local");
+        const file = u.searchParams.get("file") || u.searchParams.get("name") || "";
+        if (file) return decodeURIComponent(file);
+        return "生成音频";
+      }
       return decodeURIComponent(url.split("/").pop()?.split("?")[0] || "音频文件");
     } catch {
       return "音频文件";
@@ -872,10 +880,12 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
               onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
             />
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 pb-8">
+            {/* 主体：音频峰段波形；播放进度高亮 */}
+            <AudioWaveformPeaks src={url} audioRef={audioRef} playing={playing} />
+            <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 pb-8">
               <button
                 type="button"
-                className="nodrag nopan pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-pink-500/25 text-pink-100 ring-1 ring-pink-300/40 transition-colors hover:bg-pink-500/40"
+                className="nodrag nopan pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-pink-500/35 text-pink-50 shadow-lg ring-1 ring-pink-200/35 backdrop-blur-[2px] transition-colors hover:bg-pink-500/55"
                 onClick={(e) => {
                   e.stopPropagation();
                   togglePlay();
@@ -889,11 +899,10 @@ export const AudioInputNode = memo(function AudioInputNode(props: NodeProps) {
                   <Play className="h-5 w-5 translate-x-0.5 fill-current" />
                 )}
               </button>
-              <span className="max-w-[90%] truncate text-[10px] text-white/45">
+              <span className="max-w-[90%] truncate rounded bg-black/35 px-1.5 py-0.5 text-[10px] text-white/70">
                 {fileLabel}
               </span>
             </div>
-            <Music className="pointer-events-none absolute right-2 top-2 h-4 w-4 text-pink-300/35" />
             <AudioNodeControls
               audioRef={audioRef}
               src={url}

@@ -35,6 +35,10 @@ export type LocalGenerationJob = {
   submittedRefHostPreview?: string;
   /** 实际上游 image_urls 全文（本机任务页预览用） */
   submittedRefUrls?: string[];
+  /** 实际上游 POST 请求体 JSON（任务页「提交报文」排查用，截断保存） */
+  submitBodyPreview?: string;
+  /** 实际上游 POST 完整 URL */
+  submitUrl?: string;
   error?: string;
   resultUrlPreview?: string;
   /** 落盘素材 id，供任务页/同步上游回写画布时还原 URL */
@@ -66,6 +70,8 @@ export type LocalGenerationJobPatch = Partial<
     | "submittedReferenceCount"
     | "submittedRefHostPreview"
     | "submittedRefUrls"
+    | "submitBodyPreview"
+    | "submitUrl"
   >
 >;
 

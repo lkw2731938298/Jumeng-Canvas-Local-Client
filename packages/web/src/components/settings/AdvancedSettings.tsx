@@ -4,9 +4,9 @@
  * 高级设置：三块说清楚——密钥、模型、画布工具。模型卡片默认只露常用项。
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Save, Search, Trash2 } from "lucide-react";
 import type { LocalModel, LocalProvider } from "@/lib/local/types";
 import type { LocalCanvasToolDef, LocalToolModelsMap } from "@/lib/local/canvasToolDefs";
 import { applyEndpointDefaults, JUMENGAI_SDK_API_BASE } from "@/lib/local/endpointHelpers";
@@ -27,6 +27,7 @@ import {
 import { normalizeApiKey } from "@/lib/local/generate";
 import { UserOssSettingsPanel } from "@/components/settings/UserOssSettingsPanel";
 import { DataLocationSettingsPanel } from "@/components/settings/DataLocationSettingsPanel";
+import { Switch } from "@/components/ui/switch";
 
 export type AdvancedTab = "keys" | "models" | "tools" | "oss" | "storage";
 
@@ -273,40 +274,105 @@ function KeysPane(props: Props) {
 }
 
 function ModelsPane(props: Props) {
+  const [query, setQuery] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return props.visibleModels;
+    return props.visibleModels.filter((m) => {
+      const blob = `${m.displayName || ""} ${m.name || ""} ${m.upstreamModel || ""} ${
+        props.providers.find((p) => p.id === m.providerId)?.name || ""
+      }`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [props.visibleModels, props.providers, query]);
+
+  const enabledInFilter = filtered.filter((m) => m.enabled !== false).length;
+  /** 当前列表是否已全部勾选「在画布显示」 */
+  const allSelectedInFilter =
+    filtered.length > 0 && enabledInFilter === filtered.length;
+
+  const setEnabledForFiltered = (enabled: boolean) => {
+    const ids = new Set(filtered.map((m) => m.id));
+    if (ids.size === 0) return;
+    props.setModels((prev) =>
+      prev.map((m) => (ids.has(m.id) ? { ...m, enabled } : m))
+    );
+    toast.message(
+      enabled
+        ? `已全选「在画布显示」：${ids.size} 个`
+        : `已取消全选：${ids.size} 个`
+    );
+  };
+
   return (
     <section className="mt-8">
-      <h3 className="text-base font-medium">模型清单</h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        画布里能选到的，就是这里勾了「在画布显示」的模型。通常只需核对：用哪组密钥、平台上的模型名对不对。
-      </p>
-      <p className="mt-2 text-xs text-muted-foreground">
-        对话 {props.countByCat.text} · 出图 {props.countByCat.image} · 出视频{" "}
-        {props.countByCat.video} · 音频 {props.countByCat.audio} · 3D 模型 {props.countByCat.model3d}
-      </p>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(
-          [
-            ["text", "加对话模型"],
-            ["image", "加出图模型"],
-            ["video", "加出视频模型"],
-            ["audio", "加音频模型"],
-            ["model3d", "加 3D 模型"],
-          ] as const
-        ).map(([cat, label]) => (
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-medium">模型清单</h3>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            默认一行一个，点开再改密钥绑定与平台模型名。勾选「显示」的才会出现在画布。
+          </p>
+        </div>
+        <div className="relative">
           <button
-            key={cat}
             type="button"
             className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-            onClick={() => props.onAddModel(cat)}
+            onClick={() => setAddOpen((v) => !v)}
           >
             <Plus className="h-4 w-4" />
-            {label}
+            添加模型
+            <ChevronDown className={`h-3.5 w-3.5 transition ${addOpen ? "rotate-180" : ""}`} />
           </button>
-        ))}
+          {addOpen ? (
+            <div className="absolute right-0 z-20 mt-1 min-w-[160px] rounded-lg border border-border bg-card p-1 shadow-lg">
+              {(
+                [
+                  ["text", "对话"],
+                  ["image", "出图"],
+                  ["video", "出视频"],
+                  ["audio", "音频"],
+                  ["model3d", "3D 模型"],
+                ] as const
+              ).map(([cat, label]) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-muted"
+                  onClick={() => {
+                    props.onAddModel(cat);
+                    setAddOpen(false);
+                    // 新模型会排到列表前部，展开由父级 models 异步更新后用户再点即可
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <p className="mt-2 text-xs text-muted-foreground">
+        共 {props.models.length} · 当前列表显示 {enabledInFilter}/{filtered.length}
+        {query.trim() ? "（已搜索）" : ""}
+        {" · "}
+        对话 {props.countByCat.text} · 出图 {props.countByCat.image} · 出视频{" "}
+        {props.countByCat.video} · 音频 {props.countByCat.audio} · 3D {props.countByCat.model3d}
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className="relative min-w-[200px] flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            className="w-full rounded-md border border-border bg-card py-1.5 pl-8 pr-3 text-sm"
+            placeholder="搜索名称 / 平台模型名 / 密钥组"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
         {(
           [
             ["all", "全部"],
@@ -314,7 +380,7 @@ function ModelsPane(props: Props) {
             ["image", "出图"],
             ["video", "出视频"],
             ["audio", "音频"],
-            ["model3d", "3D 模型"],
+            ["model3d", "3D"],
           ] as const
         ).map(([id, label]) => {
           const n =
@@ -328,46 +394,157 @@ function ModelsPane(props: Props) {
                   ? "bg-primary text-primary-foreground"
                   : "border border-border"
               }`}
-              onClick={() => props.setModelFilter(id)}
+              onClick={() => {
+                props.setModelFilter(id);
+                setExpandedId(null);
+              }}
             >
-              {label} ({n})
+              {label} {n}
             </button>
           );
         })}
-      </div>
-
-      {props.visibleModels.some((m) => m.category === "text") && (
-        <label className={`${labelCls} mt-4 block max-w-md`}>
-          测对话模型时说的话
-          <input
-            className={inputCls}
-            value={props.testPrompt}
-            onChange={(e) => props.setTestPrompt(e.target.value)}
+        <label
+          className={`ml-auto inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs ${
+            filtered.length === 0 ? "opacity-40" : ""
+          }`}
+          title="对当前筛选/搜索结果：开=全部在画布显示，关=全部不显示"
+        >
+          <span className="text-muted-foreground whitespace-nowrap">
+            一键全选
+            {filtered.length > 0 ? ` ${enabledInFilter}/${filtered.length}` : ""}
+          </span>
+          <Switch
+            checked={allSelectedInFilter}
+            disabled={filtered.length === 0}
+            onCheckedChange={(checked) => setEnabledForFiltered(Boolean(checked))}
           />
         </label>
-      )}
+        {expandedId ? (
+          <button
+            type="button"
+            className="rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+            onClick={() => setExpandedId(null)}
+          >
+            收起编辑
+          </button>
+        ) : null}
+      </div>
 
-      <div className="mt-6 space-y-4">
-        {props.visibleModels.map((m) => {
-          const idx = props.models.findIndex((x) => x.id === m.id);
-          if (idx < 0) return null;
-          return (
-            <ModelCard
-              key={m.id}
-              model={m}
-              idx={idx}
-              providers={props.providers}
-              models={props.models}
-              setModels={props.setModels}
-              testingId={props.testingId}
-              onTest={() => props.onTestModel(m.id)}
+      {props.visibleModels.some((m) => m.category === "text") &&
+        (props.modelFilter === "all" || props.modelFilter === "text") && (
+          <label className={`${labelCls} mt-3 block max-w-md`}>
+            测对话模型时说的话
+            <input
+              className={inputCls}
+              value={props.testPrompt}
+              onChange={(e) => props.setTestPrompt(e.target.value)}
             />
-          );
-        })}
-        {props.visibleModels.length === 0 && (
-          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            这一类还没有模型。用上面的按钮添加，或返回向导重新勾选。
+          </label>
+        )}
+
+      <div className="mt-4 overflow-hidden rounded-xl border border-border">
+        {filtered.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+            {props.visibleModels.length === 0
+              ? "这一类还没有模型。点右上角「添加模型」，或返回向导重新勾选。"
+              : "没有匹配的模型，试试换关键词或分类。"}
           </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {filtered.map((m) => {
+              const idx = props.models.findIndex((x) => x.id === m.id);
+              if (idx < 0) return null;
+              const open = expandedId === m.id;
+              const providerName =
+                props.providers.find((p) => p.id === m.providerId)?.name || "未绑密钥";
+              const missingKey =
+                !m.providerId ||
+                (!props.providers.find((p) => p.id === m.providerId)?.apiKey?.trim() &&
+                  !m.apiKey?.trim());
+              return (
+                <li key={m.id} className={open ? "bg-muted/20" : undefined}>
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <label
+                      className="inline-flex shrink-0 items-center"
+                      title="在画布显示"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={m.enabled !== false}
+                        onChange={(e) => {
+                          const list = [...props.models];
+                          list[idx] = { ...m, enabled: e.target.checked };
+                          props.setModels(list);
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setExpandedId(open ? null : m.id)}
+                    >
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {m.displayName || m.name || "未命名"}
+                        </span>
+                        <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
+                          {CAT_ZH[m.category]}
+                        </span>
+                        {m.enabled === false ? (
+                          <span className="text-[10px] text-muted-foreground">已隐藏</span>
+                        ) : null}
+                        {missingKey ? (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                            缺密钥
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {providerName}
+                        {m.upstreamModel ? ` · ${m.upstreamModel}` : ""}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                      onClick={() => setExpandedId(open ? null : m.id)}
+                    >
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`}
+                      />
+                      {open ? "收起" : "编辑"}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center rounded-md p-1.5 text-red-500 hover:bg-red-500/10"
+                      title="删除"
+                      onClick={() => {
+                        if (expandedId === m.id) setExpandedId(null);
+                        props.setModels((prev) => prev.filter((x) => x.id !== m.id));
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {open ? (
+                    <div className="border-t border-border px-3 pb-4 pt-1">
+                      <ModelCard
+                        model={m}
+                        idx={idx}
+                        providers={props.providers}
+                        models={props.models}
+                        setModels={props.setModels}
+                        testingId={props.testingId}
+                        onTest={() => props.onTestModel(m.id)}
+                        embedded
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </section>
@@ -382,6 +559,8 @@ function ModelCard(props: {
   setModels: Props["setModels"];
   testingId: string | null;
   onTest: () => void;
+  /** 嵌在紧凑列表展开区：去掉外框与顶栏开关（行上已有） */
+  embedded?: boolean;
 }) {
   const { model: m, idx } = props;
   const isCustom = (m.mode || "openai_compatible") === "custom_template";
@@ -395,22 +574,24 @@ function ModelCard(props: {
   };
 
   return (
-    <div className="rounded-xl border border-border p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={m.enabled !== false}
-            onChange={(e) => patch({ ...m, enabled: e.target.checked })}
-          />
-          在画布显示
-        </label>
-        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-          {CAT_ZH[m.category]}
-        </span>
-      </div>
+    <div className={props.embedded ? "pt-2" : "rounded-xl border border-border p-4"}>
+      {!props.embedded ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={m.enabled !== false}
+              onChange={(e) => patch({ ...m, enabled: e.target.checked })}
+            />
+            在画布显示
+          </label>
+          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+            {CAT_ZH[m.category]}
+          </span>
+        </div>
+      ) : null}
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className={`${props.embedded ? "mt-0" : "mt-3"} grid gap-3 sm:grid-cols-2`}>
         <label className={labelCls}>
           画布上显示的名字
           <input
@@ -497,15 +678,17 @@ function ModelCard(props: {
           <ChevronDown className={`h-4 w-4 transition ${more ? "rotate-180" : ""}`} />
           {more ? "收起更多" : "更多（自定义请求 / 画布选项）"}
         </button>
-        <button
-          type="button"
-          className="ml-auto inline-flex items-center gap-1 text-sm text-red-500"
-          onClick={() =>
-            props.setModels((prev) => prev.filter((x) => x.id !== m.id))
-          }
-        >
-          <Trash2 className="h-4 w-4" /> 删除
-        </button>
+        {!props.embedded ? (
+          <button
+            type="button"
+            className="ml-auto inline-flex items-center gap-1 text-sm text-red-500"
+            onClick={() =>
+              props.setModels((prev) => prev.filter((x) => x.id !== m.id))
+            }
+          >
+            <Trash2 className="h-4 w-4" /> 删除
+          </button>
+        ) : null}
       </div>
 
       {more && (
@@ -928,7 +1111,7 @@ function ToolsPane(props: Props) {
     <section className="mt-8">
       <h3 className="text-base font-medium">画布工具默认用谁</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        扩图、分镜「准备资产 · 主体生图」、多角度等功能会走这里指定的模型。空着则自动用该用途下第一个启用的模型。向导里「完成并保存」已经按用途填过一遍。
+        分镜「准备资产 · 主体生图」、多角度等功能会走这里指定的模型。空着则自动用该用途下第一个启用的模型。扩图 / HD 高清固定 gemini-nano-banana-2.1，不在此配置。
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {(["text", "image", "video", "audio"] as const).map((cat) => (

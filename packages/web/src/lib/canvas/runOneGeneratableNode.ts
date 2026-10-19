@@ -336,7 +336,9 @@ export async function runOneGeneratableNode(opts: {
     } else {
       const isVideo = node.type === "video_input";
       const isImage = node.type === "image_input";
-      if (isVideo || isImage) {
+      const isAudio = node.type === "audio_input";
+      // 图片 / 视频 / 音频：展开 @文本 + 合并已连接上游文本节点正文
+      if (isVideo || isImage || isAudio) {
         const resolved = await resolveMediaPromptForGeneration({
           draft,
           references: allRefs,
